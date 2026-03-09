@@ -21,7 +21,7 @@
 ## 📸 스크린샷
 
 <p align="center">
-  <img src="Screenshots/screenshot_20260302_025301_356.png" alt="IronRose 렌더링 결과" width="720"/>
+  <img src="screenshot_20260302_025301_356.png" alt="IronRose 렌더링 결과" width="720"/>
 </p>
 
 ---
