@@ -9,3 +9,8 @@ srgb = true
 filter_mode = "Bilinear"
 wrap_mode = "Repeat"
 generate_mipmaps = true
+[[sub_assets]]
+name = "Yaktaur"
+type = "Sprite"
+index = 0
+guid = "48ccff49-8c2a-4d6a-8a9a-b89d45936355"

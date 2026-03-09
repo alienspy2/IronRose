@@ -9,3 +9,8 @@ srgb = true
 filter_mode = "Bilinear"
 wrap_mode = "Repeat"
 generate_mipmaps = true
+[[sub_assets]]
+name = "Basic Green Monster Batch 3 4x"
+type = "Sprite"
+index = 0
+guid = "bad33317-edda-43da-bf52-88ceec5fe421"

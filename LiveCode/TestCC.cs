@@ -7,15 +7,20 @@ public class TestCC : MonoBehaviour
     public float mouseSensitivity = 2f;
     public float gravity = -9.81f;
     public float jumpForce = 5f;
+    public int maxJumps = 2;
 
     private CharacterController? cc = null;
     private float _verticalVelocity = 0f;
+    private int _jumpsRemaining = 0;
+    private Vector3 _airVelocity = Vector3.zero;
+    private Vector3 _startPosition;
 
     public override void Start()
     {
         cc = GetComponent<CharacterController>();
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+        _startPosition = transform.position;
     }
 
     public override void Update()
@@ -30,19 +35,36 @@ public class TestCC : MonoBehaviour
         transform.Rotate(0f, mouseX, 0f);
 
         // ---- Movement ----
-        float h = Input.GetAxis("Horizontal"); // A/D
-        float v = Input.GetAxis("Vertical");   // W/S
+        Vector3 move;
+        if (cc.isGrounded)
+        {
+            float h = Input.GetAxis("Horizontal"); // A/D
+            float v = Input.GetAxis("Vertical");   // W/S
 
-        Vector3 move = transform.right * h + transform.forward * v;
+            move = transform.right * h + transform.forward * v;
 
-        if (move.sqrMagnitude > 1f)
-            move = move.normalized;
+            if (move.sqrMagnitude > 1f)
+                move = move.normalized;
 
-        move *= moveSpeed;
+            move *= moveSpeed;
+            _airVelocity = move;
+        }
+        else
+        {
+            move = _airVelocity;
+        }
 
-        // Jump
-        if (cc.isGrounded && Input.GetKeyDown(KeyCode.Space))
+        // Jump logic
+        if (cc.isGrounded)
+        {
+            _jumpsRemaining = maxJumps;
+        }
+
+        if (Input.GetKeyDown(KeyCode.Space) && _jumpsRemaining > 0)
+        {
             _verticalVelocity = jumpForce;
+            _jumpsRemaining--;
+        }
 
         // Gravity
         if (cc.isGrounded && _verticalVelocity < 0f)
@@ -52,5 +74,13 @@ public class TestCC : MonoBehaviour
         move.y = _verticalVelocity;
 
         cc.Move(move * dt);
+
+        // Respawn if fell too deep
+        if (transform.position.y < _startPosition.y - 10f)
+        {
+            transform.position = _startPosition;
+            _verticalVelocity = 0f;
+            _airVelocity = Vector3.zero;
+        }
     }
 }
