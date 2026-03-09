@@ -1,0 +1,16 @@
+guid = "eeb81ccf-d365-4916-b7db-1d2be99f603b"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "button_rectangle_gradient"
+type = "Sprite"
+index = 0
+guid = "99345e48-da68-431b-849c-308bf29ed2d6"

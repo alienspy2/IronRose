@@ -1,0 +1,16 @@
+guid = "fa5dcf5d-aa3e-4676-84ee-14467445d251"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "arrow_decorative_w_small"
+type = "Sprite"
+index = 0
+guid = "df4e0889-903f-4af5-b144-b2141e5f6bff"

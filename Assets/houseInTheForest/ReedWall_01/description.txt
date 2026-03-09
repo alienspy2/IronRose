@@ -1,0 +1,9 @@
+Name: ReedWall_01
+Name (Korean): ReedWall_01
+Category: wall
+
+=== Description ===
+A wall constructed of woven reeds, creating a natural and earthy atmosphere.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, reed wall, woven reeds, natural texture, 8k resolution

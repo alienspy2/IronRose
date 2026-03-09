@@ -1,0 +1,9 @@
+Name: WarthenWoodStaircase_02
+Name (Korean): WarthenWood계단_02
+Category: floor
+
+=== Description ===
+A medium-height staircase constructed of weathered Warthen wood panels, fitting within a cozy forest dwelling. The panels show signs of age and wear, adding to the cottage's charm.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, wooden staircase, Warthen wood panels, weathered wood, detailed paneling, 숲속의 작은 집, warm lighting, realistic wood textures, high resolution, no background, no shadow, no floor.

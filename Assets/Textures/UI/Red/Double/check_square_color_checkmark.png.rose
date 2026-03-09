@@ -1,0 +1,16 @@
+guid = "b4024a7a-5577-4f90-8a61-2fce1529cfac"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "check_square_color_checkmark"
+type = "Sprite"
+index = 0
+guid = "86390584-c13d-4176-a352-3352714a1181"

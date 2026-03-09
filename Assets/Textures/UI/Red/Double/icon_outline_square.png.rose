@@ -1,0 +1,16 @@
+guid = "eafa7983-8491-4350-b0be-c8fc9241ee93"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "icon_outline_square"
+type = "Sprite"
+index = 0
+guid = "c0bfd48b-ef96-4718-aa9d-18d75802641b"

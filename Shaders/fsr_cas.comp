@@ -1,0 +1,55 @@
+#version 450
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0) uniform texture2D inputTex;
+layout(set = 0, binding = 1) uniform sampler linearSampler;
+layout(set = 0, binding = 2, rgba16f) uniform writeonly image2D outputTex;
+
+layout(set = 0, binding = 3) uniform CasParams {
+    vec2 ImageSize;
+    vec2 ImageSizeRcp;
+    float Sharpness;   // 0.0 = no sharpening, 1.0 = standard, 2.0 = aggressive
+    float _pad0;
+    float _pad1;
+    float _pad2;
+};
+
+void main()
+{
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    if (pos.x >= int(ImageSize.x) || pos.y >= int(ImageSize.y)) return;
+
+    vec2 uv = (vec2(pos) + 0.5) * ImageSizeRcp;
+
+    // Sample center and 4 neighbors (cross pattern)
+    vec3 c = texture(sampler2D(inputTex, linearSampler), uv).rgb;
+    vec3 n = texture(sampler2D(inputTex, linearSampler), uv + vec2(0, -ImageSizeRcp.y)).rgb;
+    vec3 s = texture(sampler2D(inputTex, linearSampler), uv + vec2(0,  ImageSizeRcp.y)).rgb;
+    vec3 w = texture(sampler2D(inputTex, linearSampler), uv + vec2(-ImageSizeRcp.x, 0)).rgb;
+    vec3 e = texture(sampler2D(inputTex, linearSampler), uv + vec2( ImageSizeRcp.x, 0)).rgb;
+
+    // Min/max of cross neighborhood
+    vec3 mnRGB = min(c, min(min(n, s), min(w, e)));
+    vec3 mxRGB = max(c, max(max(n, s), max(w, e)));
+
+    // CAS sharpening weight: based on local contrast
+    // Higher contrast → less sharpening (avoids ringing)
+    vec3 ampRGB = clamp(min(mnRGB, 2.0 - mxRGB) / mxRGB, 0.0, 1.0);
+
+    // Scale by sharpness parameter (user control)
+    // Sharpness > 1.0: stronger peak for more aggressive sharpening
+    float sharp = Sharpness;
+    ampRGB *= min(sharp, 1.0);
+    float peak = -1.0 / mix(8.0, 5.0, clamp(sharp, 0.0, 1.0));
+    // Boost beyond CAS range: extra multiplier for sharp > 1.0
+    if (sharp > 1.0) peak *= sharp;
+    vec3 wt = ampRGB * peak;
+
+    // Apply sharpening filter: weighted sum with center boost
+    vec3 result = (c + (n + s + w + e) * wt) / (1.0 + 4.0 * wt);
+
+    // Clamp to avoid negative values from oversharpening
+    result = max(result, vec3(0.0));
+
+    imageStore(outputTex, pos, vec4(result, 1.0));
+}

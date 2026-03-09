@@ -1,0 +1,9 @@
+Name: ClayBrickWall_01
+Name (Korean): ClayBrickWall_01
+Category: wall
+
+=== Description ===
+A textured clay brick wall with a subtle aged appearance, fitting for a rustic dwelling.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, clay brick wall, aged bricks, subtle texture, warm color palette, 8k resolution

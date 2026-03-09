@@ -1,0 +1,9 @@
+Name: RusticWoodPanel_01
+Name (Korean): RusticWoodPanel_01
+Category: wall
+
+=== Description ===
+A weathered wooden panel texture, showcasing knots and slight discoloration, perfect for an old forest cabin.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, weathered rustic wooden panel, knots, slight discoloration, warm wood tone, realistic texture, 8k resolution

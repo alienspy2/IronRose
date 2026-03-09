@@ -1,0 +1,9 @@
+Name: VintageWoodenBox_03
+Name (Korean): 빈티지 우드 박스 03
+Category: prop
+
+=== Description ===
+A small, weathered wooden box with brass hinges and a tarnished latch.  It has a worn and aged appearance, suggesting it might contain old letters or trinkets.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, a vintage wooden box with brass hinges and a worn surface, illuminated by warm light.

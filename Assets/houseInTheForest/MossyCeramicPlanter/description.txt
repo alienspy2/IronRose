@@ -1,0 +1,9 @@
+Name: MossyCeramicPlanter
+Name (Korean): 이끼 낀 세라믹 화분
+Category: prop
+
+=== Description ===
+A ceramic planter covered in a delicate layer of moss, suggesting it has been placed outdoors in a sheltered spot. It contains a small fern.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, a moss-covered ceramic planter with a green fern inside, highlighting the texture of the moss.

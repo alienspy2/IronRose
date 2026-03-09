@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AssimpNet" Version="4.1.0" />
+    <PackageReference Include="SharpGLTF.Core" Version="1.0.6" />
+    <PackageReference Include="BCnEncoder.Net" Version="2.2.1" />
+    <PackageReference Include="Meshoptimizer.NET" Version="1.0.7" />
+    <PackageReference Include="Tomlyn" Version="0.20.0" />
+    <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
+    <PackageReference Include="Silk.NET.Input" Version="2.23.0" />
+    <PackageReference Include="Veldrid" Version="4.9.0" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+    <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="2.1.5" />
+    <PackageReference Include="SixLabors.Fonts" Version="2.1.0" />
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+    <PackageReference Include="ImGui.NET" Version="1.91.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\IronRose.Contracts\IronRose.Contracts.csproj" />
+    <ProjectReference Include="..\IronRose.Physics\IronRose.Physics.csproj" />
+    <ProjectReference Include="..\IronRose.Rendering\IronRose.Rendering.csproj" />
+    <ProjectReference Include="..\IronRose.Scripting\IronRose.Scripting.csproj" />
+  </ItemGroup>
+
+</Project>

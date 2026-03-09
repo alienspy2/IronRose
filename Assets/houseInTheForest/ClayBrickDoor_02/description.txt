@@ -1,0 +1,9 @@
+Name: ClayBrickDoor_02
+Name (Korean):  점토 벽돌 문_02
+Category: other
+
+=== Description ===
+A weathered clay brick door, fitting in with a rustic cottage. It has a slightly aged appearance and simple design.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting. A weathered clay brick door, dark red bricks, aged texture, simple design, 4k resolution, realistic rendering.

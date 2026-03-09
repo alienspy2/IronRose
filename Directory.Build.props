@@ -1,0 +1,14 @@
+<Project>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Roslyn 컴파일러 서버 재사용 비활성화 (메모리 절약) -->
+    <UseSharedCompilation>false</UseSharedCompilation>
+  </PropertyGroup>
+
+</Project>

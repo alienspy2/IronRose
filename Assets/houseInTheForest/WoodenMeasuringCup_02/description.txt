@@ -1,0 +1,9 @@
+Name: WoodenMeasuringCup_02
+Name (Korean): 우드 측정컵 02
+Category: prop
+
+=== Description ===
+A simple, wooden measuring cup with markings, suggesting it's used for simple cooking or crafting tasks in a rural environment.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, a wooden measuring cup with clear markings and a slightly worn texture.

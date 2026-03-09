@@ -1,0 +1,16 @@
+guid = "edbdb6b4-2d18-4cfb-acf7-28f688076ed7"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "icon_cross"
+type = "Sprite"
+index = 0
+guid = "b25d388d-98cb-4106-8f7b-8bbc1f10764c"

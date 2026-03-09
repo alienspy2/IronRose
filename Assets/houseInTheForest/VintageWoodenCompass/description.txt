@@ -1,0 +1,9 @@
+Name: VintageWoodenCompass
+Name (Korean): 빈티지 나무 나침반
+Category: prop
+
+=== Description ===
+A vintage wooden compass with an aged face, a symbol of exploration and adventure in a secluded forest cabin.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed vintage wooden compass, aged face, weathered wood, warm lighting, forest theme.

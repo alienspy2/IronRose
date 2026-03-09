@@ -1,0 +1,26 @@
+guid = "c1ae6bf6-f708-428c-95d3-10113cf70df2"
+version = 1
+[importer]
+generate_mipmesh = true
+mipmesh_min_triangles = 500
+mipmesh_target_error = 0.02
+type = "MeshImporter"
+scale = 1.0
+generate_normals = true
+flip_uvs = true
+triangulate = true
+[[sub_assets]]
+name = "tmpq2htgqmr.ply"
+type = "Mesh"
+index = 0
+guid = "8425aaca-04ed-4722-a928-cf7912405601"
+[[sub_assets]]
+name = "Material_0"
+type = "Material"
+index = 0
+guid = "9e47ffb1-a441-46ca-aa97-42e50d9061fc"
+[[sub_assets]]
+name = "Texture_0"
+type = "Texture2D"
+index = 0
+guid = "a89fe50e-7107-47df-9df8-5749558f5ca5"

@@ -1,0 +1,16 @@
+guid = "ae552a67-ab8c-4fd0-b2e2-45ee7d4f28c9"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = true
+[[sub_assets]]
+name = "Centaur"
+type = "Sprite"
+index = 0
+guid = "80bc46d8-9bb5-49ef-ae10-4b6faa1ed39f"

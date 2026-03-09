@@ -1,0 +1,9 @@
+Name: StoneFlagstoneFloor_01
+Name (Korean): 돌 타일 바닥_01
+Category: floor
+
+=== Description ===
+A texture depicting a floor made of individual flagstones, common in older cabins.  Shows slight grout lines and weathering.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed texture of stone flagstone floor, visible grout lines, weathering, grey and beige tones, 4K resolution, photorealistic

@@ -1,0 +1,16 @@
+guid = "3a21faff-e3bb-46c5-b378-f4bbc925b8bc"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "icon_outline_checkmark"
+type = "Sprite"
+index = 0
+guid = "7aabee08-d427-44db-82fe-d6b2928c6e69"

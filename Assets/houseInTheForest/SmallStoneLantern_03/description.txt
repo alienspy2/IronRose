@@ -1,0 +1,9 @@
+Name: SmallStoneLantern_03
+Name (Korean): 작은 돌 램프 03
+Category: prop
+
+=== Description ===
+A small, weathered stone lantern, partially obscured by moss.  It emits a subtle, ambient light.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, a small stone lantern partially covered in moss with a warm glow emanating from within.

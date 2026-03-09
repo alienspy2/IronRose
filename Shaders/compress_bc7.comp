@@ -1,0 +1,156 @@
+#version 450
+
+// BC7 Mode 6 GPU texture compressor
+// Each thread processes one 4×4 block → 128-bit BC7 block (4 uints)
+//
+// Mode 6: 1 subset, 7-bit RGBA endpoints + 1 p-bit each, 4-bit indices
+// Bit layout: mode(7) + R0(7)+R1(7)+G0(7)+G1(7)+B0(7)+B1(7)+A0(7)+A1(7) + P0(1)+P1(1) + indices(63)
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) readonly buffer InputPixels {
+    uint pixels[];
+};
+
+layout(set = 0, binding = 1) buffer OutputBlocks {
+    uint blocks[];
+};
+
+layout(set = 0, binding = 2) uniform Params {
+    uint texWidth;
+    uint texHeight;
+    uint blocksX;
+    uint blocksY;
+};
+
+// BC7 Mode 6 interpolation weights (4-bit, 16 entries)
+const uint WEIGHTS[16] = uint[16](
+    0, 4, 9, 13, 17, 21, 26, 30, 34, 38, 43, 47, 51, 55, 60, 64
+);
+
+uvec4 loadPixel(uint px, uint py) {
+    px = min(px, texWidth - 1u);
+    py = min(py, texHeight - 1u);
+    uint packed = pixels[py * texWidth + px];
+    return uvec4(packed & 0xFFu, (packed >> 8) & 0xFFu,
+                 (packed >> 16) & 0xFFu, (packed >> 24) & 0xFFu);
+}
+
+void writeBits(inout uvec4 data, inout uint bitPos, uint value, uint numBits) {
+    uint wordIdx = bitPos >> 5u;
+    uint bitOff  = bitPos & 31u;
+    data[wordIdx] |= (value << bitOff);
+    if (bitOff + numBits > 32u && wordIdx < 3u) {
+        data[wordIdx + 1u] |= (value >> (32u - bitOff));
+    }
+    bitPos += numBits;
+}
+
+void main() {
+    uint bx = gl_GlobalInvocationID.x;
+    uint by = gl_GlobalInvocationID.y;
+    if (bx >= blocksX || by >= blocksY) return;
+
+    // Load 4×4 block
+    uvec4 texels[16];
+    uvec4 minCol = uvec4(255u);
+    uvec4 maxCol = uvec4(0u);
+
+    uint baseX = bx * 4u;
+    uint baseY = by * 4u;
+    for (uint j = 0u; j < 4u; j++) {
+        for (uint i = 0u; i < 4u; i++) {
+            uvec4 c = loadPixel(baseX + i, baseY + j);
+            uint idx = j * 4u + i;
+            texels[idx] = c;
+            minCol = min(minCol, c);
+            maxCol = max(maxCol, c);
+        }
+    }
+
+    // Quantize endpoints to 7-bit + p-bit
+    // Mode 6 has 1 p-bit per endpoint (shared across all channels)
+    // Effective 8-bit: (7bit << 1) | pbit, then replicate MSB: val | (val >> 7)
+    // For best quality with min/max: try both p-bit values and pick better
+
+    // Simple approach: p-bit = LSB of the rounded 8-bit value
+    uvec4 e0_7 = (minCol >> 1u) & 0x7Fu;
+    uvec4 e1_7 = (maxCol >> 1u) & 0x7Fu;
+    uint pb0 = minCol.r & 1u;  // use R channel LSB as p-bit hint
+    uint pb1 = maxCol.r & 1u;
+
+    // Reconstruct full 8-bit endpoints for index computation
+    uvec4 ep0_full, ep1_full;
+    for (uint ch = 0u; ch < 4u; ch++) {
+        uint v0 = (e0_7[ch] << 1u) | pb0;
+        uint v1 = (e1_7[ch] << 1u) | pb1;
+        // BC7 dequantization: replicate top bit into LSB
+        ep0_full[ch] = v0 | (v0 >> 7u);
+        ep1_full[ch] = v1 | (v1 >> 7u);
+    }
+
+    // Compute 4-bit indices (find closest interpolated color)
+    uint indices[16];
+    for (uint t = 0u; t < 16u; t++) {
+        uint bestIdx = 0u;
+        uint bestDist = 0xFFFFFFFFu;
+        for (uint idx = 0u; idx < 16u; idx++) {
+            uint w = WEIGHTS[idx];
+            uint dist = 0u;
+            for (uint ch = 0u; ch < 4u; ch++) {
+                uint interp = (ep0_full[ch] * (64u - w) + ep1_full[ch] * w + 32u) >> 6u;
+                int diff = int(texels[t][ch]) - int(interp);
+                dist += uint(diff * diff);
+            }
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestIdx = idx;
+            }
+        }
+        indices[t] = bestIdx;
+    }
+
+    // Anchor fix-up: index[0] must have MSB = 0 (i.e. < 8 for 4-bit)
+    // If not, swap endpoints and complement all indices
+    if (indices[0] >= 8u) {
+        uvec4 tmp = e0_7; e0_7 = e1_7; e1_7 = tmp;
+        uint ptmp = pb0; pb0 = pb1; pb1 = ptmp;
+        for (uint t = 0u; t < 16u; t++) {
+            indices[t] = 15u - indices[t];
+        }
+    }
+
+    // Pack BC7 Mode 6 block (128 bits = uvec4)
+    uvec4 data = uvec4(0u);
+    uint bitPos = 0u;
+
+    // Mode 6: bit pattern = 0000001 (7 bits, bit 6 is set)
+    writeBits(data, bitPos, 1u << 6u, 7u);
+
+    // Endpoints: R0, R1, G0, G1, B0, B1, A0, A1 (each 7 bits)
+    writeBits(data, bitPos, e0_7.r, 7u);
+    writeBits(data, bitPos, e1_7.r, 7u);
+    writeBits(data, bitPos, e0_7.g, 7u);
+    writeBits(data, bitPos, e1_7.g, 7u);
+    writeBits(data, bitPos, e0_7.b, 7u);
+    writeBits(data, bitPos, e1_7.b, 7u);
+    writeBits(data, bitPos, e0_7.a, 7u);
+    writeBits(data, bitPos, e1_7.a, 7u);
+
+    // P-bits: P0, P1 (1 bit each)
+    writeBits(data, bitPos, pb0, 1u);
+    writeBits(data, bitPos, pb1, 1u);
+
+    // Indices: index[0] = 3 bits (anchor), indices[1..15] = 4 bits each
+    writeBits(data, bitPos, indices[0] & 0x7u, 3u);
+    for (uint t = 1u; t < 16u; t++) {
+        writeBits(data, bitPos, indices[t], 4u);
+    }
+
+    // Write output
+    uint blockIdx = (by * blocksX + bx) * 4u;
+    blocks[blockIdx + 0u] = data.x;
+    blocks[blockIdx + 1u] = data.y;
+    blocks[blockIdx + 2u] = data.z;
+    blocks[blockIdx + 3u] = data.w;
+}

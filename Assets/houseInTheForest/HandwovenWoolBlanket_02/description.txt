@@ -1,0 +1,9 @@
+Name: HandwovenWoolBlanket_02
+Name (Korean): 수공예 양털 담요 02
+Category: prop
+
+=== Description ===
+A thick, handwoven wool blanket, with a rich, textured appearance.  It suggests a comfortable and cozy space.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, a handwoven wool blanket with a close-up view of the texture and weave.

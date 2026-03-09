@@ -1,0 +1,9 @@
+Name: HandwovenWoolRug_01
+Name (Korean): 수공예 양모 러그_01
+Category: furniture
+
+=== Description ===
+A richly colored handwoven wool rug, adding warmth and texture to the floor of a woodland cottage. The rug displays a natural, earthy pattern.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, handwoven wool rug, rich colors, natural patterns, 숲속의 작은 집 theme, high resolution, detailed textures.

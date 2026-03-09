@@ -1,0 +1,16 @@
+guid = "222234f4-063d-4d35-af33-bf2c0c3847b1"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = true
+[[sub_assets]]
+name = "Hell Knight"
+type = "Sprite"
+index = 0
+guid = "815bddab-fbb4-46ba-b3a3-8a4fac17d9dd"

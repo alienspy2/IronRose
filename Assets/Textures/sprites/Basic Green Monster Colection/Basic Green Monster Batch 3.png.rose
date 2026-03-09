@@ -1,0 +1,16 @@
+guid = "beb583d8-aa46-4587-af98-29ec4b6c88ef"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = true
+[[sub_assets]]
+name = "Basic Green Monster Batch 3"
+type = "Sprite"
+index = 0
+guid = "570cde6c-fab9-4054-ab49-9b67037d4c1d"

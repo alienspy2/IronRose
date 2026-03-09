@@ -1,0 +1,9 @@
+Name: DriedHerbBundle
+Name (Korean): 말린 허브 묶음
+Category: prop
+
+=== Description ===
+A tightly bound bundle of dried herbs hanging from a simple wooden twine.  It exudes a scent of the forest.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed dried herb bundle, rustic twine, natural textures, earthy tones, realistic rendering, warm lighting.

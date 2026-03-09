@@ -1,0 +1,165 @@
+using System.Linq;
+using System.Numerics;
+using Veldrid;
+using RoseEngine;
+using Vector4 = System.Numerics.Vector4;
+
+namespace IronRose.Rendering
+{
+    // Mesh, sprite, and text draw methods.
+    // Extracted from RenderSystem (Phase 15 — H-1).
+    public partial class RenderSystem
+    {
+        private void DrawOpaqueRenderers(CommandList cl, System.Numerics.Matrix4x4 viewProj)
+        {
+            foreach (var renderer in MeshRenderer._allRenderers)
+            {
+                if (!renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
+                if (renderer.gameObject._isEditorInternal) continue;
+                var filter = renderer.GetComponent<MeshFilter>();
+                if (filter?.mesh == null) continue;
+                var mesh = filter.mesh;
+                mesh.UploadToGPU(_device!);
+                if (mesh.VertexBuffer == null || mesh.IndexBuffer == null) continue;
+
+                // Material override: drag-hover preview용 임시 Material
+                var mat = (_materialOverride != null &&
+                           renderer.gameObject.GetInstanceID() == _materialOverrideObjectId)
+                    ? _materialOverride
+                    : renderer.material;
+                var (matUniforms, texView, normalTexView, mroTexView) = PrepareMaterial(mat);
+                DrawMesh(cl, viewProj, mesh, renderer.transform, matUniforms, texView, bindPerFrame: false, normalTexView, mroTexView);
+            }
+        }
+
+        private void DrawAllRenderers(CommandList cl, System.Numerics.Matrix4x4 viewProj, bool useWireframeColor)
+        {
+            foreach (var renderer in MeshRenderer._allRenderers)
+            {
+                if (!renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
+                if (renderer.gameObject._isEditorInternal) continue;
+                var filter = renderer.GetComponent<MeshFilter>();
+                if (filter?.mesh == null) continue;
+                var mesh = filter.mesh;
+                mesh.UploadToGPU(_device!);
+                if (mesh.VertexBuffer == null || mesh.IndexBuffer == null) continue;
+
+                MaterialUniforms matUniforms;
+                TextureView? texView;
+                TextureView? normalTexView = null;
+                TextureView? mroTexView = null;
+                if (useWireframeColor)
+                {
+                    var wc = DebugOverlaySettings.wireframeColor;
+                    matUniforms = new MaterialUniforms
+                    {
+                        Color = new Vector4(wc.r, wc.g, wc.b, wc.a),
+                        Roughness = 0.5f, Occlusion = 1f,
+                    };
+                    texView = null;
+                }
+                else
+                {
+                    (matUniforms, texView, normalTexView, mroTexView) = PrepareMaterial(renderer.material);
+                }
+
+                DrawMesh(cl, viewProj, mesh, renderer.transform, matUniforms, texView, bindPerFrame: true, normalTexView, mroTexView);
+            }
+        }
+
+        private void SetUnlitLightData(CommandList cl, Camera camera)
+        {
+            cl.UpdateBuffer(_lightBuffer, 0, new LightUniforms
+            {
+                CameraPos = new Vector4(camera.transform.position.x, camera.transform.position.y, camera.transform.position.z, 0),
+                LightCount = -1,
+            });
+        }
+
+        private void DrawAllSprites(CommandList cl, System.Numerics.Matrix4x4 viewProj, Camera camera)
+        {
+            SetUnlitLightData(cl, camera);
+            cl.SetPipeline(_spritePipeline);
+
+            var active = SpriteRenderer._allSpriteRenderers
+                .Where(sr => sr.enabled && sr.sprite != null &&
+                             sr.gameObject.activeInHierarchy && !sr._isDestroyed)
+                .ToList();
+            if (active.Count == 0) return;
+
+            var camPos = camera.transform.position;
+            active.Sort((a, b) =>
+            {
+                int orderCmp = a.sortingOrder.CompareTo(b.sortingOrder);
+                if (orderCmp != 0) return orderCmp;
+                return (b.transform.position - camPos).sqrMagnitude
+                    .CompareTo((a.transform.position - camPos).sqrMagnitude);
+            });
+
+            foreach (var sr in active)
+            {
+                sr.EnsureMesh();
+                if (sr._cachedMesh == null) continue;
+                var mesh = sr._cachedMesh;
+                mesh.UploadToGPU(_device!);
+                if (mesh.VertexBuffer == null || mesh.IndexBuffer == null) continue;
+
+                TextureView? texView = null;
+                float hasTexture = 0f;
+                sr.sprite!.texture.UploadToGPU(_device!);
+                if (sr.sprite.texture.TextureView != null)
+                { texView = sr.sprite.texture.TextureView; hasTexture = 1f; }
+
+                var c = sr.color;
+                DrawMesh(cl, viewProj, mesh, sr.transform, new MaterialUniforms
+                {
+                    Color = new Vector4(c.r, c.g, c.b, c.a),
+                    HasTexture = hasTexture,
+                }, texView, bindPerFrame: true);
+            }
+        }
+
+        private void DrawAllTexts(CommandList cl, System.Numerics.Matrix4x4 viewProj, Camera camera)
+        {
+            SetUnlitLightData(cl, camera);
+            cl.SetPipeline(_spritePipeline);
+
+            var active = TextRenderer._allTextRenderers
+                .Where(tr => tr.enabled && tr.font?.atlasTexture != null &&
+                             !string.IsNullOrEmpty(tr.text) &&
+                             tr.gameObject.activeInHierarchy && !tr._isDestroyed)
+                .ToList();
+            if (active.Count == 0) return;
+
+            var camPos = camera.transform.position;
+            active.Sort((a, b) =>
+            {
+                int orderCmp = a.sortingOrder.CompareTo(b.sortingOrder);
+                if (orderCmp != 0) return orderCmp;
+                return (b.transform.position - camPos).sqrMagnitude
+                    .CompareTo((a.transform.position - camPos).sqrMagnitude);
+            });
+
+            foreach (var tr in active)
+            {
+                tr.EnsureMesh();
+                if (tr._cachedMesh == null) continue;
+                var mesh = tr._cachedMesh;
+                mesh.UploadToGPU(_device!);
+                if (mesh.VertexBuffer == null || mesh.IndexBuffer == null) continue;
+
+                TextureView? texView = null;
+                float hasTexture = 0f;
+                tr.font!.atlasTexture!.UploadToGPU(_device!);
+                if (tr.font.atlasTexture.TextureView != null)
+                { texView = tr.font.atlasTexture.TextureView; hasTexture = 1f; }
+
+                DrawMesh(cl, viewProj, mesh, tr.transform, new MaterialUniforms
+                {
+                    Color = new Vector4(tr.color.r, tr.color.g, tr.color.b, tr.color.a),
+                    HasTexture = hasTexture,
+                }, texView, bindPerFrame: true);
+            }
+        }
+    }
+}

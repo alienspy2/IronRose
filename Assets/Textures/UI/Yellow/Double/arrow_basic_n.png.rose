@@ -1,0 +1,16 @@
+guid = "af77420f-5b8e-428a-904e-936224cf7989"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "arrow_basic_n"
+type = "Sprite"
+index = 0
+guid = "6981f79b-0330-41e7-a9ee-f92aec6f55a5"

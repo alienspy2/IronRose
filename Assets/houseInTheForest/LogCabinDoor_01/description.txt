@@ -1,0 +1,9 @@
+Name: LogCabinDoor_01
+Name (Korean): 나무 집 문_01
+Category: other
+
+=== Description ===
+A sturdy door constructed from log cabin style wood, common in rustic cottages. It’s slightly worn and features a dark stain.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting.  A log cabin style door made of wood, dark stain, weathered texture, sturdy construction, 4k resolution, realistic rendering.

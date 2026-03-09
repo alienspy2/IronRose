@@ -1,0 +1,9 @@
+Name: VintageWoodenCompass_02
+Name (Korean): 빈티지 우드 나침반 02
+Category: prop
+
+=== Description ===
+A weathered vintage wooden compass, with a brass center and a slightly cracked glass face.  It evokes a sense of adventure and exploration.
+
+=== Generation Prompt ===
+Isolated on solid white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, a vintage wooden compass with a brass center and a cracked glass face, highlighting the aged details.

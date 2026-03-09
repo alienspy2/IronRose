@@ -1,0 +1,9 @@
+Name: AntiqueBook
+Name (Korean): 고전 서적
+Category: prop
+
+=== Description ===
+An antique book with a worn leather cover, suggesting a collection of forgotten tales and knowledge in a woodland cabin.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed antique book, worn leather cover, aged paper, warm lighting, forest theme.

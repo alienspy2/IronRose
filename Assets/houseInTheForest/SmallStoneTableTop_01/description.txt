@@ -1,0 +1,9 @@
+Name: SmallStoneTableTop_01
+Name (Korean): 작은 돌 테이블 상판_01
+Category: furniture
+
+=== Description ===
+A natural stone tabletop, rough-hewn and weathered, suitable for a rustic table in a woodland cabin.  It has a slightly irregular surface.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, small stone tabletop, rough-hewn, weathered, irregular surface, 숲속의 작은 집 theme, high resolution, detailed textures.

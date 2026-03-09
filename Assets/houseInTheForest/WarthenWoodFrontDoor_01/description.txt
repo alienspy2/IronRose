@@ -1,0 +1,9 @@
+Name: WarthenWoodFrontDoor_01
+Name (Korean): 워스턴우드 앞문_01
+Category: other
+
+=== Description ===
+A weathered wooden front door with a Warthen wood panel design, typical of a small, secluded forest dwelling.  It features a simple iron handle and a slightly worn appearance.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting. A weathered wooden front door with a Warthen wood panel design, dark brown wood, iron handle, slightly worn, aged texture,  detailed wood grain, 4k resolution, realistic rendering.

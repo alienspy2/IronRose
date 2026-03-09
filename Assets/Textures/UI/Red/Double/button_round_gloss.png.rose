@@ -1,0 +1,16 @@
+guid = "b93ce86d-decb-4464-8017-af44dd4ec6d7"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "button_round_gloss"
+type = "Sprite"
+index = 0
+guid = "97f731b0-c677-4d85-9438-4e6dc9a34f39"

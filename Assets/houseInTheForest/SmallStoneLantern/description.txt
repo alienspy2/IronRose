@@ -1,0 +1,9 @@
+Name: SmallStoneLantern
+Name (Korean): 작은 돌 조명
+Category: prop
+
+=== Description ===
+A small, weathered stone lantern with a flickering, ethereal glow. It’s partially covered in moss.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed small stone lantern, weathered stone, mossy texture, atmospheric lighting, forest theme.

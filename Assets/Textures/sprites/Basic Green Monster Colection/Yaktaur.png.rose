@@ -1,0 +1,11 @@
+guid = "98f287a5-c059-4bf9-9db3-fa16f3b53a03"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = true

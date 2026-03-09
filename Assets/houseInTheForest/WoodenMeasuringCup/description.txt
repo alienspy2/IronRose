@@ -1,0 +1,9 @@
+Name: WoodenMeasuringCup
+Name (Korean): 나무 측정컵
+Category: prop
+
+=== Description ===
+A weathered wooden measuring cup, perhaps used for preparing simple forest remedies or baking goods.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed wooden measuring cup, weathered wood, rustic texture, warm lighting.

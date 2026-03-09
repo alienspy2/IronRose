@@ -1,0 +1,9 @@
+Name: HandcraftedWoodenWardrobe_01
+Name (Korean): 수제 나무 옷장_01
+Category: furniture
+
+=== Description ===
+A substantial wardrobe constructed from weathered wooden planks, featuring a simple, elegant design typical of a secluded woodland home. It has a sturdy door and exposed hinges.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, handcrafted wooden wardrobe, weathered planks, simple design, exposed hinges, 숲속의 작은 집 theme, high resolution, detailed textures.

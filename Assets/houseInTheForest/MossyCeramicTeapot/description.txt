@@ -1,0 +1,9 @@
+Name: MossyCeramicTeapot
+Name (Korean): 이끼 낀 세라믹 찻주전자
+Category: prop
+
+=== Description ===
+A small, moss-covered ceramic teapot, reminiscent of a forgotten corner of a woodland cottage. It has a simple, rustic design.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed mossy ceramic teapot, rustic design, earthy tones, natural texture, warm lighting.

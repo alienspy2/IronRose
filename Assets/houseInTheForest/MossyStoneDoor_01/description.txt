@@ -1,0 +1,9 @@
+Name: MossyStoneDoor_01
+Name (Korean): 이끼 낀 돌 문_01
+Category: other
+
+=== Description ===
+A stone door partially covered in moss, suggesting years of exposure to the forest environment. The stone is rough-hewn and gray, reflecting a primitive aesthetic.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting. A stone door partially covered in green moss, rough-hewn stone, gray color, weathered texture, 4k resolution, realistic rendering.

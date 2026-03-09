@@ -1,0 +1,125 @@
+#version 450
+
+// BC5 GPU texture compressor (for normal maps)
+// BC5 = two independent BC4 blocks: R channel + G channel
+// Each BC4 block: 2 byte endpoints + 16 × 3-bit indices = 64 bits
+// Each thread processes one 4×4 block → 128 bits (4 uints)
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) readonly buffer InputPixels {
+    uint pixels[];
+};
+
+layout(set = 0, binding = 1) buffer OutputBlocks {
+    uint blocks[];
+};
+
+layout(set = 0, binding = 2) uniform Params {
+    uint texWidth;
+    uint texHeight;
+    uint blocksX;
+    uint blocksY;
+};
+
+// Encode a single BC4 block (one channel, 16 values) into 64 bits (uvec2)
+// Format: endpoint0(8) + endpoint1(8) + 16 × index(3) = 64 bits
+// When e0 > e1: 8-level interpolation (endpoints + 6 interpolated)
+uvec2 encodeBC4(uint values[16], uint minVal, uint maxVal) {
+    // Ensure e0 > e1 for 8-level mode
+    uint e0 = maxVal;
+    uint e1 = minVal;
+
+    // Build 8-level palette
+    uint palette[8];
+    palette[0] = e0;
+    palette[1] = e1;
+    if (e0 > e1) {
+        palette[2] = (6u * e0 + 1u * e1 + 3u) / 7u;
+        palette[3] = (5u * e0 + 2u * e1 + 3u) / 7u;
+        palette[4] = (4u * e0 + 3u * e1 + 3u) / 7u;
+        palette[5] = (3u * e0 + 4u * e1 + 3u) / 7u;
+        palette[6] = (2u * e0 + 5u * e1 + 3u) / 7u;
+        palette[7] = (1u * e0 + 6u * e1 + 3u) / 7u;
+    } else {
+        // e0 == e1: all indices map to same value
+        for (uint i = 2u; i < 8u; i++) palette[i] = e0;
+    }
+
+    // Find best index for each pixel
+    uint indices = 0u;  // pack 16 × 3-bit indices
+    // First 16 indices need 48 bits → stored in bits [16..63]
+    // Layout: [e0:8][e1:8][idx0:3][idx1:3]...[idx15:3]
+    uint idxBits0 = 0u; // bits 0..31 of index region
+    uint idxBits1 = 0u; // bits 32..47 of index region
+
+    for (uint t = 0u; t < 16u; t++) {
+        uint bestIdx = 0u;
+        uint bestDist = 0xFFFFFFFFu;
+        for (uint i = 0u; i < 8u; i++) {
+            int diff = int(values[t]) - int(palette[i]);
+            uint dist = uint(diff * diff);
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestIdx = i;
+            }
+        }
+
+        // Pack 3-bit index at position t*3 within the 48-bit index region
+        uint bitPos = t * 3u;
+        if (bitPos < 32u) {
+            idxBits0 |= (bestIdx << bitPos);
+            if (bitPos + 3u > 32u) {
+                idxBits1 |= (bestIdx >> (32u - bitPos));
+            }
+        } else {
+            idxBits1 |= (bestIdx << (bitPos - 32u));
+        }
+    }
+
+    // Pack: low 32 bits = [e0:8][e1:8][idxBits0 lower 16 bits]
+    //        high 32 bits = [idxBits0 upper 16 bits][idxBits1 lower 16 bits]
+    uint lo = e0 | (e1 << 8u) | (idxBits0 << 16u);
+    uint hi = (idxBits0 >> 16u) | (idxBits1 << 16u);
+
+    return uvec2(lo, hi);
+}
+
+void main() {
+    uint bx = gl_GlobalInvocationID.x;
+    uint by = gl_GlobalInvocationID.y;
+    if (bx >= blocksX || by >= blocksY) return;
+
+    // Load R and G channels for 4×4 block
+    uint rValues[16];
+    uint gValues[16];
+    uint rMin = 255u, rMax = 0u;
+    uint gMin = 255u, gMax = 0u;
+
+    uint baseX = bx * 4u;
+    uint baseY = by * 4u;
+    for (uint j = 0u; j < 4u; j++) {
+        for (uint i = 0u; i < 4u; i++) {
+            uint px = min(baseX + i, texWidth - 1u);
+            uint py = min(baseY + j, texHeight - 1u);
+            uint packed = pixels[py * texWidth + px];
+            uint r = packed & 0xFFu;
+            uint g = (packed >> 8u) & 0xFFu;
+            uint idx = j * 4u + i;
+            rValues[idx] = r;
+            gValues[idx] = g;
+            rMin = min(rMin, r); rMax = max(rMax, r);
+            gMin = min(gMin, g); gMax = max(gMax, g);
+        }
+    }
+
+    uvec2 bc4_r = encodeBC4(rValues, rMin, rMax);
+    uvec2 bc4_g = encodeBC4(gValues, gMin, gMax);
+
+    // BC5 = BC4(R) then BC4(G)
+    uint blockIdx = (by * blocksX + bx) * 4u;
+    blocks[blockIdx + 0u] = bc4_r.x;
+    blocks[blockIdx + 1u] = bc4_r.y;
+    blocks[blockIdx + 2u] = bc4_g.x;
+    blocks[blockIdx + 3u] = bc4_g.y;
+}

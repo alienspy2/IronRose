@@ -1,0 +1,17 @@
+metallic = 0.0
+roughness = 0.0
+occlusion = 0.0
+normalMapStrength = 1.0
+mainTextureGuid = "efe405c4-d203-4d6b-aac9-8e562cbdf7a3"
+normalMapGuid = "a3160903-8310-44fd-b7c6-f038b0189f60"
+MROMapGuid = "7808113c-590d-4536-b175-eb69025e5dcc"
+[color]
+r = 1.0
+g = 1.0
+b = 1.0
+a = 1.0
+[emission]
+r = 0.0
+g = 0.0
+b = 0.0
+a = 1.0

@@ -1,0 +1,9 @@
+Name: WarthenWoodBasket_02
+Name (Korean): 와르텐 우드 바스켓 02
+Category: prop
+
+=== Description ===
+A woven basket made from Warthen wood, likely used for gathering berries or mushrooms.  It shows signs of age and use, with visible knots and imperfections.
+
+=== Generation Prompt ===
+Isolated on solid white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, a woven basket made of Warthen wood with visible wicker and a natural, earthy tone.

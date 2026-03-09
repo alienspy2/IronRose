@@ -1,0 +1,9 @@
+Name: FauxStone_01
+Name (Korean): FauxStone_01
+Category: wall
+
+=== Description ===
+A faux stone wall texture with a realistic stone appearance, suitable for various forest environments.
+
+=== Generation Prompt ===
+Isolated on solid white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, faux stone wall, stone texture, rough surface, 8k resolution

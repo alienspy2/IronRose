@@ -1,0 +1,9 @@
+Name: SmallStoneFloor_01
+Name (Korean): 작은 돌 바닥_01
+Category: floor
+
+=== Description ===
+A smaller scale stone floor texture, likely found in a confined space within the cabin.  The stones are closely packed.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed texture of small stone floor, closely packed stones, grey tones, 4K resolution, photorealistic

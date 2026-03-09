@@ -1,0 +1,11 @@
+guid = "cdbcad50-9d65-480e-8080-ae7807f36cdb"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Color"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = true

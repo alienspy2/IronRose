@@ -1,0 +1,9 @@
+Name: RoughStoneFloor_01
+Name (Korean): 거친 돌 바닥_01
+Category: floor
+
+=== Description ===
+A textured floor constructed from roughly cut stone blocks.  Provides a solid, durable ground surface.
+
+=== Generation Prompt ===
+Isolated on solid white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed texture of rough stone floor, irregular stone blocks, grey tones, 4K resolution, photorealistic

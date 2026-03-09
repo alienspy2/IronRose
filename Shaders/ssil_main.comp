@@ -1,0 +1,289 @@
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// --- Inputs ---
+layout(set = 0, binding = 0) uniform texture2D depthMipTex;   // R16F linear viewspace depth + MIP chain
+layout(set = 0, binding = 1) uniform texture2D normalTex;      // GBuffer normal (RGB) + roughness (A)
+layout(set = 0, binding = 2) uniform sampler linearSampler;
+
+// --- Outputs ---
+layout(set = 0, binding = 3, r8) uniform writeonly image2D aoOutput;
+
+// --- Parameters ---
+layout(set = 0, binding = 4) uniform SSILParams
+{
+    mat4 ViewMatrix;
+    mat4 ProjectionMatrix;
+    vec2 Resolution;        // screen width, height
+    float Radius;           // world-space AO radius (default: 1.5)
+    float FalloffScale;     // falloff exponent (default: 2.0)
+    int SliceCount;         // number of direction slices (3 = High)
+    int StepsPerSlice;      // samples per side per slice (3 = High, total 6)
+    int FrameIndex;         // for temporal noise
+    float DepthMipSamplingOffset;  // MIP bias (default: 3.3)
+};
+
+// --- 12B Outputs (Visibility Bitmask SSIL) ---
+layout(set = 0, binding = 5, rgba16f) uniform writeonly image2D indirectOutput;
+layout(set = 0, binding = 6) uniform texture2D albedoTex;      // GBuffer albedo for indirect color
+
+layout(set = 0, binding = 7) uniform SSILFlags
+{
+    int EnableIndirect;   // 0 = GTAO only, 1 = Visibility Bitmask SSIL
+    int _pad0;
+    int _pad1;
+    int _pad2;
+};
+
+// --- Constants ---
+const float PI = 3.14159265359;
+const float HALF_PI = 1.57079632679;
+
+// --- Utility ---
+
+// Spatial noise using R2 sequence (quasi-random, low discrepancy)
+float spatialNoise(ivec2 pos)
+{
+    return fract(52.9829189 * fract(0.06711056 * float(pos.x) + 0.00583715 * float(pos.y)));
+}
+
+float interleavedGradientNoise(ivec2 pos)
+{
+    vec3 magic = vec3(0.06711056, 0.00583715, 52.9829189);
+    return fract(magic.z * fract(dot(vec2(pos), magic.xy)));
+}
+
+// Reconstruct view-space position from UV + linear depth
+vec3 viewPosFromUV(vec2 uv, float linearDepth)
+{
+    // Reconstruct clip-space XY from UV
+    vec2 ndc = uv * 2.0 - 1.0;
+    ndc.y = -ndc.y; // Vulkan Y-flip
+
+    // Use projection matrix to get view-space XY
+    float viewX = ndc.x * linearDepth / ProjectionMatrix[0][0];
+    float viewY = ndc.y * linearDepth / ProjectionMatrix[1][1];
+
+    return vec3(viewX, viewY, -linearDepth);
+}
+
+// Fast acos approximation (from XeGTAO)
+float fastAcos(float x)
+{
+    float res = -0.156583 * abs(x) + HALF_PI;
+    res *= sqrt(1.0 - abs(x));
+    return x >= 0.0 ? res : PI - res;
+}
+
+// Sample depth MIP hierarchy at UV with appropriate MIP level
+float sampleDepthMip(vec2 uv, float mipLevel)
+{
+    return textureLod(sampler2D(depthMipTex, linearSampler), uv, mipLevel).r;
+}
+
+// --- GTAO Core ---
+
+// Analytical integration of cosine-weighted visibility over arc [h1, h2]
+// h1, h2: horizon angles, n: projected normal angle on slice plane
+float integrateArc(float h1, float h2, float n)
+{
+    float cosN = cos(n);
+    float sinN = sin(n);
+    return 0.25 * (-cos(2.0 * h1 - n) + cosN + 2.0 * h1 * sinN)
+         + 0.25 * (-cos(2.0 * h2 - n) + cosN + 2.0 * h2 * sinN);
+}
+
+// --- Visibility Bitmask (12B) ---
+
+uint updateSectors(float minHorizon, float maxHorizon, uint bitfield)
+{
+    uint startBit = uint(clamp(minHorizon * 32.0, 0.0, 31.0));
+    uint range = uint(clamp(ceil((maxHorizon - minHorizon) * 32.0), 0.0, 32.0));
+    uint mask = range > 0u ? (range >= 32u ? 0xFFFFFFFFu : (0xFFFFFFFFu >> (32u - range))) : 0u;
+    return bitfield | (mask << startBit);
+}
+
+void main()
+{
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    if (pos.x >= int(Resolution.x) || pos.y >= int(Resolution.y))
+        return;
+
+    vec2 texelSize = 1.0 / Resolution;
+    vec2 uv = (vec2(pos) + 0.5) * texelSize;
+
+    // Read center pixel data
+    float centerDepth = sampleDepthMip(uv, 0.0);
+    if (centerDepth <= 0.0)
+    {
+        imageStore(aoOutput, pos, vec4(1.0));
+        if (EnableIndirect > 0)
+            imageStore(indirectOutput, pos, vec4(0.0, 0.0, 0.0, 1.0));
+        return;
+    }
+
+    // View-space position and normal
+    vec3 viewPos = viewPosFromUV(uv, centerDepth);
+    vec3 worldNormal = normalize(texture(sampler2D(normalTex, linearSampler), uv).rgb);
+    vec3 viewNormal = normalize((ViewMatrix * vec4(worldNormal, 0.0)).xyz);
+
+    // View direction (from surface to camera, in view space camera is at origin)
+    vec3 viewDir = normalize(-viewPos);
+
+    // Screen-space radius from world-space radius
+    float screenRadius = (Radius / centerDepth) * ProjectionMatrix[0][0] * Resolution.x * 0.5;
+    screenRadius = max(screenRadius, 3.0); // minimum 3 pixels
+    screenRadius = min(screenRadius, 256.0);
+
+    // Temporal + spatial noise
+    float noiseSlice = interleavedGradientNoise(pos);
+    float noiseStep = fract(noiseSlice * 7.0 + float(FrameIndex & 63) * 0.7618033988);
+
+    float visibility = 0.0;
+    vec3 indirectSum = vec3(0.0);
+
+    // Per-slice processing
+    for (int slice = 0; slice < SliceCount; slice++)
+    {
+        float phi = (PI / float(SliceCount)) * (float(slice) + noiseSlice);
+        vec2 omega = vec2(cos(phi), sin(phi));
+
+        // Project normal onto slice plane
+        vec3 directionVec = vec3(omega, 0.0);
+        vec3 orthoDir = directionVec - dot(directionVec, viewDir) * viewDir;
+        vec3 axisVec = cross(directionVec, viewDir);
+        vec3 projNormal = viewNormal - axisVec * dot(viewNormal, axisVec);
+        float projNormalLen = length(projNormal);
+
+        float signN = sign(dot(orthoDir, projNormal));
+        float cosNorm = clamp(dot(projNormal, viewDir) / (projNormalLen + 0.0001), -1.0, 1.0);
+        float n = signN * fastAcos(cosNorm);
+
+        // Initialize horizon angles to tangent
+        float h0 = -HALF_PI; // negative direction
+        float h1 = -HALF_PI; // positive direction
+
+        // Visibility bitmask (12B)
+        uint sliceBits = 0u;
+
+        // March samples in both directions
+        for (int step = 0; step < StepsPerSlice; step++)
+        {
+            float t = (float(step) + noiseStep) / float(StepsPerSlice);
+            t = t * t; // quadratic distribution: more samples near center
+            float sampleDist = max(t * screenRadius, 1.0);
+
+            // MIP level selection based on distance
+            float mipLevel = max(0.0, log2(sampleDist) - DepthMipSamplingOffset);
+            mipLevel = min(mipLevel, 4.0);
+
+            // Positive direction
+            {
+                vec2 sampleUV = uv + omega * sampleDist * texelSize;
+                if (sampleUV.x >= 0.0 && sampleUV.x <= 1.0 && sampleUV.y >= 0.0 && sampleUV.y <= 1.0)
+                {
+                    float sampleDepth = sampleDepthMip(sampleUV, mipLevel);
+                    if (sampleDepth > 0.0)
+                    {
+                        vec3 sampleViewPos = viewPosFromUV(sampleUV, sampleDepth);
+                        vec3 horizonVec = sampleViewPos - viewPos;
+                        float horizonDist = length(horizonVec);
+
+                        if (horizonDist > 0.001 && horizonDist < Radius * FalloffScale)
+                        {
+                            float horizonAngle = atan(dot(horizonVec, viewDir), dot(horizonVec, normalize(orthoDir)));
+
+                            // Thickness heuristic: apply falloff for distant samples
+                            float falloff = clamp(1.0 - horizonDist / (Radius * FalloffScale), 0.0, 1.0);
+                            float candidate = mix(-HALF_PI, horizonAngle, falloff);
+                            h1 = max(h1, candidate);
+
+                            // 12B: Visibility bitmask + indirect lighting
+                            if (EnableIndirect > 0)
+                            {
+                                float normAngle = (horizonAngle + HALF_PI) / PI;  // [0, 1]
+                                float normAnglePrev = (h1 + HALF_PI) / PI;
+                                uint prevBits = sliceBits;
+                                sliceBits = updateSectors(min(normAnglePrev, normAngle),
+                                                          max(normAnglePrev, normAngle), sliceBits);
+                                uint newBits = sliceBits & ~prevBits;
+                                float weight = float(bitCount(newBits)) / 32.0;
+                                if (weight > 0.0)
+                                {
+                                    vec3 sampleColor = textureLod(sampler2D(albedoTex, linearSampler), sampleUV, 0).rgb;
+                                    vec3 sampleNormal = normalize(texture(sampler2D(normalTex, linearSampler), sampleUV).rgb);
+                                    float NdotH = max(dot(worldNormal, normalize(horizonVec)), 0.0);
+                                    float sNdotH = max(dot(sampleNormal, normalize(-horizonVec)), 0.0);
+                                    indirectSum += sampleColor * weight * NdotH * sNdotH * falloff;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Negative direction
+            {
+                vec2 sampleUV = uv - omega * sampleDist * texelSize;
+                if (sampleUV.x >= 0.0 && sampleUV.x <= 1.0 && sampleUV.y >= 0.0 && sampleUV.y <= 1.0)
+                {
+                    float sampleDepth = sampleDepthMip(sampleUV, mipLevel);
+                    if (sampleDepth > 0.0)
+                    {
+                        vec3 sampleViewPos = viewPosFromUV(sampleUV, sampleDepth);
+                        vec3 horizonVec = sampleViewPos - viewPos;
+                        float horizonDist = length(horizonVec);
+
+                        if (horizonDist > 0.001 && horizonDist < Radius * FalloffScale)
+                        {
+                            float horizonAngle = atan(dot(horizonVec, viewDir), dot(horizonVec, normalize(-orthoDir)));
+
+                            float falloff = clamp(1.0 - horizonDist / (Radius * FalloffScale), 0.0, 1.0);
+                            float candidate = mix(-HALF_PI, horizonAngle, falloff);
+                            h0 = max(h0, candidate);
+
+                            // 12B: indirect for negative direction
+                            if (EnableIndirect > 0)
+                            {
+                                float normAngle = (horizonAngle + HALF_PI) / PI;
+                                uint prevBits = sliceBits;
+                                sliceBits = updateSectors(0.0, normAngle, sliceBits);
+                                uint newBits = sliceBits & ~prevBits;
+                                float weight = float(bitCount(newBits)) / 32.0;
+                                if (weight > 0.0)
+                                {
+                                    vec3 sampleColor = textureLod(sampler2D(albedoTex, linearSampler), sampleUV, 0).rgb;
+                                    vec3 sampleNormal = normalize(texture(sampler2D(normalTex, linearSampler), sampleUV).rgb);
+                                    float NdotH = max(dot(worldNormal, normalize(horizonVec)), 0.0);
+                                    float sNdotH = max(dot(sampleNormal, normalize(-horizonVec)), 0.0);
+                                    indirectSum += sampleColor * weight * NdotH * sNdotH * falloff;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Clamp horizons to projected normal hemisphere
+        h0 = n + max(-h0 - n, -HALF_PI);
+        h1 = n + min(h1 - n, HALF_PI);
+
+        // Analytical integration of visibility for this slice
+        float sliceVisibility = integrateArc(h0, h1, n);
+        visibility += projNormalLen * sliceVisibility;
+    }
+
+    // Average over all slices
+    visibility /= float(SliceCount);
+    visibility = clamp(visibility, 0.0, 1.0);
+
+    imageStore(aoOutput, pos, vec4(visibility, 0.0, 0.0, 0.0));
+
+    if (EnableIndirect > 0)
+    {
+        indirectSum /= float(SliceCount);
+        imageStore(indirectOutput, pos, vec4(indirectSum, 1.0));
+    }
+}

@@ -1,0 +1,9 @@
+Name: ReedWallBackDoor_01
+Name (Korean): reed 벽 후문_01
+Category: other
+
+=== Description ===
+A simple, rustic back door constructed from woven reed panels, fitting seamlessly into a small cottage's interior design. It has a natural, earthy color and a hand-woven texture.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting.  A back door constructed from woven reed panels, reed texture, natural brown color, simple design, slightly weathered, 4k resolution, realistic rendering.

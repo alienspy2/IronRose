@@ -1,0 +1,9 @@
+Name: DriedHerbBundle_02
+Name (Korean): 말린 허브 묶음 02
+Category: prop
+
+=== Description ===
+A tightly bundled collection of dried herbs, tied with twine. It adds a natural and fragrant element to the scene.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, a bundle of dried herbs tied with twine, emphasizing the textures of the herbs and the twine.

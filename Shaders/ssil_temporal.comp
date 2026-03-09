@@ -1,0 +1,94 @@
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+// Current frame (spatially denoised)
+layout(set = 0, binding = 0) uniform texture2D currentAO;
+layout(set = 0, binding = 1) uniform texture2D currentIndirect;
+
+// History (previous frame's temporal result)
+layout(set = 0, binding = 2) uniform texture2D historyAO;
+layout(set = 0, binding = 3) uniform texture2D historyIndirect;
+
+// GBuffer world position (for reprojection)
+layout(set = 0, binding = 4) uniform texture2D worldPosTex;
+
+layout(set = 0, binding = 5) uniform sampler linearSampler;
+
+// Output (blended — reuses raw textures)
+layout(set = 0, binding = 6, r8) uniform writeonly image2D aoOutput;
+layout(set = 0, binding = 7, rgba16f) uniform writeonly image2D indirectOutput;
+
+layout(set = 0, binding = 8) uniform TemporalParams
+{
+    mat4 PrevViewProj;
+    vec2 Resolution;
+    float BlendFactor;     // history weight (0.0 = current only, 1.0 = history only)
+    float _pad;
+};
+
+void main()
+{
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    if (pos.x >= int(Resolution.x) || pos.y >= int(Resolution.y))
+        return;
+
+    vec2 texelSize = 1.0 / Resolution;
+    vec2 uv = (vec2(pos) + 0.5) * texelSize;
+
+    // Current frame values
+    float curAO = texture(sampler2D(currentAO, linearSampler), uv).r;
+    vec3 curInd = texture(sampler2D(currentIndirect, linearSampler), uv).rgb;
+
+    // Read world position for reprojection
+    vec4 worldPosData = texture(sampler2D(worldPosTex, linearSampler), uv);
+    if (worldPosData.a < 0.5)
+    {
+        // Sky pixel — no history
+        imageStore(aoOutput, pos, vec4(curAO, 0.0, 0.0, 0.0));
+        imageStore(indirectOutput, pos, vec4(curInd, 1.0));
+        return;
+    }
+
+    // Reproject to previous frame's screen space
+    vec4 prevClip = PrevViewProj * vec4(worldPosData.xyz, 1.0);
+    vec2 prevNDC = prevClip.xy / prevClip.w;
+    vec2 prevUV = prevNDC * 0.5 + 0.5;
+    prevUV.y = 1.0 - prevUV.y; // Vulkan Y flip
+
+    float blendedAO = curAO;
+    vec3 blendedInd = curInd;
+
+    if (prevUV.x >= 0.0 && prevUV.x <= 1.0 && prevUV.y >= 0.0 && prevUV.y <= 1.0)
+    {
+        float histAO = texture(sampler2D(historyAO, linearSampler), prevUV).r;
+        vec3 histInd = texture(sampler2D(historyIndirect, linearSampler), prevUV).rgb;
+
+        // Neighborhood clamping — reject stale history outside current frame's range
+        float minAO = curAO, maxAO = curAO;
+        vec3 minInd = curInd, maxInd = curInd;
+
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                vec2 nUV = uv + vec2(dx, dy) * texelSize;
+                float nAO = texture(sampler2D(currentAO, linearSampler), nUV).r;
+                vec3 nInd = texture(sampler2D(currentIndirect, linearSampler), nUV).rgb;
+                minAO = min(minAO, nAO);
+                maxAO = max(maxAO, nAO);
+                minInd = min(minInd, nInd);
+                maxInd = max(maxInd, nInd);
+            }
+        }
+
+        histAO = clamp(histAO, minAO, maxAO);
+        histInd = clamp(histInd, minInd, maxInd);
+
+        blendedAO = mix(curAO, histAO, BlendFactor);
+        blendedInd = mix(curInd, histInd, BlendFactor);
+    }
+
+    imageStore(aoOutput, pos, vec4(blendedAO, 0.0, 0.0, 0.0));
+    imageStore(indirectOutput, pos, vec4(blendedInd, 1.0));
+}

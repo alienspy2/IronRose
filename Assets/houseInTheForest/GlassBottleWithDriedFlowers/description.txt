@@ -1,0 +1,9 @@
+Name: GlassBottleWithDriedFlowers
+Name (Korean): 말린 꽃이 담긴 유리병
+Category: prop
+
+=== Description ===
+A clear glass bottle filled with dried wildflowers, creating a delicate and natural element in a woodland setting.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed glass bottle with dried flowers, delicate flowers, clear glass, warm lighting, natural texture.

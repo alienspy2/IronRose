@@ -1,0 +1,9 @@
+Name: SmallClayPotWithSucculent_02
+Name (Korean): 작은 점토 항아리 02
+Category: prop
+
+=== Description ===
+A small, rustic clay pot containing a thriving succulent plant. It adds a touch of greenery to the woodland scene.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, a small clay pot containing a succulent plant with vibrant green leaves.

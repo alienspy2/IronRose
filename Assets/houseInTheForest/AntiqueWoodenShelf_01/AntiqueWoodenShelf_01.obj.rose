@@ -1,0 +1,23 @@
+guid = "61664a3c-877c-46a2-8cdc-7eb6162ccc24"
+version = 1
+[importer]
+type = "MeshImporter"
+scale = 1.0
+generate_normals = true
+flip_uvs = true
+triangulate = true
+[[sub_assets]]
+name = "tmpayy9f6iu.ply"
+type = "Mesh"
+index = 0
+guid = "0f056718-b5dd-4e43-9c58-c5fccf81dc98"
+[[sub_assets]]
+name = "DefaultMaterial"
+type = "Material"
+index = 0
+guid = "0add7498-ef44-4d27-a32e-4cc26fef396c"
+[[sub_assets]]
+name = "material_0"
+type = "Material"
+index = 1
+guid = "0e7b24ea-174f-41df-a5d5-22edbba89339"

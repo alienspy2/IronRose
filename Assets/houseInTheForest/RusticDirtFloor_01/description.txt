@@ -1,0 +1,9 @@
+Name: RusticDirtFloor_01
+Name (Korean): Rustic 흙 바닥_01
+Category: floor
+
+=== Description ===
+A basic textured dirt floor, suitable for an early cabin environment.  Shows subtle organic variations in color.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed texture of rustic dirt floor, subtle organic color variations, earthy tones, 4K resolution, photorealistic

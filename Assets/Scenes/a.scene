@@ -1,0 +1,758 @@
+name = "a"
+[[gameObjects]]
+name = "Main Camera"
+guid = "39dff26e-69ad-445f-a848-00bd32cb15fb"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 12.23778343200684, -24.47556304931641]
+localRotation = [0.2297529578208923, 0.0, 0.0, 0.973249077796936]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "Camera"
+[gameObjects.components.fields]
+fieldOfView = 60.0
+nearClipPlane = 0.1000000014901161
+farClipPlane = 1000.0
+clearFlags = "Skybox"
+backgroundColor = [0.1920000016689301, 0.3019999861717224, 0.4749999940395355, 1.0]
+[[gameObjects]]
+name = "Cube"
+guid = "39bc8c44-1723-4d1c-8627-4aa42c3c3dfb"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.5, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+primitiveType = "Cube"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "21af5140-ecaf-43f8-ab37-513a94cf486f"
+[[gameObjects.components]]
+type = "TestComponent"
+[gameObjects.components.fields]
+speed = 5.0
+health = 100
+isActive = true
+playerName = "Player"
+position = [0.0, 0.0, 0.0]
+tint = [1.0, 1.0, 1.0, 1.0]
+customVec4 = [0.0, 0.0, 0.0, 0.0]
+customDouble = 3.140000104904175
+customByte = 128
+speeds = [1.0, 2.0, 3.0]
+waypoints = []
+enabled = true
+[[gameObjects.components]]
+type = "Test2"
+[gameObjects.components.fields]
+enabled = true
+[gameObjects.components.fields.hello]
+_sceneRef = "Transform"
+_guid = "9ea2df0f-d79e-425b-bacf-98874cef1233"
+[[gameObjects]]
+name = "Plane"
+guid = "868f0de6-c16a-4135-b15a-6c2779abdbc2"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+primitiveType = "Plane"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "1ddd3f47-9781-404c-86cd-3aeaf4c50fdc"
+[[gameObjects]]
+name = "Spot Light"
+guid = "98fb2d1a-52da-4430-8b87-1ddf86918cfc"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 5.0, -2.0]
+localRotation = [0.5606287717819214, 0.0, 0.0, 0.8280672430992126]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "RoseEngine.Light"
+[gameObjects.components.fields]
+color = [1.0, 1.0, 1.0, 1.0]
+intensity = 2.0
+range = 15.0
+rangeNear = 0.0
+type = "Spot"
+enabled = true
+spotAngle = 80.0
+spotOuterAngle = 90.0
+shadows = true
+shadowResolution = 256
+shadowBias = 0.001000000047497451
+shadowNormalBias = 0.001000000047497451
+shadowNearPlane = 0.1000000014901161
+shadowCullMode = "TwoFace"
+shadowSoftness = 1.0
+[[gameObjects]]
+name = "Canvas"
+guid = "7755d291-b901-4614-a931-086f7d6286aa"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[gameObjects.rectTransform]
+anchorMin = [0.0, 0.0]
+anchorMax = [1.0, 1.0]
+anchoredPosition = [0.0, 0.0]
+sizeDelta = [0.0, 0.0]
+pivot = [0.5, 0.5]
+[[gameObjects.components]]
+type = "RoseEngine.Canvas"
+[gameObjects.components.fields]
+renderMode = "ScreenSpaceOverlay"
+sortingOrder = 0
+referenceResolution = [1920.0, 1080.0]
+scaleMode = "ScaleWithScreenSize"
+matchWidthOrHeight = 0.0
+[[gameObjects]]
+name = "TitleBar"
+guid = "a1c68857-e1fe-4b2c-9e3e-0e9b03737725"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 4
+[gameObjects.rectTransform]
+anchorMin = [0.0, 0.0]
+anchorMax = [1.0, 0.0]
+anchoredPosition = [0.0, 20.0]
+sizeDelta = [0.0, 40.0]
+pivot = [0.5, 0.5]
+[[gameObjects.components]]
+type = "RoseEngine.UIPanel"
+[gameObjects.components.fields]
+color = [0.05000000074505806, 0.05000000074505806, 0.1000000014901161, 0.8500000238418579]
+imageType = "Simple"
+[[gameObjects]]
+name = "TitleText"
+guid = "70511d86-21f3-42a9-a3db-504837760a11"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 5
+[gameObjects.rectTransform]
+anchorMin = [0.0, 0.0]
+anchorMax = [1.0, 1.0]
+anchoredPosition = [10.0, 8.5]
+sizeDelta = [-20.0, 17.0]
+pivot = [0.5, 0.5]
+[[gameObjects.components]]
+type = "RoseEngine.UIText"
+[gameObjects.components.fields]
+text = "IronRose Engine — Test Scene"
+fontSize = 18.0
+color = [0.8999999761581421, 0.8500000238418579, 0.699999988079071, 1.0]
+alignment = "MiddleLeft"
+overflow = "Overflow"
+[gameObjects.components.fields.font]
+_assetGuid = "6fd68ab5-1aeb-4049-bf17-8d2edbdf837e"
+_assetType = "Font"
+[[gameObjects]]
+name = "ScoreText"
+guid = "63843d88-3f73-4f44-9ef1-3a63ce997813"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 4
+[gameObjects.rectTransform]
+anchorMin = [1.0, 0.0]
+anchorMax = [1.0, 0.0]
+anchoredPosition = [-110.0, 32.0]
+sizeDelta = [200.0, 40.0]
+pivot = [0.5, 0.5]
+[[gameObjects.components]]
+type = "RoseEngine.UIText"
+[gameObjects.components.fields]
+text = "Score: 12345"
+fontSize = 22.0
+color = [1.0, 0.949999988079071, 0.4000000059604645, 1.0]
+alignment = "MiddleRight"
+overflow = "Overflow"
+[gameObjects.components.fields.font]
+_assetGuid = "6fd68ab5-1aeb-4049-bf17-8d2edbdf837e"
+_assetType = "Font"
+[[gameObjects]]
+name = "HealthBarBG"
+guid = "9c6fcb86-032d-46cc-bedd-54f41ab01736"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 4
+[gameObjects.rectTransform]
+anchorMin = [0.0, 0.0]
+anchorMax = [0.0, 0.0]
+anchoredPosition = [110.0, 60.0]
+sizeDelta = [200.0, 25.0]
+pivot = [0.5, 0.5]
+[[gameObjects.components]]
+type = "RoseEngine.UIPanel"
+[gameObjects.components.fields]
+color = [0.1500000059604645, 0.1500000059604645, 0.1500000059604645, 0.8999999761581421]
+imageType = "Simple"
+[[gameObjects]]
+name = "HealthBarFill"
+guid = "53c2c859-a8b7-47dd-8c02-68f4157d15d6"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 8
+[gameObjects.rectTransform]
+anchorMin = [0.0, 0.0]
+anchorMax = [0.0, 0.0]
+anchoredPosition = [0.0, 0.0]
+sizeDelta = [176.0, 25.0]
+pivot = [0.0, 0.0]
+[[gameObjects.components]]
+type = "RoseEngine.UIPanel"
+[gameObjects.components.fields]
+color = [0.2000000029802322, 0.800000011920929, 0.300000011920929, 1.0]
+imageType = "Simple"
+[[gameObjects]]
+name = "HealthLabel"
+guid = "dc7f1bc3-0fcd-48e9-aa12-08c6042f9b98"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 8
+[gameObjects.rectTransform]
+anchorMin = [0.0, 0.0]
+anchorMax = [1.0, 1.0]
+anchoredPosition = [0.0, 0.0]
+sizeDelta = [0.0, 0.0]
+pivot = [0.5, 0.5]
+[[gameObjects.components]]
+type = "RoseEngine.UIText"
+[gameObjects.components.fields]
+text = "HP 70 / 100"
+fontSize = 14.0
+color = [1.0, 1.0, 1.0, 1.0]
+alignment = "MiddleCenter"
+overflow = "Overflow"
+[[gameObjects]]
+name = "TestButton"
+guid = "028bc4bf-e66c-4dad-883e-347bcfd8083a"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 4
+[gameObjects.rectTransform]
+anchorMin = [0.5, 0.0]
+anchorMax = [0.5, 0.0]
+anchoredPosition = [0.0, 120.0]
+sizeDelta = [160.0, 40.0]
+pivot = [0.5, 0.5]
+[[gameObjects.components]]
+type = "RoseEngine.UIPanel"
+[gameObjects.components.fields]
+color = [0.25, 0.5, 0.8500000238418579, 1.0]
+imageType = "Simple"
+[[gameObjects.components]]
+type = "RoseEngine.UIButton"
+[gameObjects.components.fields]
+normalColor = [0.25, 0.5, 0.8500000238418579, 1.0]
+hoverColor = [0.3499999940395355, 0.6000000238418579, 0.949999988079071, 1.0]
+pressedColor = [0.1500000059604645, 0.3499999940395355, 0.6499999761581421, 1.0]
+disabledColor = [0.5, 0.5, 0.5, 0.5]
+transition = "ColorTint"
+interactable = true
+[[gameObjects]]
+name = "ButtonLabel"
+guid = "076dfabb-a6b8-41d3-8623-2a3e1e675cd7"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 11
+[gameObjects.rectTransform]
+anchorMin = [0.0, 0.0]
+anchorMax = [1.0, 1.0]
+anchoredPosition = [0.0, 9.0]
+sizeDelta = [0.0, -18.0]
+pivot = [0.5, 0.5]
+[[gameObjects.components]]
+type = "RoseEngine.UIText"
+[gameObjects.components.fields]
+text = "Click Me"
+fontSize = 16.0
+color = [1.0, 1.0, 1.0, 1.0]
+alignment = "MiddleCenter"
+overflow = "Overflow"
+[gameObjects.components.fields.font]
+_assetGuid = "6fd68ab5-1aeb-4049-bf17-8d2edbdf837e"
+_assetType = "Font"
+[[gameObjects]]
+name = "TestSlider"
+guid = "8c1bae76-19eb-4693-8e07-03260a620f19"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 4
+[gameObjects.rectTransform]
+anchorMin = [0.5, 0.0]
+anchorMax = [0.5, 0.0]
+anchoredPosition = [0.0, 180.0]
+sizeDelta = [200.0, 30.0]
+pivot = [0.5, 0.5]
+[[gameObjects.components]]
+type = "RoseEngine.UISlider"
+[gameObjects.components.fields]
+value = 0.6000000238418579
+minValue = 0.0
+maxValue = 1.0
+wholeNumbers = false
+direction = "LeftToRight"
+backgroundColor = [0.2000000029802322, 0.2000000029802322, 0.2000000029802322, 0.8999999761581421]
+fillColor = [0.8999999761581421, 0.5, 0.1000000014901161, 1.0]
+handleColor = [1.0, 1.0, 1.0, 1.0]
+handleSize = 12.0
+interactable = true
+[[gameObjects]]
+name = "TestToggle"
+guid = "ebe457ff-aa83-4a0d-bcda-18151be8c3dd"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 4
+[gameObjects.rectTransform]
+anchorMin = [0.5, 0.0]
+anchorMax = [0.5, 0.0]
+anchoredPosition = [-40.0, 230.0]
+sizeDelta = [24.0, 24.0]
+pivot = [0.5, 0.5]
+[[gameObjects.components]]
+type = "RoseEngine.UIToggle"
+[gameObjects.components.fields]
+isOn = true
+interactable = true
+backgroundColor = [0.2000000029802322, 0.2000000029802322, 0.25, 1.0]
+checkmarkColor = [0.300000011920929, 0.8500000238418579, 0.4000000059604645, 1.0]
+[[gameObjects]]
+name = "ToggleLabel"
+guid = "a2c4d824-da91-4452-878f-99630a63f966"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 4
+[gameObjects.rectTransform]
+anchorMin = [0.5, 0.0]
+anchorMax = [0.5, 0.0]
+anchoredPosition = [30.0, 237.0]
+sizeDelta = [100.0, 24.0]
+pivot = [0.5, 0.5]
+[[gameObjects.components]]
+type = "RoseEngine.UIText"
+[gameObjects.components.fields]
+text = "Show FPS"
+fontSize = 14.0
+color = [0.0, 0.0, 0.0, 1.0]
+alignment = "MiddleLeft"
+overflow = "Overflow"
+[gameObjects.components.fields.font]
+_assetGuid = "6fd68ab5-1aeb-4049-bf17-8d2edbdf837e"
+_assetType = "Font"
+[[gameObjects]]
+name = "Panel"
+guid = "f81e60ff-2cdf-4ea3-a8d3-da00517a8659"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 4
+[gameObjects.rectTransform]
+anchorMin = [0.0, 0.0]
+anchorMax = [0.0, 0.0]
+anchoredPosition = [120.0, 640.0]
+sizeDelta = [480.0, 200.0]
+pivot = [0.0, 0.0]
+[[gameObjects.components]]
+type = "RoseEngine.UIPanel"
+[gameObjects.components.fields]
+color = [1.0, 1.0, 1.0, 1.0]
+imageType = "Sliced"
+[gameObjects.components.fields.sprite]
+_assetGuid = "fbb4e690-e22a-493f-be7d-bbdc70b060ea"
+_assetType = "Sprite"
+[[gameObjects]]
+name = "Image"
+guid = "e8ef5d19-1f99-4ae6-84cc-8fa0a1214f48"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 4
+[gameObjects.rectTransform]
+anchorMin = [0.5, 0.5]
+anchorMax = [0.5, 0.5]
+anchoredPosition = [-840.0, -360.0]
+sizeDelta = [480.0, 360.0]
+pivot = [0.0, 0.0]
+[[gameObjects.components]]
+type = "RoseEngine.UIImage"
+[gameObjects.components.fields]
+color = [1.0, 1.0, 1.0, 1.0]
+imageType = "Sliced"
+preserveAspect = false
+[gameObjects.components.fields.sprite]
+_assetGuid = "02cb4536-7273-4031-97d3-73f6abdb0471"
+_assetType = "Sprite"
+[[gameObjects]]
+name = "Sphere"
+guid = "65935ea9-394d-4d51-8d36-18e65ba83555"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [2.200406551361084, 0.4386847317218781, -1.27634608745575]
+localRotation = [0.0, 0.0, 0.3221307098865509, 0.9466952085494995]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+primitiveType = "Sphere"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "3be1eb8e-4bd4-4b26-8a50-1c76333af54f"
+[[gameObjects.components]]
+type = "RoseEngine.SphereCollider"
+[gameObjects.components.fields]
+radius = 0.5
+isTrigger = false
+center = [0.0, 0.0, 0.0]
+[[gameObjects.components]]
+type = "RoseEngine.Animator"
+[gameObjects.components.fields]
+speed = 1.0
+time = 0.0
+enabled = true
+[gameObjects.components.fields.clip]
+_assetGuid = "671d2345-63ce-46b3-8b26-08f4c333687e"
+_assetType = "AnimationClip"
+[[gameObjects]]
+name = "Text"
+guid = "068bdfee-8c30-4864-b0e5-d53bda70582f"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 16
+[gameObjects.rectTransform]
+anchorMin = [0.0, 0.0]
+anchorMax = [1.0, 1.0]
+anchoredPosition = [-8.543998718261719, -47.45600128173828]
+sizeDelta = [-89.08799743652344, -166.9120025634766]
+pivot = [0.5, 0.5]
+[[gameObjects.components]]
+type = "RoseEngine.UIText"
+[gameObjects.components.fields]
+text = "New Text"
+fontSize = 16.0
+color = [0.0, 0.0, 0.0, 1.0]
+alignment = "UpperLeft"
+overflow = "Overflow"
+[gameObjects.components.fields.font]
+_assetGuid = "6fd68ab5-1aeb-4049-bf17-8d2edbdf837e"
+_assetType = "Font"
+[[gameObjects]]
+name = "InputField"
+guid = "14636c7b-12d4-4566-a0aa-2afe20532e97"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 16
+[gameObjects.rectTransform]
+anchorMin = [0.0, 0.0]
+anchorMax = [0.0, 0.0]
+anchoredPosition = [33.0, 93.0]
+sizeDelta = [400.0, 58.0]
+pivot = [0.0, 0.0]
+[[gameObjects.components]]
+type = "RoseEngine.UIInputField"
+[gameObjects.components.fields]
+text = ""
+placeholder = "Enter text..."
+fontSize = 16.0
+maxLength = 256
+contentType = "Standard"
+textColor = [1.0, 1.0, 1.0, 1.0]
+placeholderColor = [0.5, 0.5, 0.5, 0.6000000238418579]
+backgroundColor = [0.1500000059604645, 0.1500000059604645, 0.1500000059604645, 1.0]
+focusedBorderColor = [0.300000011920929, 0.6000000238418579, 0.8999999761581421, 1.0]
+borderColor = [0.300000011920929, 0.300000011920929, 0.300000011920929, 1.0]
+selectionColor = [0.2000000029802322, 0.4000000059604645, 0.699999988079071, 0.5]
+padding = 4.0
+interactable = true
+readOnly = false
+[gameObjects.components.fields.font]
+_assetGuid = "6fd68ab5-1aeb-4049-bf17-8d2edbdf837e"
+_assetType = "Font"
+[[gameObjects]]
+name = "Sphere1"
+guid = "9ea2df0f-d79e-425b-bacf-98874cef1233"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 2.797150135040283, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 18
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+primitiveType = "Sphere"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "c5f33d7f-9ada-474c-a891-070bcd0e871d"
+[[gameObjects.components]]
+type = "RoseEngine.SphereCollider"
+[gameObjects.components.fields]
+radius = 0.5
+isTrigger = false
+center = [0.0, 0.0, 0.0]
+[[gameObjects]]
+name = "ClayBrickWall_01"
+guid = "91c60945-50a7-44c1-b12c-f96bc496e901"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [-0.9333992004394531, 0.4998252391815186, -2.942035675048828]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [0.6100000143051147, 0.5, 0.5]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "124e3a27-4e6f-4703-bc1a-dc526e22cc9c"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "b7958c36-81b4-47ea-811d-8598992a5972"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 7.0
+meshGuid = "124e3a27-4e6f-4703-bc1a-dc526e22cc9c"
+[[gameObjects]]
+name = "ClayBrickWall_02"
+guid = "dd3906c1-fd75-4e53-97a0-92fac4994feb"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [-1.933399200439453, 0.4998252391815186, -2.942035675048828]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [0.6100000143051147, 0.5, 0.5]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "124e3a27-4e6f-4703-bc1a-dc526e22cc9c"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "b7958c36-81b4-47ea-811d-8598992a5972"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 7.0
+meshGuid = "124e3a27-4e6f-4703-bc1a-dc526e22cc9c"
+[[gameObjects]]
+name = "ClayBrickWall_03"
+guid = "7f2ab6fe-9873-4653-9df5-040b8d58dac4"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [1.066600799560547, 0.4998252391815186, -2.942035675048828]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [0.6100000143051147, 0.5, 0.5]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "124e3a27-4e6f-4703-bc1a-dc526e22cc9c"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "b7958c36-81b4-47ea-811d-8598992a5972"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 7.0
+meshGuid = "124e3a27-4e6f-4703-bc1a-dc526e22cc9c"
+[[gameObjects]]
+name = "ClayBrickWall_04"
+guid = "6c1ab838-0b23-49ef-9486-6e402150159c"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.06660079956054688, 0.4998252391815186, -2.942035675048828]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [0.6100000143051147, 0.5, 0.5]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "124e3a27-4e6f-4703-bc1a-dc526e22cc9c"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "b7958c36-81b4-47ea-811d-8598992a5972"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 7.0
+meshGuid = "124e3a27-4e6f-4703-bc1a-dc526e22cc9c"
+[[gameObjects]]
+name = "Cube"
+guid = "b56e1d69-d0d7-4b08-ac83-3bc1cfd5e8b7"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, -4.252482414245605]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [10.0, 10.0, 10.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+primitiveType = "Cube"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+enabled = false
+color = [1.0, 1.0, 1.0, 1.0]
+metallic = 0.0
+roughness = 0.5
+[[gameObjects.components]]
+type = "RoseEngine.BoxCollider"
+[gameObjects.components.fields]
+size = [1.0, 1.0, 1.0]
+isTrigger = true
+center = [0.0, 0.0, 0.0]
+[[gameObjects.components]]
+type = "PostProcessVolume"
+[gameObjects.components.fields]
+blendDistance = 0.2000000029802322
+weight = 1.0
+profileGuid = "4bdd8569-af14-43e6-861c-54a794b478df"
+[[gameObjects]]
+name = "Cube_01"
+guid = "c3d6b38b-049b-4894-b9dc-d7aa75df5c1f"
+activeSelf = false
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 5.344122886657715]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [10.0, 10.0, 10.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+primitiveType = "Cube"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+enabled = false
+color = [1.0, 1.0, 1.0, 1.0]
+metallic = 0.0
+roughness = 0.5
+[[gameObjects.components]]
+type = "RoseEngine.BoxCollider"
+[gameObjects.components.fields]
+size = [1.0, 1.0, 1.0]
+isTrigger = true
+center = [0.0, 0.0, 0.0]
+[[gameObjects.components]]
+type = "PostProcessVolume"
+[gameObjects.components.fields]
+blendDistance = 5.0
+weight = 1.0
+profileGuid = "066771a9-6f15-4b29-9524-ab1ec24e71a5"
+[[gameObjects]]
+name = "Cube_02"
+guid = "0c16c398-723e-492b-92a5-7cc80969087e"
+activeSelf = false
+[gameObjects.transform]
+localPosition = [0.0, 0.0, -4.252482414245605]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1000.0, 1000.0, 1000.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+primitiveType = "Cube"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+enabled = false
+color = [1.0, 1.0, 1.0, 1.0]
+metallic = 0.0
+roughness = 0.5
+[[gameObjects.components]]
+type = "RoseEngine.BoxCollider"
+[gameObjects.components.fields]
+size = [1.0, 1.0, 1.0]
+isTrigger = true
+center = [0.0, 0.0, 0.0]
+[[gameObjects.components]]
+type = "PostProcessVolume"
+[gameObjects.components.fields]
+blendDistance = 5.0
+weight = 0.009999999776482582
+profileGuid = "4bdd8569-af14-43e6-861c-54a794b478df"
+[sceneEnvironment]
+skyboxTextureGuid = "c9cc97e4-3fd1-42ed-a236-168d544a05e2"
+skyboxExposure = 1.0
+skyboxRotation = 0.0
+ambientIntensity = 0.7400000095367432
+ambientLight = [0.2000000029802322, 0.2000000029802322, 0.2000000029802322, 1.0]
+skyZenithIntensity = 0.0
+skyHorizonIntensity = 0.0
+sunIntensity = 0.0
+skyZenithColor = [0.1500000059604645, 0.300000011920929, 0.6499999761581421, 1.0]
+skyHorizonColor = [0.6000000238418579, 0.699999988079071, 0.8500000238418579, 1.0]
+[editorState]
+expandedNodes = ["7755d291-b901-4614-a931-086f7d6286aa", "f81e60ff-2cdf-4ea3-a8d3-da00517a8659", "65935ea9-394d-4d51-8d36-18e65ba83555"]
+[editorState.sceneViewCamera]
+position = [-6.933207035064697, 6.738627910614014, -5.614400863647461]
+rotation = [0.2868803441524506, 0.4081862270832062, -0.136834904551506, 0.8557802438735962]
+pivot = [0.0, 0.0, 0.0]

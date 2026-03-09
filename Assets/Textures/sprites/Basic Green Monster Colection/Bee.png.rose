@@ -1,0 +1,16 @@
+guid = "35883848-b13b-4895-a800-83760fecda78"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = true
+[[sub_assets]]
+name = "Bee"
+type = "Sprite"
+index = 0
+guid = "8e8f9ae7-e56c-49af-8aef-053045315f36"

@@ -1,0 +1,16 @@
+guid = "d9d5a0f9-38a0-486d-a5e4-a97d98b7625a"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "check_square_grey_cross"
+type = "Sprite"
+index = 0
+guid = "fa3e8833-beb4-43d6-a5ce-17174ddec6d9"

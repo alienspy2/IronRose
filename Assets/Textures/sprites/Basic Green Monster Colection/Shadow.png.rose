@@ -1,0 +1,16 @@
+guid = "4509b479-e5f2-42b0-accd-3be871bf650b"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = true
+[[sub_assets]]
+name = "Shadow"
+type = "Sprite"
+index = 0
+guid = "11e145ea-71ad-4811-918e-8eabb6f6a242"

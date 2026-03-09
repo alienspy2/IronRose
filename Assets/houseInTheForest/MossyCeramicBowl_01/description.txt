@@ -1,0 +1,9 @@
+Name: MossyCeramicBowl_01
+Name (Korean): 이끼 공예 그릇_01
+Category: furniture
+
+=== Description ===
+A decorative ceramic bowl covered in simulated moss, providing a touch of woodland charm to any interior space. It features a rounded form and a delicate glaze.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, mossy ceramic bowl, moss texture, rounded form, delicate glaze, 숲속의 작은 집 theme, high resolution, detailed textures.

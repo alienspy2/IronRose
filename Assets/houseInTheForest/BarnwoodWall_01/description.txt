@@ -1,0 +1,9 @@
+Name: BarnwoodWall_01
+Name (Korean): BarnwoodWall_01
+Category: wall
+
+=== Description ===
+A textured wall made of weathered barnwood, with deep grooves and a grayed finish.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, barnwood wall, weathered wood, deep grooves, 8k resolution

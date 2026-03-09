@@ -1,0 +1,9 @@
+Name: MossyDirtPatch_01
+Name (Korean): 이끼 낀 흙 덩어리_01
+Category: floor
+
+=== Description ===
+A small area of dirt floor covered with moss, characteristic of damp, shaded areas in a forest-themed cabin. Includes patches of green moss.
+
+=== Generation Prompt ===
+Isolated on solid white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed texture of mossy dirt patch, various shades of green moss, 4K resolution, photorealistic

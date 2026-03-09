@@ -1,0 +1,11 @@
+[prefab]
+version = 1
+rootName = "Cube_Variant"
+basePrefabGuid = "340f1316-5c89-4fac-a318-e3a530c59c3d"
+[[overrides]]
+path = "0/_name"
+value = "Cube_Variant"
+[[overrides]]
+path = "1/MeshRenderer/material"
+value = {_assetGuid = "1422e8de-96df-46a1-95a2-2b6b60e061ab", _assetType = "Material"}
+

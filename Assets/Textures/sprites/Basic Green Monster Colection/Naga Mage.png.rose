@@ -1,0 +1,16 @@
+guid = "99f6f1e0-ba28-4b86-b4f7-c3d0e7577210"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = true
+[[sub_assets]]
+name = "Naga Mage"
+type = "Sprite"
+index = 0
+guid = "2357b35f-a3ee-40e7-8396-89a2dceb71bb"

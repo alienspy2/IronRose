@@ -1,0 +1,16 @@
+guid = "7107b864-ab15-48b9-9489-dd7fc03610c7"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "button_rectangle_gloss"
+type = "Sprite"
+index = 0
+guid = "696c0215-6d84-4542-b166-e9a93bd68e5e"

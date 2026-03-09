@@ -1,0 +1,9 @@
+Name: MossyCeramicTable_01
+Name (Korean): 이끼 공예 테이블_01
+Category: furniture
+
+=== Description ===
+A low, round table with a ceramic top covered in a layer of simulated moss, ideal for a rustic dining or crafting area. It has a simple wooden base.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, mossy ceramic table, ceramic top, moss texture, wooden base, 숲속의 작은 집 theme, high resolution, detailed textures.

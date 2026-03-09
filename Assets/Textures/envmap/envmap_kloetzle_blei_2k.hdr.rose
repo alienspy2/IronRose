@@ -1,0 +1,11 @@
+guid = "c9d0d034-a203-4ea1-9ffd-1e4dd8fc7dab"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 4096
+compression = "None"
+texture_type = "HDR"
+srgb = false
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = true

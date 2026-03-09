@@ -1,0 +1,16 @@
+guid = "97d9b5b2-6dfb-49b9-bd2d-a79550456362"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = true
+[[sub_assets]]
+name = "Death-Cob"
+type = "Sprite"
+index = 0
+guid = "50241573-2976-4951-a3dc-6c5e954c970c"

@@ -1,0 +1,111 @@
+name = "aaa"
+[[gameObjects]]
+name = "Main Camera"
+guid = "e5dce6a2-50ef-47d2-bd62-f44951a7f12c"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 3.0, -6.0]
+localRotation = [0.2297529578208923, 0.0, 0.0, 0.973249077796936]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "Camera"
+[gameObjects.components.fields]
+fieldOfView = 60.0
+nearClipPlane = 0.1000000014901161
+farClipPlane = 1000.0
+clearFlags = "Skybox"
+backgroundColor = [0.1920000016689301, 0.3019999861717224, 0.4749999940395355, 1.0]
+[[gameObjects]]
+name = "Cube"
+guid = "aac58a20-a70a-4aca-b1b9-ce5634ca2707"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.5, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+primitiveType = "Cube"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+color = [1.0, 1.0, 1.0, 1.0]
+metallic = 0.0
+roughness = 0.5
+[[gameObjects.components]]
+type = "RoseEngine.BoxCollider"
+[gameObjects.components.fields]
+size = [1.0, 1.0, 1.0]
+isTrigger = false
+center = [0.0, 0.0, 0.0]
+[[gameObjects]]
+name = "Plane"
+guid = "3957ca9a-b7c1-4aee-8e0f-851d451fafae"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+primitiveType = "Plane"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+color = [1.0, 1.0, 1.0, 1.0]
+metallic = 0.0
+roughness = 0.5
+[[gameObjects.components]]
+type = "RoseEngine.BoxCollider"
+[gameObjects.components.fields]
+size = [10.0, 0.009999999776482582, 10.0]
+isTrigger = false
+center = [0.0, 0.0, 0.0]
+[[gameObjects]]
+name = "Spot Light"
+guid = "6dd20b20-e22d-449d-863c-6328d7b354e7"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 5.0, -2.0]
+localRotation = [0.5606287717819214, 0.0, 0.0, 0.8280672430992126]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "RoseEngine.Light"
+[gameObjects.components.fields]
+color = [1.0, 1.0, 1.0, 1.0]
+intensity = 2.0
+range = 15.0
+rangeNear = 0.0
+type = "Spot"
+enabled = true
+spotAngle = 30.0
+spotOuterAngle = 45.0
+shadows = true
+shadowResolution = 1024
+shadowBias = 0.001000000047497451
+shadowNormalBias = 0.001000000047497451
+shadowNearPlane = 0.1000000014901161
+shadowCullMode = "TwoFace"
+shadowSoftness = 1.0
+[sceneEnvironment]
+skyboxTextureGuid = "c9cc97e4-3fd1-42ed-a236-168d544a05e2"
+skyboxExposure = 1.0
+skyboxRotation = 0.0
+ambientIntensity = 0.7400000095367432
+ambientLight = [0.2000000029802322, 0.2000000029802322, 0.2000000029802322, 1.0]
+skyZenithIntensity = 0.0
+skyHorizonIntensity = 0.0
+sunIntensity = 0.0
+skyZenithColor = [0.1500000059604645, 0.300000011920929, 0.6499999761581421, 1.0]
+skyHorizonColor = [0.6000000238418579, 0.699999988079071, 0.8500000238418579, 1.0]
+[editorState]
+[editorState.sceneViewCamera]
+position = [-8.514355659484863, 6.423172473907471, 3.353896617889404]
+rotation = [0.1695432960987091, 0.7881914973258972, -0.2490077614784241, 0.5366603136062622]
+pivot = [0.0, 0.0, 0.0]

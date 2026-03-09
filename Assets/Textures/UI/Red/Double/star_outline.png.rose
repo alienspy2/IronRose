@@ -1,0 +1,16 @@
+guid = "c4fb4b99-4e87-45f3-ae0c-39629c6c6a70"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "star_outline"
+type = "Sprite"
+index = 0
+guid = "ead357d0-b7fc-4cce-a9b7-51ebe2327f69"

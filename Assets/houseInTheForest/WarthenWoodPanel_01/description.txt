@@ -1,0 +1,9 @@
+Name: WarthenWoodPanel_01
+Name (Korean): WarthenWoodPanel_01
+Category: wall
+
+=== Description ===
+A weathered wooden panel with a worn finish and subtle cracks, suggesting age and use.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, warthern wood panel, cracks, worn finish, 8k resolution

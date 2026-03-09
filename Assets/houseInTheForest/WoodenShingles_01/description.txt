@@ -1,0 +1,9 @@
+Name: WoodenShingles_01
+Name (Korean): WoodenShingles_01
+Category: wall
+
+=== Description ===
+A wall texture featuring wooden shingles, simulating a rustic roof covering for a cozy cabin.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, wooden shingles, rustic roof, overlapping shingles, 8k resolution

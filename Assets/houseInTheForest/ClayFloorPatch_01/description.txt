@@ -1,0 +1,9 @@
+Name: ClayFloorPatch_01
+Name (Korean): 점토 바닥 패치_01
+Category: floor
+
+=== Description ===
+A small patch of floor made from compacted clay, typical of early cabin construction.  Shows a rough, uneven surface.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed texture of clay floor patch, rough, uneven surface, brown and grey tones, 4K resolution, photorealistic

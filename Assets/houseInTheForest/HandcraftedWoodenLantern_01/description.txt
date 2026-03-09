@@ -1,0 +1,9 @@
+Name: HandcraftedWoodenLantern_01
+Name (Korean): 수제 나무 램프_01
+Category: furniture
+
+=== Description ===
+A beautifully crafted wooden lantern, casting a warm glow and adding a touch of rustic elegance to the woodland setting. It has an intricate carved design.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, handcrafted wooden lantern, intricate carving, warm glow, 숲속의 작은 집 theme, high resolution, detailed textures.

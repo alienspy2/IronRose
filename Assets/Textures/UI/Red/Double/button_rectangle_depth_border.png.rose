@@ -1,0 +1,16 @@
+guid = "ce423d66-72ec-4247-a2bb-ef79fda57b5f"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "button_rectangle_depth_border"
+type = "Sprite"
+index = 0
+guid = "d9b95a34-36ca-4acb-9604-0ce362d1a7d2"

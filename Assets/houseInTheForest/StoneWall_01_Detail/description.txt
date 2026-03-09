@@ -1,0 +1,9 @@
+Name: StoneWall_01_Detail
+Name (Korean): StoneWall_01_Detail
+Category: wall
+
+=== Description ===
+A detailed section of a stone wall with various stone sizes and textures, offering intricate patterns.
+
+=== Generation Prompt ===
+Isolated on solid white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, stone wall detail, irregular stones, rough texture, 8k resolution

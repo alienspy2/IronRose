@@ -1,0 +1,9 @@
+Name: WoodenDecking_01
+Name (Korean): 나무 데크재_01
+Category: floor
+
+=== Description ===
+A section of wooden decking, likely part of a small porch or extension, suitable for a rustic cabin aesthetic.  Show some weathered wood.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed texture of wooden decking, weathered wood, grey and brown tones, 4K resolution, photorealistic

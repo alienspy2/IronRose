@@ -1,0 +1,9 @@
+Name: WeatheredWoodFlooring_01
+Name (Korean): 낡은 나무 바닥재_01
+Category: floor
+
+=== Description ===
+A weathered wooden flooring texture, showing the effects of age and exposure to the elements in a small cabin setting.  Grain is visible, with slight discoloration.
+
+=== Generation Prompt ===
+Isolated on solid white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed texture of weathered wooden flooring, visible grain, slight discoloration, warm lighting, 4K resolution, photorealistic

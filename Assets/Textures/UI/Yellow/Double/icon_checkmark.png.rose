@@ -1,0 +1,16 @@
+guid = "55c27b09-64ce-41ec-b0a0-8c75e73fa0ac"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "icon_checkmark"
+type = "Sprite"
+index = 0
+guid = "b851a49d-c261-4fc6-81bb-896df71d1183"

@@ -1,0 +1,16 @@
+guid = "074e6cc3-8760-4470-b08e-eee770364eb3"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "star"
+type = "Sprite"
+index = 0
+guid = "e06b31f1-4597-4669-a177-5e3baeb07214"

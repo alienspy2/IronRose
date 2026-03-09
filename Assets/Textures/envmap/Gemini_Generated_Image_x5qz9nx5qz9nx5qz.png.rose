@@ -1,0 +1,11 @@
+guid = "3e81ebdc-2710-4c29-b1e4-2f58417733d7"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC6H"
+texture_type = "Panoramic"
+srgb = false
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = true

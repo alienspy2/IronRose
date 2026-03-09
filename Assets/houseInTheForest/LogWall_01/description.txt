@@ -1,0 +1,9 @@
+Name: LogWall_01
+Name (Korean): LogWall_01
+Category: wall
+
+=== Description ===
+A wall made of stacked logs, showcasing natural wood grain and imperfections.
+
+=== Generation Prompt ===
+Isolated on solid white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, log wall, stacked logs, natural wood grain, rustic look, 8k resolution

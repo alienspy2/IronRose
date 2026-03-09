@@ -1,0 +1,9 @@
+Name: RoughHewnDirtFloor_01
+Name (Korean): 거친 흙 바닥_01
+Category: floor
+
+=== Description ===
+A realistic texture of slightly damp, rough-hewn dirt suitable for a small cabin floor. Shows subtle variations in color and small pebbles.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed texture of rough, damp dirt floor, small pebbles scattered throughout, earthy tones, 4K resolution, photorealistic

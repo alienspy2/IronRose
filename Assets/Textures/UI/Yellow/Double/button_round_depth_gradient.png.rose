@@ -1,0 +1,16 @@
+guid = "bdfe98d7-ef87-4190-a279-50597f27a016"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "button_round_depth_gradient"
+type = "Sprite"
+index = 0
+guid = "ece2e3ac-500c-4a38-9f86-81fe4e4ff6df"

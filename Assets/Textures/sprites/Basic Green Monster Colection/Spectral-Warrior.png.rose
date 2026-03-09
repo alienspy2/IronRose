@@ -1,0 +1,16 @@
+guid = "d44dd238-21c4-46ef-a618-b9b4d84d2b37"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = true
+[[sub_assets]]
+name = "Spectral-Warrior"
+type = "Sprite"
+index = 0
+guid = "2269aee4-9131-4cba-8e65-781331a5b8b2"

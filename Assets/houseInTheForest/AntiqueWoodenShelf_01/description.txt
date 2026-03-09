@@ -1,0 +1,9 @@
+Name: AntiqueWoodenShelf_01
+Name (Korean): 빈티지 나무 선반_01
+Category: furniture
+
+=== Description ===
+A rustic wooden shelf, perfect for displaying collectibles or books in a cozy woodland dwelling. It has multiple levels and a weathered finish.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, antique wooden shelf, weathered finish, multiple levels, 숲속의 작은 집 theme, high resolution, detailed textures.

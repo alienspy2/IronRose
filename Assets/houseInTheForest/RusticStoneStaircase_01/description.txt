@@ -1,0 +1,9 @@
+Name: RusticStoneStaircase_01
+Name (Korean): RusticStone계단_01
+Category: floor
+
+=== Description ===
+A weathered, low stone staircase leading out of a mossy alcove, typical of a secluded forest cottage. The stairs feature rough-hewn stones and a slightly uneven surface.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, realistic stone staircase, weathered stone, mossy alcove, uneven surface, 숲속의 작은 집, rustic, detailed textures, high resolution, no background, no shadow, no floor.

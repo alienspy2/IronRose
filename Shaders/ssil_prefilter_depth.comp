@@ -1,0 +1,68 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform texture2D depthInput;
+layout(set = 0, binding = 1) uniform sampler depthSampler;
+layout(set = 0, binding = 2, r16f) uniform writeonly image2D depthMipOut;
+
+layout(set = 0, binding = 3) uniform PrefilterParams
+{
+    vec2 TexelSize;       // 1.0 / inputResolution
+    float NearPlane;
+    float FarPlane;
+    int MipLevel;         // 0 = linearize from depth, 1+ = downsample from previous
+    int SrcWidth;
+    int SrcHeight;
+    float _pad;
+};
+
+// For MIP 0: read from depth buffer (R32F copy) and linearize
+// For MIP 1+: read from previous MIP level and take min of 2x2
+layout(set = 0, binding = 4) uniform texture2D prevMipInput;
+
+float linearizeDepth(float d)
+{
+    // Vulkan depth [0,1] → linear view-space Z
+    return NearPlane * FarPlane / (FarPlane - d * (FarPlane - NearPlane));
+}
+
+void main()
+{
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+
+    if (MipLevel == 0)
+    {
+        // MIP 0: linearize raw depth
+        vec2 uv = (vec2(pos) + 0.5) * TexelSize;
+        float rawDepth = texture(sampler2D(depthInput, depthSampler), uv).r;
+
+        float viewZ = 0.0;
+        if (rawDepth < 1.0)
+            viewZ = linearizeDepth(rawDepth);
+
+        imageStore(depthMipOut, pos, vec4(viewZ, 0.0, 0.0, 0.0));
+    }
+    else
+    {
+        // MIP 1+: min-downsample from previous level
+        ivec2 srcPos = pos * 2;
+
+        // Clamp to source dimensions
+        ivec2 s0 = srcPos;
+        ivec2 s1 = min(srcPos + ivec2(1, 0), ivec2(SrcWidth - 1, SrcHeight - 1));
+        ivec2 s2 = min(srcPos + ivec2(0, 1), ivec2(SrcWidth - 1, SrcHeight - 1));
+        ivec2 s3 = min(srcPos + ivec2(1, 1), ivec2(SrcWidth - 1, SrcHeight - 1));
+
+        // Use texelFetch from previous MIP (bound as prevMipInput)
+        vec2 invSrc = 1.0 / vec2(SrcWidth, SrcHeight);
+        float d0 = texture(sampler2D(prevMipInput, depthSampler), (vec2(s0) + 0.5) * invSrc).r;
+        float d1 = texture(sampler2D(prevMipInput, depthSampler), (vec2(s1) + 0.5) * invSrc).r;
+        float d2 = texture(sampler2D(prevMipInput, depthSampler), (vec2(s2) + 0.5) * invSrc).r;
+        float d3 = texture(sampler2D(prevMipInput, depthSampler), (vec2(s3) + 0.5) * invSrc).r;
+
+        // Min for conservative horizon tracing (closest depth)
+        float minDepth = min(min(d0, d1), min(d2, d3));
+        imageStore(depthMipOut, pos, vec4(minDepth, 0.0, 0.0, 0.0));
+    }
+}

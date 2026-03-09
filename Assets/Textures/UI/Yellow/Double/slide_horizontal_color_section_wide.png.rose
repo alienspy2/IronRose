@@ -1,0 +1,16 @@
+guid = "a61842c4-fdb2-4de1-a720-ab3022929edc"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "slide_horizontal_color_section_wide"
+type = "Sprite"
+index = 0
+guid = "6b6dc3d0-8019-43d3-8efa-5167946f8a30"

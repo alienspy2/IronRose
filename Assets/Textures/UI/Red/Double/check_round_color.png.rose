@@ -1,0 +1,16 @@
+guid = "66cb1e13-9288-49df-b32b-7ff239addacc"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "check_round_color"
+type = "Sprite"
+index = 0
+guid = "539c7ea4-6d74-47c8-b6e7-14e8d23e8c9f"

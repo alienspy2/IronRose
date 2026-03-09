@@ -1,0 +1,16 @@
+guid = "1e158923-7777-49d7-a2eb-d6f8eee52221"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = false
+[[sub_assets]]
+name = "check_round_round_circle"
+type = "Sprite"
+index = 0
+guid = "784aa112-c2f9-4133-a1c3-7a5f10e316da"

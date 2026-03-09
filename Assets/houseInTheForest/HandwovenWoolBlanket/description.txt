@@ -1,0 +1,9 @@
+Name: HandwovenWoolBlanket
+Name (Korean): 직조된 양모 담요
+Category: prop
+
+=== Description ===
+A cozy handwoven wool blanket, folded neatly on a small wooden stool, perfect for a quiet evening in a forest cabin.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed handwoven wool blanket, warm colors, natural textures, rustic setting.

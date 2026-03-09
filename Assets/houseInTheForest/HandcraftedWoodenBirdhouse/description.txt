@@ -1,0 +1,9 @@
+Name: HandcraftedWoodenBirdhouse
+Name (Korean): 수제 나무 새집
+Category: prop
+
+=== Description ===
+A charming, weathered wooden birdhouse, typical of a cozy forest dwelling. It's slightly tilted and worn, suggesting years of use.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed handcrafted wooden birdhouse, weathered wood, mossy texture, forest theme, realistic rendering, warm lighting.

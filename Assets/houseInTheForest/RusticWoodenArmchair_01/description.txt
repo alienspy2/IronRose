@@ -1,0 +1,9 @@
+Name: RusticWoodenArmchair_01
+Name (Korean): 나무 의자_01
+Category: furniture
+
+=== Description ===
+A weathered, comfortable armchair crafted from dark, rustic wood, perfect for relaxing in a woodland cottage. It features intricately carved wooden arms and a slightly worn cushion.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, rustic wooden armchair, dark wood, carved details, worn cushion, 숲속의 작은 집 theme, high resolution, detailed textures.

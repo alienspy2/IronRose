@@ -1,0 +1,99 @@
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform texture2D aoInput;
+layout(set = 0, binding = 1) uniform texture2D depthMipTex;
+layout(set = 0, binding = 2) uniform texture2D normalTex;
+layout(set = 0, binding = 3) uniform sampler linearSampler;
+layout(set = 0, binding = 4, r8) uniform writeonly image2D aoOutput;
+
+layout(set = 0, binding = 5) uniform DenoiseParams
+{
+    vec2 TexelSize;         // 1.0 / resolution
+    float DepthThreshold;   // depth-based edge stopping
+    float NormalThreshold;  // normal-based edge stopping
+    vec2 Direction;         // (1,0) for horizontal, (0,1) for vertical
+    float _pad1;
+    float _pad2;
+};
+
+// Optional: indirect light denoise
+layout(set = 0, binding = 6) uniform texture2D indirectInput;
+layout(set = 0, binding = 7, rgba16f) uniform writeonly image2D indirectOutput;
+
+layout(set = 0, binding = 8) uniform DenoiseFlags
+{
+    int HasIndirect;
+    int _pad_f1;
+    int _pad_f2;
+    int _pad_f3;
+};
+
+// Separable Gaussian kernel, 17-tap (±8), sigma ≈ 4
+const int RADIUS = 8;
+const float kernel[9] = float[9](
+    1.000, 0.969, 0.882, 0.755, 0.607, 0.458, 0.325, 0.215, 0.135
+);
+
+void main()
+{
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    vec2 uv = (vec2(pos) + 0.5) * TexelSize;
+
+    float centerDepth = texture(sampler2D(depthMipTex, linearSampler), uv).r;
+    vec3 centerNormal = texture(sampler2D(normalTex, linearSampler), uv).rgb * 2.0 - 1.0;
+    float centerAO = texture(sampler2D(aoInput, linearSampler), uv).r;
+
+    float weightedAO = centerAO * kernel[0];
+    float totalWeight = kernel[0];
+    vec3 weightedIndirect = vec3(0.0);
+    vec3 centerIndirect = vec3(0.0);
+
+    if (HasIndirect > 0)
+    {
+        centerIndirect = texture(sampler2D(indirectInput, linearSampler), uv).rgb;
+        weightedIndirect = centerIndirect * kernel[0];
+    }
+
+    for (int i = 1; i <= RADIUS; i++)
+    {
+        // Sample in both directions along the blur axis
+        for (int sign = -1; sign <= 1; sign += 2)
+        {
+            vec2 sampleUV = uv + Direction * TexelSize * float(i * sign);
+            float sampleDepth = texture(sampler2D(depthMipTex, linearSampler), sampleUV).r;
+            vec3 sampleNormal = texture(sampler2D(normalTex, linearSampler), sampleUV).rgb * 2.0 - 1.0;
+
+            // Depth edge-stopping weight
+            float depthDiff = abs(centerDepth - sampleDepth);
+            float depthWeight = exp(-depthDiff * depthDiff / (DepthThreshold * DepthThreshold + 0.0001));
+
+            // Normal similarity weight (cosine-based)
+            float normalDot = max(dot(centerNormal, sampleNormal), 0.0);
+            float normalWeight = pow(normalDot, NormalThreshold);
+
+            float spatialWeight = kernel[i];
+            float w = spatialWeight * depthWeight * normalWeight;
+
+            float sampleAO = texture(sampler2D(aoInput, linearSampler), sampleUV).r;
+            weightedAO += sampleAO * w;
+            totalWeight += w;
+
+            if (HasIndirect > 0)
+            {
+                vec3 sampleInd = texture(sampler2D(indirectInput, linearSampler), sampleUV).rgb;
+                weightedIndirect += sampleInd * w;
+            }
+        }
+    }
+
+    float filteredAO = weightedAO / max(totalWeight, 0.0001);
+    imageStore(aoOutput, pos, vec4(filteredAO, 0.0, 0.0, 0.0));
+
+    if (HasIndirect > 0)
+    {
+        vec3 filteredIndirect = weightedIndirect / max(totalWeight, 0.0001);
+        imageStore(indirectOutput, pos, vec4(filteredIndirect, 1.0));
+    }
+}

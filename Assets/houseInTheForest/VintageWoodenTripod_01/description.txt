@@ -1,0 +1,9 @@
+Name: VintageWoodenTripod_01
+Name (Korean): 빈티지 나무 삼각대_01
+Category: furniture
+
+=== Description ===
+An aged wooden tripod, likely used for holding lanterns or displaying small objects within the charming woodland cottage. It exhibits signs of age and wear.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, vintage wooden tripod, aged wood, signs of wear, 숲속의 작은 집 theme, high resolution, detailed textures.

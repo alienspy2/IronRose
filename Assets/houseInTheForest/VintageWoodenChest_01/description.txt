@@ -1,0 +1,9 @@
+Name: VintageWoodenChest_01
+Name (Korean): 빈티지 나무 상자_01
+Category: furniture
+
+=== Description ===
+An antique wooden chest with ornate iron banding, suitable for storing treasures or linens within a cozy woodland retreat. It has a securely fastened lid.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, vintage wooden chest, ornate iron banding, secure lid, 숲속의 작은 집 theme, high resolution, detailed textures.

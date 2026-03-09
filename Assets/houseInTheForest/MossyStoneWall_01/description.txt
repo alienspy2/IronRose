@@ -1,0 +1,9 @@
+Name: MossyStoneWall_01
+Name (Korean): MossyStoneWall_01
+Category: wall
+
+=== Description ===
+A stone wall textured with lush green moss, creating a damp and ancient forest feel.
+
+=== Generation Prompt ===
+Isolated on solid white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, mossy stone wall, green moss, rough stone texture, damp effect, 8k resolution

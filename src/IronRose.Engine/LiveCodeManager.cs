@@ -1,0 +1,367 @@
+using IronRose.Rendering;
+using IronRose.Scripting;
+using IronRose.Engine.Editor;
+using IronRose.Engine.Editor.ImGuiEditor.Panels;
+using RoseEngine;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+
+namespace IronRose.Engine
+{
+    /// <summary>
+    /// LiveCode hot-reload: file watching, compilation, and state preservation.
+    /// Extracted from EngineCore (Phase 15 — H-2).
+    /// </summary>
+    internal class LiveCodeManager
+    {
+        private ScriptCompiler? _compiler;
+        private ScriptDomain? _scriptDomain;
+        private readonly List<string> _liveCodePaths = new();
+        private readonly List<FileSystemWatcher> _liveCodeWatchers = new();
+        private bool _reloadRequested;
+        private DateTime _lastReloadTime = DateTime.MinValue;
+        private readonly Dictionary<string, string> _savedHotReloadStates = new();
+
+        /// <summary>
+        /// LiveCode에서 발견된 MonoBehaviour 데모 타입 목록 (DemoLauncher에서 참조).
+        /// </summary>
+        public Type[] LiveCodeDemoTypes { get; private set; } = Array.Empty<Type>();
+
+        /// <summary>
+        /// 핫 리로드 후 씬 복원 콜백.
+        /// </summary>
+        public Action? OnAfterReload { get; set; }
+
+        public bool ReloadRequested => _reloadRequested;
+
+        public void Initialize()
+        {
+            RoseEngine.Debug.Log("[Engine] Initializing LiveCode hot-reload...");
+
+            // 빌드 타임 LiveCode.dll이 Default ALC에 로드되었는지 확인
+            var buildTimeLiveCode = AppDomain.CurrentDomain.GetAssemblies()
+                .FirstOrDefault(a => a.GetName().Name == "LiveCode"
+                    && !string.IsNullOrEmpty(a.Location));
+            if (buildTimeLiveCode != null)
+            {
+                RoseEngine.Debug.LogWarning(
+                    "[Engine] Build-time LiveCode.dll detected in Default ALC! " +
+                    "This may cause duplicate types. " +
+                    "Ensure LiveCode.csproj is excluded from build output. " +
+                    $"Location: {buildTimeLiveCode.Location}");
+            }
+
+            _compiler = new ScriptCompiler();
+            _compiler.AddReference(typeof(IronRose.API.Screen));
+            _compiler.AddReference(typeof(EngineCore).Assembly.Location);
+            _compiler.AddReference(typeof(PostProcessStack).Assembly.Location);
+            _compiler.AddReference(typeof(IHotReloadable).Assembly.Location);
+
+            var entryAsm = System.Reflection.Assembly.GetEntryAssembly();
+            if (entryAsm != null && !string.IsNullOrEmpty(entryAsm.Location))
+                _compiler.AddReference(entryAsm.Location);
+            _scriptDomain = new ScriptDomain();
+
+            var monoBehaviourType = typeof(MonoBehaviour);
+            _scriptDomain.SetTypeFilter(type => !monoBehaviourType.IsAssignableFrom(type));
+
+            FindLiveCodeDirectories();
+
+            foreach (var path in _liveCodePaths)
+            {
+                var watcher = new FileSystemWatcher(path, "*.cs");
+                watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size;
+                watcher.Changed += OnLiveCodeChanged;
+                watcher.Created += OnLiveCodeChanged;
+                watcher.Deleted += OnLiveCodeChanged;
+                watcher.Renamed += (s, e) => OnLiveCodeChanged(s, e);
+                watcher.EnableRaisingEvents = true;
+                _liveCodeWatchers.Add(watcher);
+                RoseEngine.Debug.Log($"[Engine] FileSystemWatcher active on {path}");
+            }
+
+            CompileAllLiveCode();
+        }
+
+        /// <summary>
+        /// 메인 스레드에서 매 프레임 호출. 리로드 요청이 있으면 처리합니다.
+        /// </summary>
+        public void ProcessReload()
+        {
+            if (!_reloadRequested) return;
+            _reloadRequested = false;
+
+            bool isPlaying = EditorPlayMode.State == PlayModeState.Playing;
+
+            RoseEngine.Debug.Log("[Engine] Hot reloading LiveCode...");
+
+            if (isPlaying)
+                SaveHotReloadableState();
+
+            CompileAllLiveCode();
+
+            // Play/에디터 모두 동일: GO를 유지하고 컴포넌트만 새 어셈블리 타입으로 교체
+            MigrateEditorComponents();
+
+            if (isPlaying)
+                RestoreHotReloadableState();
+        }
+
+        public void UpdateScripts()
+        {
+            _scriptDomain?.Update();
+        }
+
+        public void Dispose()
+        {
+            foreach (var watcher in _liveCodeWatchers)
+                watcher.Dispose();
+            _liveCodeWatchers.Clear();
+        }
+
+        private void FindLiveCodeDirectories()
+        {
+            // 1) 루트 LiveCode/ 디렉토리 탐색 (주요 경로)
+            string[] searchRoots = { ".", "..", "../.." };
+            foreach (var root in searchRoots)
+            {
+                string rootLiveCode = Path.GetFullPath(
+                    Path.Combine(root, RoseEngine.EngineDirectories.LiveCodePath));
+                if (Directory.Exists(rootLiveCode) && !_liveCodePaths.Contains(rootLiveCode))
+                {
+                    _liveCodePaths.Add(rootLiveCode);
+                    RoseEngine.Debug.Log($"[Engine] Found LiveCode directory: {rootLiveCode}");
+                    break;
+                }
+            }
+
+            // 2) src/*/LiveCode/ 하위 디렉토리도 추가 탐색 (확장성)
+            foreach (var root in searchRoots)
+            {
+                string srcDir = Path.GetFullPath(Path.Combine(root, "src"));
+                if (!Directory.Exists(srcDir)) continue;
+
+                foreach (var projectDir in Directory.GetDirectories(srcDir))
+                {
+                    string liveCodeDir = Path.Combine(
+                        projectDir, RoseEngine.EngineDirectories.LiveCodePath);
+                    if (!Directory.Exists(liveCodeDir)) continue;
+
+                    string fullPath = Path.GetFullPath(liveCodeDir);
+                    if (!_liveCodePaths.Contains(fullPath))
+                    {
+                        _liveCodePaths.Add(fullPath);
+                        RoseEngine.Debug.Log($"[Engine] Found LiveCode directory: {fullPath}");
+                    }
+                }
+                break;
+            }
+
+            // 3) 아무것도 못 찾으면 생성
+            if (_liveCodePaths.Count == 0)
+            {
+                string fallback = Path.GetFullPath(RoseEngine.EngineDirectories.LiveCodePath);
+                Directory.CreateDirectory(fallback);
+                _liveCodePaths.Add(fallback);
+                RoseEngine.Debug.Log($"[Engine] Created LiveCode directory: {fallback}");
+            }
+        }
+
+        private void CompileAllLiveCode()
+        {
+            var csFiles = _liveCodePaths
+                .Where(Directory.Exists)
+                .SelectMany(p => Directory.GetFiles(p, "*.cs"))
+                .ToArray();
+
+            if (csFiles.Length == 0)
+                return;
+
+            RoseEngine.Debug.Log($"[Engine] Compiling {csFiles.Length} LiveCode files from {_liveCodePaths.Count} directories...");
+
+            var result = _compiler!.CompileFromFiles(csFiles, "LiveCode");
+            if (result.Success && result.AssemblyBytes != null)
+            {
+                if (_scriptDomain!.IsLoaded)
+                    _scriptDomain.Reload(result.AssemblyBytes);
+                else
+                    _scriptDomain.LoadScripts(result.AssemblyBytes);
+
+                RegisterLiveCodeBehaviours();
+                RoseEngine.Debug.Log("[Engine] LiveCode loaded!");
+            }
+            else
+            {
+                RoseEngine.Debug.LogError("[Engine] LiveCode compilation failed");
+            }
+        }
+
+        private void RegisterLiveCodeBehaviours()
+        {
+            var monoBehaviourType = typeof(MonoBehaviour);
+            var types = _scriptDomain!.GetLoadedTypes();
+            var demoTypes = new List<Type>();
+
+            foreach (var type in types)
+            {
+                if (type.IsAbstract || type.IsInterface) continue;
+                if (!monoBehaviourType.IsAssignableFrom(type)) continue;
+
+                demoTypes.Add(type);
+                RoseEngine.Debug.Log($"[Engine] LiveCode demo detected: {type.Name}");
+            }
+
+            LiveCodeDemoTypes = demoTypes.ToArray();
+            RoseEngine.Debug.Log($"[Engine] LiveCode demos available: {LiveCodeDemoTypes.Length}");
+
+            // 에디터 캐시 무효화: 새 타입이 Add Component 메뉴 및 씬 역직렬화에 반영
+            ImGuiInspectorPanel.InvalidateComponentTypeCache();
+            ImGuiHierarchyPanel.InvalidateComponentTypeCache();
+            SceneSerializer.InvalidateComponentTypeCache();
+        }
+
+        private void SaveHotReloadableState()
+        {
+            _savedHotReloadStates.Clear();
+            foreach (var go in SceneManager.AllGameObjects)
+            {
+                foreach (var comp in go.InternalComponents)
+                {
+                    if (comp is IHotReloadable reloadable)
+                    {
+                        try
+                        {
+                            var state = reloadable.SerializeState();
+                            _savedHotReloadStates[comp.GetType().Name] = state;
+                            RoseEngine.Debug.Log($"[Engine] State saved: {comp.GetType().Name}");
+                        }
+                        catch (Exception ex)
+                        {
+                            RoseEngine.Debug.LogError($"[Engine] State save failed for {comp.GetType().Name}: {ex.Message}");
+                        }
+                    }
+                }
+            }
+        }
+
+        private void RestoreHotReloadableState()
+        {
+            if (_savedHotReloadStates.Count == 0) return;
+
+            foreach (var go in SceneManager.AllGameObjects)
+            {
+                foreach (var comp in go.InternalComponents)
+                {
+                    if (comp is IHotReloadable reloadable)
+                    {
+                        string typeName = comp.GetType().Name;
+                        if (_savedHotReloadStates.TryGetValue(typeName, out var state))
+                        {
+                            try
+                            {
+                                reloadable.DeserializeState(state);
+                                RoseEngine.Debug.Log($"[Engine] State restored: {typeName}");
+                            }
+                            catch (Exception ex)
+                            {
+                                RoseEngine.Debug.LogError($"[Engine] State restore failed for {typeName}: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+            }
+            _savedHotReloadStates.Clear();
+        }
+
+        /// <summary>
+        /// 에디터(비Playing) 모드에서 LiveCode 리로드 후,
+        /// 기존 컴포넌트 인스턴스를 새 어셈블리 타입으로 교체하고 필드 값을 복사한다.
+        /// </summary>
+        private void MigrateEditorComponents()
+        {
+            if (_scriptDomain == null || LiveCodeDemoTypes.Length == 0) return;
+
+            // 새 어셈블리의 타입을 이름으로 매핑
+            var newTypeMap = new Dictionary<string, Type>();
+            foreach (var t in _scriptDomain.GetLoadedTypes())
+                newTypeMap[t.Name] = t;
+
+            foreach (var go in SceneManager.AllGameObjects)
+            {
+                for (int i = 0; i < go._components.Count; i++)
+                {
+                    var old = go._components[i];
+                    if (old is Transform) continue;
+
+                    var oldType = old.GetType();
+                    // 이미 최신 어셈블리 타입이면 스킵
+                    if (!newTypeMap.TryGetValue(oldType.Name, out var newType)) continue;
+                    if (oldType == newType) continue;
+
+                    // 새 인스턴스 생성
+                    Component? newComp;
+                    try
+                    {
+                        newComp = (Component)Activator.CreateInstance(newType)!;
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
+                    // public 필드 값 복사 (이름 매칭)
+                    CopyFieldValues(oldType, old, newType, newComp);
+
+                    newComp.gameObject = go;
+                    go._components[i] = newComp;
+
+                    // MonoBehaviour 레지스트리 교체
+                    if (old is MonoBehaviour oldMb)
+                        SceneManager.UnregisterBehaviour(oldMb);
+                    if (newComp is MonoBehaviour newMb)
+                        SceneManager.RegisterBehaviour(newMb);
+
+                    RoseEngine.Debug.Log($"[Engine] Migrated component: {oldType.Name} on {go.name}");
+                }
+            }
+        }
+
+        private static void CopyFieldValues(Type oldType, object oldObj, Type newType, object newObj)
+        {
+            var newFields = newType.GetFields(BindingFlags.Public | BindingFlags.Instance);
+            foreach (var nf in newFields)
+            {
+                var of = oldType.GetField(nf.Name, BindingFlags.Public | BindingFlags.Instance);
+                if (of == null) continue;
+
+                try
+                {
+                    var val = of.GetValue(oldObj);
+                    // 타입 호환성 체크 (같은 이름이더라도 타입이 다를 수 있음)
+                    if (val != null && nf.FieldType.IsAssignableFrom(val.GetType()))
+                        nf.SetValue(newObj, val);
+                    else if (val == null && !nf.FieldType.IsValueType)
+                        nf.SetValue(newObj, null);
+                }
+                catch
+                {
+                    // 필드 복사 실패는 무시 (새 기본값 유지)
+                }
+            }
+        }
+
+        private void OnLiveCodeChanged(object sender, FileSystemEventArgs e)
+        {
+            var now = DateTime.Now;
+            if ((now - _lastReloadTime).TotalSeconds < 1.0)
+                return;
+
+            _lastReloadTime = now;
+            _reloadRequested = true;
+            RoseEngine.Debug.Log($"[Engine] LiveCode changed: {e.Name} -> reload scheduled");
+        }
+    }
+}

@@ -1,0 +1,101 @@
+name = "DefaultScene"
+[[gameObjects]]
+name = "Main Camera"
+guid = "7fa460f6-1463-4ef3-962c-b13ff94239cb"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [-2.580169677734375, 4.696514129638672, 6.6098952293396]
+localRotation = [0.05261862650513649, 0.941375732421875, -0.2839048206806183, 0.1744735985994339]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "Camera"
+[gameObjects.components.fields]
+fieldOfView = 60.0
+nearClipPlane = 0.1000000014901161
+farClipPlane = 1000.0
+clearFlags = "Skybox"
+backgroundColor = [0.1920000016689301, 0.3019999861717224, 0.4749999940395355, 1.0]
+[[gameObjects]]
+name = "Light"
+guid = "e1ac57a4-abd5-429e-89b7-484a40256fb2"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [1.14176619052887, 14.11098194122314, -5.595911026000977]
+localRotation = [-0.5460067391395569, 0.08375474065542221, -0.05498002097010612, -0.8317685723304749]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "RoseEngine.Light"
+[gameObjects.components.fields]
+color = [1.0, 1.0, 1.0, 1.0]
+intensity = 50.0
+range = 20.0
+rangeNear = 10.0
+type = "Spot"
+enabled = true
+spotAngle = 50.0
+spotOuterAngle = 80.0
+shadows = true
+shadowResolution = 1024
+shadowBias = 0.001000000047497451
+shadowNormalBias = 0.001000000047497451
+shadowNearPlane = 0.1000000014901161
+shadowCullMode = "TwoFace"
+shadowSoftness = 1.0
+[[gameObjects]]
+name = "HandcraftedWoodenLantern_01"
+guid = "33b3a057-a972-4a1f-846a-a44b199cf33b"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.9926632046699524, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "8b939625-7c62-4064-b5e7-2270dedd4639"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "3685d294-f4ed-4f52-a5e4-ebf60e2a9329"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 7.0
+meshGuid = "8b939625-7c62-4064-b5e7-2270dedd4639"
+[[gameObjects]]
+name = "Plane"
+guid = "e599eeca-e5f9-4eeb-bd89-bcb60cb82e33"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+primitiveType = "Plane"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "8387cc04-cfd8-4cf7-8fd0-9d031fbd7ccf"
+[sceneEnvironment]
+skyboxTextureGuid = "3e2bf4de-b81f-45a5-ba41-7861c3ba1bed"
+skyboxExposure = 1.129999995231628
+skyboxRotation = 0.0
+ambientIntensity = 1.0
+ambientLight = [0.2000000029802322, 0.2000000029802322, 0.2000000029802322, 1.0]
+skyZenithIntensity = 0.800000011920929
+skyHorizonIntensity = 1.0
+sunIntensity = 20.0
+skyZenithColor = [0.1500000059604645, 0.300000011920929, 0.6499999761581421, 1.0]
+skyHorizonColor = [0.6000000238418579, 0.699999988079071, 0.8500000238418579, 1.0]
+[editorState]
+[editorState.sceneViewCamera]
+position = [-8.652536392211914, 6.423166275024414, 2.979311227798462]
+rotation = [-0.1749350428581238, -0.7762967944145203, 0.2452499866485596, -0.553726851940155]
+pivot = [0.0, 0.0, 0.0]

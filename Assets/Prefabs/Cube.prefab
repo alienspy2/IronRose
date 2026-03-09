@@ -1,0 +1,62 @@
+[prefab]
+version = 1
+rootName = "Cube"
+[[gameObjects]]
+name = "Cube"
+guid = "41b963cb-e85d-4a9f-aa42-9da5c0d8a7b9"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+primitiveType = "Cube"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+color = [1.0, 1.0, 1.0, 1.0]
+metallic = 0.0
+roughness = 0.5
+[[gameObjects.components]]
+type = "RoseEngine.BoxCollider"
+[gameObjects.components.fields]
+size = [1.0, 1.0, 1.0]
+isTrigger = false
+center = [0.0, 0.0, 0.0]
+[[gameObjects]]
+name = "Cube"
+guid = "417287b7-17e1-4257-aa29-de9e79220a17"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 1.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 0
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+primitiveType = "Cube"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "90a8838d-ba68-41c5-ad7c-9c4f07543af5"
+[[gameObjects.components]]
+type = "RoseEngine.BoxCollider"
+[gameObjects.components.fields]
+size = [1.0, 1.0, 1.0]
+isTrigger = false
+center = [0.0, 0.0, 0.0]
+[[gameObjects]]
+name = "Sphere"
+guid = "c2c2ee9c-bfb6-420b-9e64-9cfec1c0043c"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [-0.1000000014901161, 1.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 1
+[gameObjects.prefabInstance]
+prefabGuid = "456de0b1-6bb8-4107-9c29-c95cfa105e01"

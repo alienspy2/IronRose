@@ -1,0 +1,9 @@
+Name: HandcraftedWoodenCrock
+Name (Korean): 수작업 나무 그릇
+Category: prop
+
+=== Description ===
+A sturdy, handmade wooden crock used for storing grains or herbs in a rustic woodland setting.  It has a slightly worn finish and a simple, unadorned design.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, close-up of a handcrafted wooden crock with a slightly weathered texture and a dark, rich brown color, emphasizing the artisan's touch.

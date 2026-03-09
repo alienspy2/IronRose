@@ -1,0 +1,11 @@
+guid = "9af60ce3-106c-48c7-8a4f-0a56bfd847da"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Color"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = true

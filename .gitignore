@@ -1,0 +1,90 @@
+# Build outputs
+bin/
+obj/
+*.dll
+*.exe
+*.pdb
+
+# Hot reload temporary builds
+bin-hot/
+temp-hot/
+
+# Visual Studio / VS Code
+.vs/
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+*.DotSettings.user
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Test Results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# AI 테스트 출력물
+.claude/test_outputs/
+.claude/*.log
+
+# Runtime logs
+logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.cache
+
+# Backup files
+*.bak
+*~
+
+# Compiled assemblies (if hot-reload enabled)
+*.hot.dll
+*.hot.pdb
+bin-hot/
+
+# Asset import cache
+RoseCache/
+
+# FidelityFX SDK (참조 전용)
+external/fsr3.1/
+
+# Custom user preferences
+Screenshots/
+
+# Asset thumbnails
+*.thumbnails.png
+
+# Editor local state
+.rose_editor_state.toml

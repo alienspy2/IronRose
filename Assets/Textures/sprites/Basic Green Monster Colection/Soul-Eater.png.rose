@@ -1,0 +1,16 @@
+guid = "8017abb5-44a9-47ef-a653-9b50028722d0"
+version = 1
+[importer]
+type = "TextureImporter"
+max_size = 2048
+compression = "BC7"
+texture_type = "Sprite"
+srgb = true
+filter_mode = "Bilinear"
+wrap_mode = "Repeat"
+generate_mipmaps = true
+[[sub_assets]]
+name = "Soul-Eater"
+type = "Sprite"
+index = 0
+guid = "fa41b8b1-b275-48d0-9072-d2a85fcf6bf0"

@@ -1,0 +1,9 @@
+Name: TiledStoneFloor_01
+Name (Korean): 타일 석재 바닥_01
+Category: floor
+
+=== Description ===
+A floor made of rectangular tiles, offering a polished look. Suitable for a slightly more refined cabin.
+
+=== Generation Prompt ===
+Isolated on solid white background, single object, centered, full object visible, not cropped, entire object in frame, no background, no shadow, no floor, product photography style, studio lighting, detailed texture of tiled stone floor, rectangular tiles, grey and white tones, 4K resolution, photorealistic

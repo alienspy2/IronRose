@@ -1,0 +1,9 @@
+Name: LogCabinStaircase_03
+Name (Korean): LogCabin계단_03
+Category: floor
+
+=== Description ===
+A tall, sturdy staircase built with thick log walls, characteristic of a rustic log cabin. The design has a strong, simple, and solid appearance, reflecting the traditional small home.
+
+=== Generation Prompt ===
+Isolated on pure white background, single object, centered, full object visible, not cropped, entire object in frame, product photography style, studio lighting, log staircase, log walls, rustic log cabin, textured wood, 숲속의 작은 집, rustic, traditional design, high resolution, no background, no shadow, no floor.

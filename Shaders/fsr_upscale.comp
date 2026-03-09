@@ -1,0 +1,117 @@
+#version 450
+layout(local_size_x = 8, local_size_y = 8) in;
+
+// Input (render resolution)
+layout(set = 0, binding = 0) uniform texture2D colorInput;
+layout(set = 0, binding = 1) uniform texture2D depthInput;
+layout(set = 0, binding = 2) uniform texture2D velocityInput;
+layout(set = 0, binding = 3) uniform sampler linearSampler;
+
+// History (display resolution)
+layout(set = 0, binding = 4) uniform texture2D historyInput;
+
+// Output (display resolution)
+layout(set = 0, binding = 5, rgba16f) uniform writeonly image2D upscaledOutput;
+
+layout(set = 0, binding = 6) uniform FsrParams {
+    vec2 RenderSize;
+    vec2 DisplaySize;
+    vec2 RenderSizeRcp;
+    vec2 DisplaySizeRcp;
+    vec2 JitterOffset;
+    int FrameIndex;
+    float _pad;
+};
+
+// Tonemap for neighborhood clamping in perceptual space
+vec3 toYCoCg(vec3 rgb)
+{
+    float y  = dot(rgb, vec3(0.25, 0.5, 0.25));
+    float co = dot(rgb, vec3(0.5, 0.0, -0.5));
+    float cg = dot(rgb, vec3(-0.25, 0.5, -0.25));
+    return vec3(y, co, cg);
+}
+
+vec3 fromYCoCg(vec3 ycocg)
+{
+    float y  = ycocg.x;
+    float co = ycocg.y;
+    float cg = ycocg.z;
+    return vec3(y + co - cg, y + cg, y - co - cg);
+}
+
+void main()
+{
+    ivec2 dispPos = ivec2(gl_GlobalInvocationID.xy);
+    if (dispPos.x >= int(DisplaySize.x) || dispPos.y >= int(DisplaySize.y)) return;
+
+    vec2 dispUV = (vec2(dispPos) + 0.5) * DisplaySizeRcp;
+
+    // 1) Sample current frame (render resolution)
+    // Unjitter the UV to compensate for sub-pixel jitter applied during rendering
+    vec2 renderUV = dispUV - JitterOffset * RenderSizeRcp;
+    vec4 currentColor = texture(sampler2D(colorInput, linearSampler), renderUV);
+
+    // 2) Read motion vector and reproject history
+    vec2 velocity = texture(sampler2D(velocityInput, linearSampler), renderUV).rg;
+    vec2 historyUV = dispUV - velocity;
+    vec4 historyColor = texture(sampler2D(historyInput, linearSampler), historyUV);
+
+    // 3) Neighborhood clamping (3x3 in YCoCg space, render resolution)
+    vec3 minYCoCg = vec3(1e10);
+    vec3 maxYCoCg = vec3(-1e10);
+    vec3 m1 = vec3(0.0);  // mean
+    vec3 m2 = vec3(0.0);  // variance
+
+    for (int y = -1; y <= 1; y++)
+    {
+        for (int x = -1; x <= 1; x++)
+        {
+            vec2 offset = vec2(x, y) * RenderSizeRcp;
+            vec3 s = texture(sampler2D(colorInput, linearSampler), renderUV + offset).rgb;
+            vec3 sYCoCg = toYCoCg(s);
+            minYCoCg = min(minYCoCg, sYCoCg);
+            maxYCoCg = max(maxYCoCg, sYCoCg);
+            m1 += sYCoCg;
+            m2 += sYCoCg * sYCoCg;
+        }
+    }
+
+    // Variance-based clamp (tighter than min/max)
+    m1 /= 9.0;
+    m2 /= 9.0;
+    vec3 sigma = sqrt(max(m2 - m1 * m1, vec3(0.0)));
+    float gamma = 1.25;  // clamp box expansion factor
+    vec3 clampMin = m1 - gamma * sigma;
+    vec3 clampMax = m1 + gamma * sigma;
+
+    vec3 histYCoCg = toYCoCg(historyColor.rgb);
+    histYCoCg = clamp(histYCoCg, clampMin, clampMax);
+    historyColor.rgb = fromYCoCg(histYCoCg);
+
+    // 4) Blend factor
+    float blendFactor = 0.05;  // 5% current, 95% history
+
+    // First frames: ramp up from 100% current (no valid history yet)
+    // Frame 0: blend=1.0, Frame 1: 0.5, Frame 2: 0.25, ... converges to 0.05
+    if (FrameIndex < 16)
+    {
+        float ramp = 1.0 / (1.0 + float(FrameIndex));
+        blendFactor = max(blendFactor, ramp);
+    }
+
+    // Reject history if UV is out of screen
+    if (historyUV.x < 0.0 || historyUV.x > 1.0 ||
+        historyUV.y < 0.0 || historyUV.y > 1.0)
+    {
+        blendFactor = 1.0;
+    }
+
+    // Increase blend toward current frame based on motion magnitude
+    float motionLen = length(velocity * DisplaySize);
+    blendFactor = mix(blendFactor, 0.3, clamp(motionLen * 0.1, 0.0, 1.0));
+
+    vec3 result = mix(historyColor.rgb, currentColor.rgb, blendFactor);
+
+    imageStore(upscaledOutput, dispPos, vec4(result, 1.0));
+}

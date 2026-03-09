@@ -1,0 +1,59 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "IronRose Editor",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/IronRose.RoseEditor/bin/Debug/net10.0/IronRose.RoseEditor.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+            "stopAtEntry": false,
+            "justMyCode": false,
+            "enableStepFiltering": false,
+            "suppressJITOptimizations": true,
+            "logging": {
+                "moduleLoad": false,
+                "engineLogging": false
+            }
+        },
+        {
+            "name": "IronRose Standalone",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/IronRose.Standalone/bin/Debug/net10.0/IronRose.Standalone.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+            "stopAtEntry": false,
+            "justMyCode": false,
+            "enableStepFiltering": false,
+            "suppressJITOptimizations": true,
+            "logging": {
+                "moduleLoad": false,
+                "engineLogging": false
+            }
+        },
+        {
+            "name": "IronRose Step Trace (Entry)",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/IronRose.Standalone/bin/Debug/net10.0/IronRose.Standalone.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole",
+            "stopAtEntry": true,
+            "justMyCode": false,
+            "enableStepFiltering": false,
+            "suppressJITOptimizations": true,
+            "logging": {
+                "moduleLoad": false,
+                "engineLogging": false
+            }
+        }
+    ]
+}
