@@ -285,6 +285,16 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 if (data.InputContext != null && _inputHandler != null)
                     _inputHandler.AddSecondaryInput(data.InputContext, window);
 
+                // 분리된 창을 항상 메인 창 위에 유지 (Always on Top)
+                if (_glfw != null && window.Native?.Glfw != null)
+                {
+                    unsafe
+                    {
+                        var glfwHandle = (SilkGlfw.WindowHandle*)window.Native.Glfw.Value;
+                        _glfw.SetWindowAttrib(glfwHandle, SilkGlfw.WindowAttributeSetter.Floating, true);
+                    }
+                }
+
                 // 보조 윈도우 포커스 추적
                 var capturedWin = window;
                 window.FocusChanged += focused =>
