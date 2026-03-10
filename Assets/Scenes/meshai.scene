@@ -1,0 +1,517 @@
+name = "meshai"
+[[gameObjects]]
+name = "Main Camera"
+guid = "5093c2ed-a158-4372-a2df-4be163a1238a"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 3.0, -6.0]
+localRotation = [0.2297529578208923, 0.0, 0.0, 0.973249077796936]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "Camera"
+[gameObjects.components.fields]
+fieldOfView = 60.0
+nearClipPlane = 0.1000000014901161
+farClipPlane = 1000.0
+clearFlags = "Skybox"
+backgroundColor = [0.1920000016689301, 0.3019999861717224, 0.4749999940395355, 1.0]
+[[gameObjects]]
+name = "Plane"
+guid = "0835fdff-b612-4fb3-ba65-9da6991de0bb"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+primitiveType = "Plane"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+color = [1.0, 1.0, 1.0, 1.0]
+metallic = 0.0
+roughness = 0.5
+[[gameObjects.components]]
+type = "RoseEngine.BoxCollider"
+[gameObjects.components.fields]
+size = [10.0, 0.009999999776482582, 10.0]
+isTrigger = false
+center = [0.0, 0.0, 0.0]
+[[gameObjects]]
+name = "Spot Light"
+guid = "e2f2be4e-e44f-453d-a77d-090e1a201fd9"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 5.0, -2.0]
+localRotation = [0.5606287717819214, 0.0, 0.0, 0.8280672430992126]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "RoseEngine.Light"
+[gameObjects.components.fields]
+color = [1.0, 1.0, 1.0, 1.0]
+intensity = 10.0
+range = 15.0
+rangeNear = 0.0
+type = "Spot"
+enabled = true
+spotAngle = 30.0
+spotOuterAngle = 150.0
+shadows = true
+shadowResolution = 1024
+shadowBias = 0.001000000047497451
+shadowNormalBias = 0.001000000047497451
+shadowNearPlane = 0.1000000014901161
+shadowCullMode = "TwoFace"
+shadowSoftness = 1.0
+[[gameObjects]]
+name = "Spot Light_01"
+guid = "3cb67a25-1b36-4d2b-b67e-195bde672c6d"
+activeSelf = false
+[gameObjects.transform]
+localPosition = [-2.06689977645874, 1.805647611618042, -2.197901248931885]
+localRotation = [0.1209676340222359, 0.3513140380382538, -0.04583050683140755, 0.9272782206535339]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "RoseEngine.Light"
+[gameObjects.components.fields]
+color = [1.0, 1.0, 1.0, 1.0]
+intensity = 4.809999942779541
+range = 15.0
+rangeNear = 0.0
+type = "Spot"
+enabled = true
+spotAngle = 30.0
+spotOuterAngle = 60.0
+shadows = true
+shadowResolution = 256
+shadowBias = 0.001000000047497451
+shadowNormalBias = 0.001000000047497451
+shadowNearPlane = 0.1000000014901161
+shadowCullMode = "TwoFace"
+shadowSoftness = 1.0
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture"
+guid = "ea04bc6d-94c9-4038-bee6-0666486b0990"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [-0.772534191608429, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 8
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture_01"
+guid = "cd206c05-bfd1-4031-85d5-52039198d53a"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [-2.785279035568237, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 8
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture_02"
+guid = "89e28d2f-d2f8-4f29-a8ba-a05ea55bc613"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [3.26128888130188, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 8
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture_03"
+guid = "914fb1dd-f533-4da4-9f94-cffeedf570f5"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [1.248543977737427, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 8
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "GameObject"
+guid = "06245d96-ba3a-4643-a4df-26bc25be6ebf"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects]]
+name = "GameObject_01"
+guid = "b0923cbe-9abb-43ff-beca-48165c878608"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, -2.057239055633545]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture"
+guid = "c4c820ed-23e6-4922-9372-ab71261daa9c"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [-0.772534191608429, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 9
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture_01"
+guid = "db6b0777-9dc3-416b-8857-410c36417708"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [-2.785279035568237, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 9
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture_02"
+guid = "d8871864-257f-4d55-9472-84b957cfe70f"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [3.26128888130188, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 9
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture_03"
+guid = "ca7b0df3-8235-4612-a499-b385828ffea8"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [1.248543977737427, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 9
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "GameObject_02"
+guid = "708eb84d-86df-48eb-a15d-f0c4789a68cd"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, -4.036871433258057]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture"
+guid = "f65a47e8-2ba4-44f6-8e80-19ab4fcbd8bc"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [-0.772534191608429, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 14
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture_01"
+guid = "2b6074e2-ea9e-4871-8a85-5b5c5e3b71b8"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [-2.785279035568237, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 14
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture_02"
+guid = "e80f8fa6-99cf-4338-95e5-9af3aed3762b"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [3.26128888130188, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 14
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture_03"
+guid = "f9795ee2-a380-4235-ae98-1ec331b08028"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [1.248543977737427, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 14
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "GameObject_03"
+guid = "3d59a91b-6e7d-46a0-bd80-8e1028fad58e"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, -5.773260593414307]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture"
+guid = "6a7966b6-882e-4454-a5b0-293cd9d3e92c"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [-0.772534191608429, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, 1.0, -0.0, -4.371138828673793e-08]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 19
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture_01"
+guid = "26b0e778-af8c-4cbf-a9bd-1f85e26afbde"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [-2.785279035568237, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 19
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture_02"
+guid = "a421c96d-f908-4717-92a6-caf879ba3536"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [3.26128888130188, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 19
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects]]
+name = "Meshy_AI_Orange_Armor_Astronau_0310115517_texture_03"
+guid = "8b417123-d930-4aeb-9dc1-020b0547233d"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [1.248543977737427, 0.8820202946662903, 2.555916786193848]
+localRotation = [0.0, -0.9999969005584717, 0.0, -0.002451837062835693]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 19
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+assetGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+materialGuid = "63e42bb5-fecf-4b71-bee8-fd77381ede34"
+[[gameObjects.components]]
+type = "MipMeshFilter"
+[gameObjects.components.fields]
+mipBias = 0.0
+lodScale = 8.770000457763672
+meshGuid = "f670350c-338e-4489-8584-6adea73c01cb"
+[sceneEnvironment]
+skyboxTextureGuid = "3e2bf4de-b81f-45a5-ba41-7861c3ba1bed"
+skyboxExposure = 0.1000000014901161
+skyboxRotation = 0.0
+ambientIntensity = 1.0
+ambientLight = [0.2000000029802322, 0.2000000029802322, 0.2000000029802322, 1.0]
+skyZenithIntensity = 0.800000011920929
+skyHorizonIntensity = 1.0
+sunIntensity = 20.0
+skyZenithColor = [0.1500000059604645, 0.300000011920929, 0.6499999761581421, 1.0]
+skyHorizonColor = [0.6000000238418579, 0.699999988079071, 0.8500000238418579, 1.0]
+[editorState]
+[editorState.sceneViewCamera]
+position = [0.07769574224948883, 3.770661592483521, -5.336232662200928]
+rotation = [-0.3285284340381622, -0.01648337952792645, 0.005734480917453766, -0.9443328380584717]
+pivot = [0.2385449409484863, 0.1222448348999023, -0.7301098704338074]

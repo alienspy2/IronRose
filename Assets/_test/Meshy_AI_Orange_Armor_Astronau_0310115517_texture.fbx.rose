@@ -1,0 +1,22 @@
+guid = "d15e92b4-ace8-4b4c-a1fe-01a0deae3ffc"
+version = 1
+[importer]
+type = "MeshImporter"
+scale = 1.0
+generate_normals = true
+flip_uvs = true
+triangulate = true
+generate_mipmesh = true
+mipmesh_min_triangles = 500
+mipmesh_target_error = 0.02
+mipmesh_reduction = 0.1
+[[sub_assets]]
+name = "Mesh0"
+type = "Mesh"
+index = 0
+guid = "f670350c-338e-4489-8584-6adea73c01cb"
+[[sub_assets]]
+name = "Material.002"
+type = "Material"
+index = 0
+guid = "6f6f97e3-9a5d-4ed7-93da-b95b1038f818"

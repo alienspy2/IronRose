@@ -20,21 +20,43 @@ namespace RoseEngine
         {
             get
             {
-                float sinr_cosp = 2 * (w * x + y * z);
-                float cosr_cosp = 1 - 2 * (x * x + y * y);
-                float roll = MathF.Atan2(sinr_cosp, cosr_cosp);
+                // ZXY rotation order (Unity standard)
+                // q = qy * qx * qz
+                // R = Ry * Rx * Rz
 
-                float sinp = 2 * (w * y - z * x);
-                float pitch = MathF.Abs(sinp) >= 1
-                    ? MathF.CopySign(MathF.PI / 2, sinp)
-                    : MathF.Asin(sinp);
-
-                float siny_cosp = 2 * (w * z + x * y);
-                float cosy_cosp = 1 - 2 * (y * y + z * z);
-                float yaw = MathF.Atan2(siny_cosp, cosy_cosp);
+                float x2 = x * x, y2 = y * y, z2 = z * z, w2 = w * w;
+                float unit = x2 + y2 + z2 + w2;
+                float test = x * w - y * z;
+                Vector3 euler;
 
                 const float rad2deg = 180f / MathF.PI;
-                return new Vector3(roll * rad2deg, pitch * rad2deg, yaw * rad2deg);
+
+                if (test > 0.4995f * unit) // Singularity at north pole
+                {
+                    euler.y = 2f * MathF.Atan2(y, w) * rad2deg;
+                    euler.x = 90f;
+                    euler.z = 0;
+                }
+                else if (test < -0.4995f * unit) // Singularity at south pole
+                {
+                    euler.y = -2f * MathF.Atan2(y, w) * rad2deg;
+                    euler.x = -90f;
+                    euler.z = 0;
+                }
+                else
+                {
+                    // Extract pitch (X)
+                    euler.x = MathF.Asin(Math.Clamp(2f * (w * x - y * z), -1f, 1f)) * rad2deg;
+                    // Extract yaw (Y)
+                    euler.y = MathF.Atan2(2f * (w * y + z * x), 1f - 2f * (x2 + y2)) * rad2deg;
+                    // Extract roll (Z)
+                    euler.z = MathF.Atan2(2f * (w * z + x * y), 1f - 2f * (x2 + z2)) * rad2deg;
+                }
+
+                return new Vector3(
+                    Mathf.Repeat(euler.x, 360f),
+                    Mathf.Repeat(euler.y, 360f),
+                    Mathf.Repeat(euler.z, 360f));
             }
         }
 
@@ -51,6 +73,7 @@ namespace RoseEngine
 
         public static Quaternion Euler(float x, float y, float z)
         {
+            // ZXY order: q = qy * qx * qz
             const float deg2rad = MathF.PI / 180f;
             x *= deg2rad * 0.5f;
             y *= deg2rad * 0.5f;
@@ -61,10 +84,10 @@ namespace RoseEngine
             float cz = MathF.Cos(z), sz = MathF.Sin(z);
 
             return new Quaternion(
-                sx * cy * cz - cx * sy * sz,
-                cx * sy * cz + sx * cy * sz,
-                cx * cy * sz - sx * sy * cz,
-                cx * cy * cz + sx * sy * sz
+                Mathf.Cos(y) * Mathf.Sin(x) * Mathf.Cos(z) + Mathf.Sin(y) * Mathf.Cos(x) * Mathf.Sin(z),
+                Mathf.Sin(y) * Mathf.Cos(x) * Mathf.Cos(z) - Mathf.Cos(y) * Mathf.Sin(x) * Mathf.Sin(z),
+                Mathf.Cos(y) * Mathf.Cos(x) * Mathf.Sin(z) - Mathf.Sin(y) * Mathf.Sin(x) * Mathf.Cos(z),
+                Mathf.Cos(y) * Mathf.Cos(x) * Mathf.Cos(z) + Mathf.Sin(y) * Mathf.Sin(x) * Mathf.Sin(z)
             );
         }
 
