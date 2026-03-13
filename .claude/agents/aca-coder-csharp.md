@@ -22,11 +22,13 @@ color: yellow
 
 ### 1단계: 컨텍스트 파악
 
-작업 시작 전 반드시 `./making_log/` 디렉토리를 확인한다.
+작업 시작 전 반드시 다음을 읽는다:
 
-- 디렉토리가 존재하면 안에 있는 .md 파일들을 모두 읽어 이전 작업 맥락을 파악한다.
-- 이전 로그에서 현재 작업과 관련된 결정 사항, 주의점, 의존 관계를 확인한다.
-- 디렉토리가 없거나 비어있으면 그대로 진행한다.
+1. **`./doc/CodingGuide.md`** — 코딩 스타일, 네이밍 컨벤션, Unity와의 차이점 등 프로젝트 코딩 규칙을 숙지한다.
+2. **`./making_log/`** 디렉토리의 파일 목록을 확인한다 (Glob으로 파일명만 조회).
+   - 파일명만 보고 현재 작업과 관련된 파일을 판단한다.
+   - **관련 있는 파일만 선별적으로** 읽는다. 모든 파일을 읽지 않는다.
+   - 디렉토리가 없거나 관련 파일이 없으면 그대로 진행한다.
 
 ### 2단계: 작업 대상 코드 분석
 
@@ -53,8 +55,9 @@ color: yellow
 
 #### A. 작업 로그 (개별 작업 기록)
 
-- 파일명: 작업 내용 기반 영문 kebab-case (예: `add-image-decoder.md`, `fix-tonemapping-bug.md`)
-- 날짜는 파일명에 포함하지 않는다.
+- 파일명: 영문 kebab-case. **파일명만 보고 내용을 유추할 수 있을 만큼 자세하게** 작성한다. 날짜는 포함하지 않는다.
+  - 좋은 예: `add-webp-image-decoder-with-animation-support.md`, `fix-deferred-lighting-pass-missing-shadow-bias.md`
+  - 나쁜 예: `add-decoder.md`, `fix-rendering.md`, `update-code.md`
 
 ```markdown
 # [작업 제목]

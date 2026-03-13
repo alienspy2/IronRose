@@ -27,11 +27,14 @@ color: red
 
 ### 1단계: 컨텍스트 파악
 
-작업 시작 전 반드시 `./making_log/` 디렉토리의 .md 파일들을 읽는다.
+작업 시작 전 반드시 다음을 읽는다:
 
-- `_system-*.md` 파일들로 시스템 구조와 의존 관계를 파악한다.
-- 작업 로그(phase*.md 등)로 이전 구현 맥락을 파악한다.
-- 유저가 보고한 문제와 관련된 시스템/모듈을 특정한다.
+1. **`./doc/CodingGuide.md`** — 코딩 스타일, 네이밍 컨벤션, Unity와의 차이점 등 프로젝트 코딩 규칙을 숙지한다.
+2. **`./doc/DebuggingGuide.md`** — 로깅 전략, 디버깅 원칙, 스크린캡처 활용법, 자동화 테스트 명령 등을 숙지한다.
+3. **`./making_log/`** 디렉토리의 파일 목록을 확인한다 (Glob으로 파일명만 조회).
+   - 파일명만 보고 현재 작업과 관련된 파일을 판단한다.
+   - **관련 있는 파일만 선별적으로** 읽는다. 모든 파일을 읽지 않는다.
+   - `_system-*.md` 중 관련 시스템 파일, 작업 로그 중 관련 로그만 읽는다.
 
 ### 2단계: 문제 분석 (정적 분석 우선)
 
@@ -91,7 +94,9 @@ System.IO.File.AppendAllText("_diag.log",
 
 `./making_log/` 디렉토리에 수정 로그를 작성한다.
 
-- 파일명: `fix-[문제요약].md` (영문 kebab-case)
+- 파일명: 영문 kebab-case. **파일명만 보고 내용을 유추할 수 있을 만큼 자세하게** 작성한다.
+  - 좋은 예: `fix-prefab-variant-tree-disappears-after-reparent.md`, `fix-inspector-dragfloat-not-entering-edit-mode-on-click.md`
+  - 나쁜 예: `fix-bug.md`, `fix-inspector.md`, `fix-prefab.md`
 
 ```markdown
 # [수정 제목]
