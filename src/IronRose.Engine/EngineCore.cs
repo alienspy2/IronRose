@@ -118,6 +118,8 @@ namespace IronRose.Engine
             RoseEngine.Debug.LogSink = entry => EditorBridge.PushLog(entry);
             RoseEngine.Debug.Log("[Engine] EngineCore initializing...");
 
+            ProjectContext.Initialize();
+
             RoseConfig.Load();
             ProjectSettings.Load();
             _window = window;
@@ -505,7 +507,7 @@ namespace IronRose.Engine
         {
             if (!RoseConfig.DontUseCache)
             {
-                var shaderCacheDir = Path.Combine(Directory.GetCurrentDirectory(), RoseEngine.EngineDirectories.CachePath, "shaders");
+                var shaderCacheDir = Path.Combine(ProjectContext.CachePath, "shaders");
                 ShaderCompiler.SetCacheDirectory(shaderCacheDir);
 
                 if (RoseConfig.ForceClearCache)
@@ -567,7 +569,7 @@ namespace IronRose.Engine
         private void InitAssets()
         {
             _assetDatabase = new AssetDatabase();
-            string assetsPath = Path.GetFullPath("Assets");
+            string assetsPath = ProjectContext.AssetsPath;
             if (Directory.Exists(assetsPath))
                 _assetDatabase.ScanAssets(assetsPath);
             RoseEngine.Resources.SetAssetDatabase(_assetDatabase);
@@ -584,7 +586,7 @@ namespace IronRose.Engine
 
         private void EnsureDefaultRendererProfile()
         {
-            var settingsDir = Path.GetFullPath(Path.Combine("Assets", "Settings"));
+            var settingsDir = Path.Combine(ProjectContext.AssetsPath, "Settings");
             var defaultPath = Path.Combine(settingsDir, "Default.renderer");
             if (!File.Exists(defaultPath))
             {
@@ -593,7 +595,7 @@ namespace IronRose.Engine
                 RoseMetadata.LoadOrCreate(defaultPath);
                 Debug.Log("[Engine] Created default renderer profile: Assets/Settings/Default.renderer");
                 // 새로 생성한 파일을 AssetDatabase에 등록
-                _assetDatabase?.ScanAssets(Path.GetFullPath("Assets"));
+                _assetDatabase?.ScanAssets(ProjectContext.AssetsPath);
             }
 
             // ProjectSettings에 저장된 활성 프로파일 GUID 로드, 없으면 Default
@@ -604,14 +606,14 @@ namespace IronRose.Engine
 
             if (profile == null)
                 profile = _assetDatabase?.Load<RendererProfile>(
-                    Path.Combine("Assets", "Settings", "Default.renderer"));
+                    Path.Combine(ProjectContext.AssetsPath, "Settings", "Default.renderer"));
 
             if (profile != null)
             {
                 // 실제 로드된 프로파일의 GUID를 사용 (savedGuid 또는 Default 경로에서 조회)
                 var activeGuid = savedGuid;
                 if (string.IsNullOrEmpty(activeGuid))
-                    activeGuid = _assetDatabase?.GetGuidFromPath(Path.Combine("Assets", "Settings", "Default.renderer"));
+                    activeGuid = _assetDatabase?.GetGuidFromPath(Path.Combine(ProjectContext.AssetsPath, "Settings", "Default.renderer"));
                 RenderSettings.activeRendererProfile = profile;
                 RenderSettings.activeRendererProfileGuid = activeGuid;
                 profile.ApplyToRenderSettings();
