@@ -1,0 +1,18 @@
+# Build outputs
+bin/
+obj/
+RoseCache/
+
+# Editor state (local)
+.rose_editor_state.toml
+EditorLayout.ini
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo

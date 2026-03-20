@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <!-- 엔진 소스 경로. 기본값 ../IronRose.
+         다른 경로에 엔진이 있다면 환경변수 IRONROSE_ROOT를 설정하거나 이 파일을 직접 수정. -->
+    <IronRoseRoot Condition="'$(IronRoseRoot)' == ''">$(MSBuildThisFileDirectory)../IronRose</IronRoseRoot>
+    <IronRoseRoot>$([MSBuild]::NormalizeDirectory($(IronRoseRoot)))</IronRoseRoot>
+  </PropertyGroup>
+</Project>

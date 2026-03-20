@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Directory.Build.props가 상위 디렉토리에서 자동 적용되므로 $(IronRoseRoot) 사용 가능. -->
+    <ProjectReference Include="$(IronRoseRoot)src/IronRose.Engine/IronRose.Engine.csproj" />
+    <ProjectReference Include="$(IronRoseRoot)src/IronRose.Contracts/IronRose.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

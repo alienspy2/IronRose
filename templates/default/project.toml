@@ -1,0 +1,13 @@
+[project]
+name = "{{ProjectName}}"
+version = "0.1.0"
+
+[engine]
+# 엔진 소스 경로 (상대 경로)
+path = "../IronRose"
+
+[editor]
+last_scene = ""
+
+[build]
+start_scene = "Assets/Scenes/DefaultScene.scene"
