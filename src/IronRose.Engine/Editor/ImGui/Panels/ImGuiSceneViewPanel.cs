@@ -129,6 +129,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         public void Draw()
         {
+            if (!ProjectContext.IsProjectLoaded) return;
+
             if (!IsOpen)
             {
                 _isImageHovered = false;

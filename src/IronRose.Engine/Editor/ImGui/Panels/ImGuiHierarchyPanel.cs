@@ -59,6 +59,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         public void Draw()
         {
+            if (!ProjectContext.IsProjectLoaded) return;
+
             if (!IsOpen) { _isWindowFocused = false; return; }
 
             var beginResult = ImGui.Begin("Hierarchy", ref _isOpen);

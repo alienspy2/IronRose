@@ -1,3 +1,16 @@
+// ------------------------------------------------------------
+// @file    NativeFileDialog.cs
+// @brief   크로스 플랫폼 OS 네이티브 파일 다이얼로그.
+//          Linux: zenity / kdialog, Windows: comdlg32.dll / shell32.dll P/Invoke.
+// @deps    (없음 - 외부 OS API만 사용)
+// @exports
+//   static class NativeFileDialog
+//     SaveFileDialog(title, defaultName, filter, initialDir): string?  — 파일 저장 다이얼로그
+//     OpenFileDialog(title, filter, initialDir): string?               — 파일 열기 다이얼로그
+//     PickFolder(title, initialDir): string?                           — 폴더 선택 다이얼로그
+// @note    Linux에서 zenity 우선, 없으면 kdialog 폴백.
+//          Windows에서 comdlg32 GetSaveFileName/GetOpenFileName, shell32 SHBrowseForFolder 사용.
+// ------------------------------------------------------------
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -41,6 +54,17 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 return WindowsOpenDialog(title, filter, initialDir);
             else
                 return LinuxOpenDialog(title, filter, initialDir);
+        }
+
+        /// <summary>폴더 선택 다이얼로그. 취소 시 null.</summary>
+        public static string? PickFolder(
+            string title = "Select Folder",
+            string? initialDir = null)
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                return WindowsPickFolder(title, initialDir);
+            else
+                return LinuxPickFolder(title, initialDir);
         }
 
         private static string? EnsureExtension(string? path, string ext)
@@ -129,6 +153,21 @@ namespace IronRose.Engine.Editor.ImGuiEditor
 
             return RunProcess("kdialog",
                 $"--getopenfilename \"{Escape(dir)}\" \"{filter}\"");
+        }
+
+        private static string? LinuxPickFolder(string title, string? initialDir)
+        {
+            var dir = initialDir ?? Directory.GetCurrentDirectory();
+
+            // Try zenity first
+            var result = RunProcess("zenity",
+                $"--file-selection --directory --title=\"{Escape(title)}\" --filename=\"{Escape(dir)}/\"");
+
+            if (result != null) return result;
+
+            // Fallback to kdialog
+            return RunProcess("kdialog",
+                $"--getexistingdirectory \"{Escape(dir)}\"");
         }
 
         private static string? RunProcess(string command, string arguments)
@@ -252,6 +291,60 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 return ofn.lpstrFile.TrimEnd('\0');
 
             return null;
+        }
+
+        // ================================================================
+        // Windows — SHBrowseForFolder (폴더 선택)
+        // ================================================================
+
+        private const int BIF_RETURNONLYFSDIRS = 0x00000001;
+        private const int BIF_NEWDIALOGSTYLE = 0x00000040;
+
+        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SHBrowseForFolder(ref BROWSEINFO lpbi);
+
+        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
+        private static extern bool SHGetPathFromIDList(IntPtr pidl, StringBuilder pszPath);
+
+        [DllImport("ole32.dll")]
+        private static extern void CoTaskMemFree(IntPtr ptr);
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private struct BROWSEINFO
+        {
+            public IntPtr hwndOwner;
+            public IntPtr pidlRoot;
+            public string pszDisplayName;
+            public string lpszTitle;
+            public int ulFlags;
+            public IntPtr lpfn;
+            public IntPtr lParam;
+            public int iImage;
+        }
+
+        private static string? WindowsPickFolder(string title, string? initialDir)
+        {
+            var bi = new BROWSEINFO
+            {
+                lpszTitle = title,
+                ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE,
+                pszDisplayName = new string('\0', MAX_PATH),
+            };
+
+            var pidl = SHBrowseForFolder(ref bi);
+            if (pidl == IntPtr.Zero) return null;
+
+            try
+            {
+                var sb = new StringBuilder(MAX_PATH);
+                if (SHGetPathFromIDList(pidl, sb))
+                    return sb.ToString();
+                return null;
+            }
+            finally
+            {
+                CoTaskMemFree(pidl);
+            }
         }
     }
 }

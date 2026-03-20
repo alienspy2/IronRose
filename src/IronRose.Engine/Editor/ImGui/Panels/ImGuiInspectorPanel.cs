@@ -129,6 +129,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         public void Draw(int? selectedGoId, long goSelectionVersion, string? selectedAssetPath, long assetSelectionVersion, IReadOnlyCollection<string>? allAssetPaths = null)
         {
+            if (!ProjectContext.IsProjectLoaded) return;
+
             _allSelectedAssetPaths = allAssetPaths;
             if (!IsOpen) return;
 

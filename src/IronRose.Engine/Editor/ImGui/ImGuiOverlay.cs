@@ -48,6 +48,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         private ImGuiSpriteEditorPanel? _spriteEditor;
         private ImGuiAnimationEditorPanel? _animEditor;
         private ImGuiScriptsPanel? _scripts;
+        private ImGuiStartupPanel? _startupPanel;
 
         // Property windows (고정 Inspector)
         private readonly List<ImGuiPropertyWindow> _propertyWindows = new();
@@ -345,6 +346,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             _spriteEditor = new ImGuiSpriteEditorPanel(device, _renderer);
             _animEditor = new ImGuiAnimationEditorPanel();
             _scripts = new ImGuiScriptsPanel();
+            _startupPanel = new ImGuiStartupPanel();
             _inspector.AnimEditor = _animEditor;
 
             // EditorBridge에 overlay 참조 등록
@@ -467,6 +469,14 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 if (ImGui.BeginMenu("File"))
                 {
                     bool canEditScene = !EditorPlayMode.IsInPlaySession;
+
+                    if (ImGui.MenuItem("New Project..."))
+                        _startupPanel?.ShowNewProjectDialog();
+
+                    if (ImGui.MenuItem("Open Project..."))
+                        _startupPanel?.OpenExistingProject();
+
+                    ImGui.Separator();
 
                     if (ImGui.MenuItem("New Scene", "Ctrl+N", false, canEditScene))
                         NewScene();
@@ -670,6 +680,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             }
 
             ImGui.End(); // DockSpace
+
+            // ── Startup panel (프로젝트 미로드 시) ──
+            _startupPanel?.Draw();
 
             // ── Draw panels ──
             _hierarchy?.Draw();

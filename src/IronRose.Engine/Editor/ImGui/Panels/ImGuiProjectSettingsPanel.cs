@@ -1,21 +1,4 @@
-﻿// ------------------------------------------------------------
-// @file    ImGuiProjectSettingsPanel.cs
-// @brief   Project Settings 패널 -- rose_projectSettings.toml 기반 프로젝트 전역 설정 UI.
-//          활성 렌더러 프로파일 선택, 시작 씬 설정, 외부 스크립트 에디터 설정 기능 제공.
-// @deps    IronRose.Engine/ProjectContext, IronRose.Engine/ProjectSettings,
-//          IronRose.Engine/Editor/EditorBridge, IronRose.Engine/Editor/EditorPlayMode,
-//          IronRose.Engine/Editor/EditorModal, IronRose.Engine/Editor/ImGuiEditor/Panels/ImGuiProjectPanel,
-//          IronRose.Rendering/RendererProfile, IronRose.Rendering/RenderSettings,
-//          RoseEngine/Resources, RoseEngine/Debug
-// @exports
-//   class ImGuiProjectSettingsPanel : IEditorPanel
-//     IsOpen: bool                                  -- 패널 열림/닫힘 상태
-//     Draw(): void                                  -- ImGui 패널 렌더링
-//     ActivateProfile(string, string): void         -- 렌더러 프로파일 활성화
-// @note    씬 목록은 ProjectContext.AssetsPath/Scenes 디렉토리에서 .scene 파일을 탐색한다.
-//          프로파일 목록/씬 목록은 60프레임 간격으로 갱신된다.
-// ------------------------------------------------------------
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using ImGuiNET;
@@ -192,12 +175,14 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         private void RefreshSceneListIfNeeded()
         {
+            if (!ProjectContext.IsProjectLoaded) return;
+
             _sceneListFrame++;
             if (_sceneListFrame < ProfileListRefreshInterval && _sceneList.Count > 0) return;
             _sceneListFrame = 0;
 
             _sceneList.Clear();
-            var scenesDir = Path.Combine(ProjectContext.AssetsPath, "Scenes");
+            var scenesDir = Path.Combine("Assets", "Scenes");
             if (!Directory.Exists(scenesDir)) return;
 
             foreach (var file in Directory.GetFiles(scenesDir, "*.scene", SearchOption.AllDirectories))

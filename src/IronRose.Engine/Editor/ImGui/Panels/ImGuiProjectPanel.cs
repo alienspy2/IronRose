@@ -123,6 +123,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         public void Draw()
         {
+            if (!ProjectContext.IsProjectLoaded) return;
+
             // Ping 요청 처리 (닫혀있으면 소비만 하고 무시)
             var pingPath = EditorBridge.ConsumePingAssetPath();
             if (pingPath != null && IsOpen)

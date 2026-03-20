@@ -134,9 +134,12 @@ namespace IronRose.Engine
             InitScreen();
             InitPluginApi();
             InitPhysics();
-            InitAssets();
-            InitLiveCode();
-            InitGpuCompressor();
+            if (ProjectContext.IsProjectLoaded)
+            {
+                InitAssets();
+                InitLiveCode();
+                InitGpuCompressor();
+            }
             if (!HeadlessEditor)
                 InitEditor();
 
@@ -149,7 +152,8 @@ namespace IronRose.Engine
             _testCommandRunner = TestCommandRunner.TryLoad();
 
             // 에셋 캐시 워밍업 시작
-            _warmupManager!.Start();
+            if (ProjectContext.IsProjectLoaded)
+                _warmupManager!.Start();
         }
 
         public void Update(double deltaTime)
@@ -586,6 +590,8 @@ namespace IronRose.Engine
 
         private void EnsureDefaultRendererProfile()
         {
+            if (!ProjectContext.IsProjectLoaded) return;
+
             var settingsDir = Path.Combine(ProjectContext.AssetsPath, "Settings");
             var defaultPath = Path.Combine(settingsDir, "Default.renderer");
             if (!File.Exists(defaultPath))
