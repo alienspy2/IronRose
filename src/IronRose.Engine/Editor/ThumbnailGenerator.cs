@@ -235,12 +235,7 @@ namespace IronRose.Engine.Editor
         {
             if (_labelFont != null) return _labelFont;
 
-            var fontPath = Path.Combine(AppContext.BaseDirectory, "EditorAssets", "Fonts", "Roboto.ttf");
-            if (!File.Exists(fontPath))
-            {
-                // fallback: 실행 위치 기준
-                fontPath = Path.Combine("EditorAssets", "Fonts", "Roboto.ttf");
-            }
+            var fontPath = Path.Combine(ProjectContext.EditorAssetsPath, "Fonts", "Roboto.ttf");
 
             if (File.Exists(fontPath))
             {

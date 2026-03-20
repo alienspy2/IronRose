@@ -20,7 +20,7 @@ namespace IronRose.Engine.Editor
 
         public static void Initialize(GraphicsDevice device, VeldridImGuiRenderer imGuiRenderer)
         {
-            var dir = Path.Combine(Directory.GetCurrentDirectory(), "EditorAssets", "Matcaps");
+            var dir = Path.Combine(ProjectContext.EditorAssetsPath, "Matcaps");
             if (!Directory.Exists(dir))
             {
                 Debug.LogWarning($"[EditorAssets] Matcap directory not found: {dir}");

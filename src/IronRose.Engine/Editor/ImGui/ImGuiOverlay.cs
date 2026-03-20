@@ -257,7 +257,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             SetupSystemClipboard(window, io);
 
             // Font setup — load all available fonts with auto-detected fallback chain
-            var fontsDir = Path.Combine(Directory.GetCurrentDirectory(), "EditorAssets", "Fonts");
+            var fontsDir = Path.Combine(ProjectContext.EditorAssetsPath, "Fonts");
             _fontGlyphRangesHandle = GCHandle.Alloc(_fontGlyphRanges, GCHandleType.Pinned);
             var glyphRangesPtr = _fontGlyphRangesHandle.AddrOfPinnedObject();
 
@@ -1068,7 +1068,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 if (ImGui.Button("OK", new Vector2(120, 0)))
                 {
                     // Write sentinel file — next launch will clear cache
-                    var sentinelPath = Path.Combine(Directory.GetCurrentDirectory(), ".reimport_all");
+                    var sentinelPath = Path.Combine(ProjectContext.ProjectRoot, ".reimport_all");
                     File.WriteAllText(sentinelPath, "");
 
                     ImGui.CloseCurrentPopup();

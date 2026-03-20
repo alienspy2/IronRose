@@ -29,7 +29,7 @@ namespace IronRose.AssetPipeline
         private readonly AnimationClipImporter _animClipImporter = new();
         private readonly RendererProfileImporter _rendererProfileImporter = new();
         private readonly PostProcessProfileImporter _ppProfileImporter = new();
-        private readonly RoseCache _roseCache = new(Path.Combine(Directory.GetCurrentDirectory(), RoseEngine.EngineDirectories.CachePath));
+        private readonly RoseCache _roseCache = new(ProjectContext.CachePath);
         private PrefabImporter? _prefabImporter;
 
         // ─── Prefab Dependency Graph ─────────────────────────────
