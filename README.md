@@ -77,6 +77,24 @@ IronRose.sln
 
 ---
 
+## 🏛️ 엔진 철학
+
+IronRose는 Unity와 달리, **항상 소스코드와 함께 사용되고 소스코드와 함께 실행**됩니다. 빌드된 바이너리 배포나 Hub 설치 개념이 없습니다. 개발자는 항상 엔진 소스 레포(`IronRose`)를 로컬에 두고 `ProjectReference`로 직접 참조합니다.
+
+### 2-레포 구조 (예정)
+
+현재는 단일 레포 구조이나, Unity Hub처럼 **엔진 레포**와 **에셋 프로젝트 레포**를 분리하는 것을 목표로 합니다:
+
+```
+~/git/
+  IronRose/          # 엔진 레포 (소스 코드 + 기본 셰이더)
+  MyGame/            # 에셋 프로젝트 레포 (LiveCode, FrozenCode, Assets 등)
+```
+
+에셋 프로젝트는 `ProjectReference Path="../IronRose/..."` 로 엔진을 직접 참조합니다. Hub UI 없이 에디터에서 프로젝트 폴더를 열어 사용합니다. 설계 상세는 [`plans/editor-assets-repo-separation.md`](plans/editor-assets-repo-separation.md)를 참조하세요.
+
+---
+
 ## 🚀 시작하기
 
 ### 요구 사항
@@ -140,10 +158,13 @@ GLSL 기반 셰이더 48개를 포함합니다:
 
 | 파일 | 설명 |
 |------|------|
+| `project.toml` | 프로젝트 루트 설정 (엔진 경로, 빌드 설정) — 에셋 프로젝트 레포 분리 시 도입 예정 |
 | `rose_config.toml` | 엔진 설정 (캐시, 텍스처 압축) |
 | `rose_projectSettings.toml` | 프로젝트별 설정 |
 | `.rose_editor_state.toml` | 에디터 레이아웃/상태 저장 |
 | `Directory.Build.props` | MSBuild 전역 빌드 속성 |
+
+> 모든 설정 파일은 **TOML** 포맷을 사용합니다.
 
 ---
 
