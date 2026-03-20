@@ -1,6 +1,26 @@
+// ------------------------------------------------------------
+// @file    PostProcessStack.cs
+// @brief   포스트 프로세스 이펙트 체인 관리. Ping-pong HDR 버퍼를 사용하여 이펙트를 순차 실행하고,
+//          최종 결과를 스왑체인에 블릿한다.
+// @deps    PostProcessEffect, ShaderCompiler
+// @exports
+//   class PostProcessStack : IDisposable
+//     Initialize(GraphicsDevice, uint, uint, Func<string,string>): void — 초기화 (셰이더 리졸버 델리게이트 전달)
+//     AddEffect(PostProcessEffect): void               — 이펙트 추가
+//     InsertEffect(int, PostProcessEffect): void        — 이펙트 삽입
+//     RemoveEffect(PostProcessEffect): bool             — 이펙트 제거
+//     MoveEffect(int, int): void                        — 이펙트 순서 변경
+//     GetEffect<T>(): T?                                — 타입별 이펙트 검색
+//     Execute(CommandList, TextureView, Framebuffer): void — 전체 실행 + 스왑체인 블릿
+//     ExecuteEffectsOnly(CommandList, TextureView): TextureView — 이펙트만 실행, HDR 결과 반환
+//     BlitToSwapchain(CommandList, TextureView, Framebuffer): void — 감마 보정 블릿
+//     Resize(uint, uint): void                          — 해상도 변경
+//     PendingDisposal: List<IDisposable>                — 지연 해제 대기열
+// @note    셰이더 경로는 Func<string, string> 델리게이트로 전달받으며,
+//          IronRose.Engine의 ShaderRegistry.Resolve와 연결된다.
+// ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Veldrid;
 using RoseEngine;
@@ -10,7 +30,7 @@ namespace IronRose.Rendering
     public class PostProcessStack : IDisposable
     {
         private GraphicsDevice _device = null!;
-        private string _shaderDir = "";
+        private Func<string, string> _shaderResolver = _ => "";
         private Sampler? _linearSampler;
 
         // Ping-pong HDR textures for chaining effects
@@ -45,10 +65,10 @@ namespace IronRose.Rendering
 
         public IReadOnlyList<PostProcessEffect> Effects => _effects;
 
-        public void Initialize(GraphicsDevice device, uint width, uint height, string shaderDir)
+        public void Initialize(GraphicsDevice device, uint width, uint height, Func<string, string> shaderResolver)
         {
             _device = device;
-            _shaderDir = shaderDir;
+            _shaderResolver = shaderResolver;
             _width = width;
             _height = height;
 
@@ -63,13 +83,13 @@ namespace IronRose.Rendering
 
         public void AddEffect(PostProcessEffect effect)
         {
-            effect.InitializeBase(_device, _shaderDir, _linearSampler!, _width, _height);
+            effect.InitializeBase(_device, _shaderResolver, _linearSampler!, _width, _height);
             _effects.Add(effect);
         }
 
         public void InsertEffect(int index, PostProcessEffect effect)
         {
-            effect.InitializeBase(_device, _shaderDir, _linearSampler!, _width, _height);
+            effect.InitializeBase(_device, _shaderResolver, _linearSampler!, _width, _height);
             _effects.Insert(index, effect);
         }
 
@@ -174,8 +194,8 @@ namespace IronRose.Rendering
 
             if (_blitShaders == null)
             {
-                string fullscreenVert = Path.Combine(_shaderDir, "fullscreen.vert");
-                string blitFrag = Path.Combine(_shaderDir, "blit.frag");
+                string fullscreenVert = _shaderResolver("fullscreen.vert");
+                string blitFrag = _shaderResolver("blit.frag");
                 _blitShaders = ShaderCompiler.CompileGLSL(_device, fullscreenVert, blitFrag);
             }
 

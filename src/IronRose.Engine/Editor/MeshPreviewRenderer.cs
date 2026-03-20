@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using IronRose.Rendering;
@@ -146,10 +145,9 @@ namespace IronRose.Engine.Editor
             var layouts = new[] { _perObjectLayout, _perFrameLayout };
 
             // Compile matcap shaders (mesh preview)
-            var shaderDir = FindShaderDirectory();
             _matcapShaders = ShaderCompiler.CompileGLSL(_device,
-                Path.Combine(shaderDir, "sceneview_matcap.vert"),
-                Path.Combine(shaderDir, "sceneview_matcap.frag"));
+                ShaderRegistry.Resolve("sceneview_matcap.vert"),
+                ShaderRegistry.Resolve("sceneview_matcap.frag"));
 
             // Solid pipeline (matcap)
             _solidPipeline = factory.CreateGraphicsPipeline(new GraphicsPipelineDescription(
@@ -173,8 +171,8 @@ namespace IronRose.Engine.Editor
 
             // Compile material preview shaders (PBR)
             _materialShaders = ShaderCompiler.CompileGLSL(_device,
-                Path.Combine(shaderDir, "sceneview_diffuse.vert"),
-                Path.Combine(shaderDir, "preview_material.frag"));
+                ShaderRegistry.Resolve("sceneview_diffuse.vert"),
+                ShaderRegistry.Resolve("preview_material.frag"));
 
             _materialPipeline = factory.CreateGraphicsPipeline(new GraphicsPipelineDescription(
                 BlendStateDescription.SingleOverrideBlend,
@@ -433,17 +431,5 @@ namespace IronRose.Engine.Editor
             _colorTexture?.Dispose();
         }
 
-        private static string FindShaderDirectory()
-        {
-            string[] candidates = { "Shaders", "../Shaders", "../../Shaders" };
-            foreach (var candidate in candidates)
-            {
-                string fullPath = Path.GetFullPath(candidate);
-                if (Directory.Exists(fullPath) &&
-                    File.Exists(Path.Combine(fullPath, "sceneview_matcap.vert")))
-                    return fullPath;
-            }
-            return "Shaders";
-        }
     }
 }

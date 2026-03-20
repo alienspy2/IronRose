@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -238,7 +237,6 @@ namespace IronRose.Rendering
     public partial class RenderSystem : IDisposable
     {
         private GraphicsDevice? _device;
-        private string _shaderDir = "";
 
         // --- Deferred resource disposal ---
         // Resources are NOT disposed immediately during Resize, because the current frame's
@@ -459,65 +457,64 @@ namespace IronRose.Rendering
         public void Initialize(GraphicsDevice device)
         {
             _device = device;
-            _shaderDir = FindShaderDirectory();
             var factory = device.ResourceFactory;
             uint width = device.SwapchainFramebuffer.Width;
             uint height = device.SwapchainFramebuffer.Height;
 
             // --- Compile shaders ---
             _forwardShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "vertex.glsl"),
-                Path.Combine(_shaderDir, "fragment.glsl"));
+                ShaderRegistry.Resolve("vertex.glsl"),
+                ShaderRegistry.Resolve("fragment.glsl"));
 
             _geometryShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "deferred_geometry.vert"),
-                Path.Combine(_shaderDir, "deferred_geometry.frag"));
+                ShaderRegistry.Resolve("deferred_geometry.vert"),
+                ShaderRegistry.Resolve("deferred_geometry.frag"));
 
             _ambientShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "deferred_lighting.vert"),
-                Path.Combine(_shaderDir, "deferred_ambient.frag"));
+                ShaderRegistry.Resolve("deferred_lighting.vert"),
+                ShaderRegistry.Resolve("deferred_ambient.frag"));
 
             _directionalLightShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "deferred_lighting.vert"),
-                Path.Combine(_shaderDir, "deferred_directlight.frag"));
+                ShaderRegistry.Resolve("deferred_lighting.vert"),
+                ShaderRegistry.Resolve("deferred_directlight.frag"));
 
             _pointLightShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "deferred_pointlight.vert"),
-                Path.Combine(_shaderDir, "deferred_pointlight.frag"));
+                ShaderRegistry.Resolve("deferred_pointlight.vert"),
+                ShaderRegistry.Resolve("deferred_pointlight.frag"));
 
             _spotLightShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "deferred_spotlight.vert"),
-                Path.Combine(_shaderDir, "deferred_spotlight.frag"));
+                ShaderRegistry.Resolve("deferred_spotlight.vert"),
+                ShaderRegistry.Resolve("deferred_spotlight.frag"));
 
             _shadowAtlasShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "shadow.vert"),
-                Path.Combine(_shaderDir, "shadow_atlas.frag"));
+                ShaderRegistry.Resolve("shadow.vert"),
+                ShaderRegistry.Resolve("shadow_atlas.frag"));
 
             _shadowBlurShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "fullscreen.vert"),
-                Path.Combine(_shaderDir, "shadow_blur.frag"));
+                ShaderRegistry.Resolve("fullscreen.vert"),
+                ShaderRegistry.Resolve("shadow_blur.frag"));
 
             _skyboxShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "skybox.vert"),
-                Path.Combine(_shaderDir, "skybox.frag"));
+                ShaderRegistry.Resolve("skybox.vert"),
+                ShaderRegistry.Resolve("skybox.frag"));
 
             // --- SSIL compute shaders ---
             _ssilPrefilterShader = ShaderCompiler.CompileComputeGLSL(device,
-                Path.Combine(_shaderDir, "ssil_prefilter_depth.comp"));
+                ShaderRegistry.Resolve("ssil_prefilter_depth.comp"));
             _ssilMainShader = ShaderCompiler.CompileComputeGLSL(device,
-                Path.Combine(_shaderDir, "ssil_main.comp"));
+                ShaderRegistry.Resolve("ssil_main.comp"));
             _ssilDenoiseShader = ShaderCompiler.CompileComputeGLSL(device,
-                Path.Combine(_shaderDir, "ssil_denoise.comp"));
+                ShaderRegistry.Resolve("ssil_denoise.comp"));
             _ssilTemporalShader = ShaderCompiler.CompileComputeGLSL(device,
-                Path.Combine(_shaderDir, "ssil_temporal.comp"));
+                ShaderRegistry.Resolve("ssil_temporal.comp"));
 
             // --- FSR Upscaler compute shader ---
-            var fsrShaderPath = Path.Combine(_shaderDir, "fsr_upscale.comp");
+            var fsrShaderPath = ShaderRegistry.Resolve("fsr_upscale.comp");
             _fsrUpscaleShader = ShaderCompiler.CompileComputeGLSL(device, fsrShaderPath);
 
             // --- CAS Sharpening compute shader ---
             _casShader = ShaderCompiler.CompileComputeGLSL(device,
-                Path.Combine(_shaderDir, "fsr_cas.comp"));
+                ShaderRegistry.Resolve("fsr_cas.comp"));
 
             // --- Uniform buffers ---
             _transformBuffer = factory.CreateBuffer(new BufferDescription(
@@ -798,8 +795,8 @@ namespace IronRose.Rendering
 
             // --- Debug Overlay (CreatePipelines보다 먼저 생성해야 파이프라인에 포함됨) ---
             _debugOverlayShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "fullscreen.vert"),
-                Path.Combine(_shaderDir, "debug_overlay.frag"));
+                ShaderRegistry.Resolve("fullscreen.vert"),
+                ShaderRegistry.Resolve("debug_overlay.frag"));
 
             _debugOverlayParamsBuffer = factory.CreateBuffer(new BufferDescription(
                 (uint)Marshal.SizeOf<DebugOverlayParamsGPU>(), BufferUsage.UniformBuffer | BufferUsage.Dynamic));
@@ -823,7 +820,7 @@ namespace IronRose.Rendering
 
             // --- PostProcessing Stack (render resolution) ---
             _gameViewContext.PostProcessStack = new PostProcessStack();
-            _gameViewContext.PostProcessStack.Initialize(device, _gameViewContext.RenderWidth, _gameViewContext.RenderHeight, _shaderDir);
+            _gameViewContext.PostProcessStack.Initialize(device, _gameViewContext.RenderWidth, _gameViewContext.RenderHeight, ShaderRegistry.Resolve);
             _gameViewContext.PostProcessStack.AddEffect(new BloomEffect());
             _gameViewContext.PostProcessStack.AddEffect(new TonemapEffect());
 
@@ -1383,7 +1380,7 @@ namespace IronRose.Rendering
             _sceneViewContext = new RenderContext("SceneView");
             CreateContextResources(_sceneViewContext, width, height);
             _sceneViewContext.PostProcessStack = new PostProcessStack();
-            _sceneViewContext.PostProcessStack.Initialize(_device!, _sceneViewContext.RenderWidth, _sceneViewContext.RenderHeight, _shaderDir);
+            _sceneViewContext.PostProcessStack.Initialize(_device!, _sceneViewContext.RenderWidth, _sceneViewContext.RenderHeight, ShaderRegistry.Resolve);
             _sceneViewContext.PostProcessStack.AddEffect(new BloomEffect());
             _sceneViewContext.PostProcessStack.AddEffect(new TonemapEffect());
             return _sceneViewContext;
@@ -1769,23 +1766,6 @@ namespace IronRose.Rendering
         // ==============================
         // Utilities
         // ==============================
-
-        private static string FindShaderDirectory()
-        {
-            string[] candidates = { "Shaders", "../Shaders", "../../Shaders" };
-            foreach (var candidate in candidates)
-            {
-                string fullPath = Path.GetFullPath(candidate);
-                if (Directory.Exists(fullPath) &&
-                    File.Exists(Path.Combine(fullPath, "vertex.glsl")))
-                {
-                    Debug.Log($"[RenderSystem] Shader directory: {fullPath}");
-                    return fullPath;
-                }
-            }
-
-            throw new FileNotFoundException("Could not find Shaders directory with vertex.glsl and fragment.glsl");
-        }
 
         public void Dispose()
         {

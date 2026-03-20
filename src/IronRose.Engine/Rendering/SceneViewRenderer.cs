@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Numerics;
 using Veldrid;
 using RoseEngine;
+using IronRose.Engine;
 using IronRose.Engine.Editor.SceneView;
 using Matrix4x4 = System.Numerics.Matrix4x4;
 using Shader = Veldrid.Shader;
@@ -19,7 +19,6 @@ namespace IronRose.Rendering
     public class SceneViewRenderer : IDisposable
     {
         private GraphicsDevice? _device;
-        private string _shaderDir = "";
 
         // --- Framebuffer ---
         private Texture? _colorTexture;
@@ -113,7 +112,6 @@ namespace IronRose.Rendering
         public void Initialize(GraphicsDevice device)
         {
             _device = device;
-            _shaderDir = FindShaderDirectory();
             // Match swapchain formats so RenderSystem can render to our FB in Rendered mode
             _colorFormat = device.SwapchainFramebuffer.OutputDescription.ColorAttachments[0].Format;
             _depthFormat = device.SwapchainFramebuffer.OutputDescription.DepthAttachment?.Format
@@ -196,34 +194,34 @@ namespace IronRose.Rendering
         {
             // MatCap
             _matcapShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "sceneview_matcap.vert"),
-                Path.Combine(_shaderDir, "sceneview_matcap.frag"));
+                ShaderRegistry.Resolve("sceneview_matcap.vert"),
+                ShaderRegistry.Resolve("sceneview_matcap.frag"));
 
             // DiffuseOnly — reuse existing forward shaders (vertex.glsl + fragment.glsl)
             _diffuseShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "sceneview_diffuse.vert"),
-                Path.Combine(_shaderDir, "sceneview_diffuse.frag"));
+                ShaderRegistry.Resolve("sceneview_diffuse.vert"),
+                ShaderRegistry.Resolve("sceneview_diffuse.frag"));
 
             // Wireframe — reuse existing forward vertex shader, simple flat color fragment
             _wireframeShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "sceneview_matcap.vert"),
-                Path.Combine(_shaderDir, "sceneview_matcap.frag"));
+                ShaderRegistry.Resolve("sceneview_matcap.vert"),
+                ShaderRegistry.Resolve("sceneview_matcap.frag"));
 
             // Pick
             _pickShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "pick_object.vert"),
-                Path.Combine(_shaderDir, "pick_object.frag"));
+                ShaderRegistry.Resolve("pick_object.vert"),
+                ShaderRegistry.Resolve("pick_object.frag"));
 
             // Outline
             _outlineStencilShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "outline.vert"),
-                Path.Combine(_shaderDir, "outline.frag"));
+                ShaderRegistry.Resolve("outline.vert"),
+                ShaderRegistry.Resolve("outline.frag"));
             _outlineExpandShaders = _outlineStencilShaders; // Same shaders, different pipeline state
 
             // Gizmo lines
             _gizmoLineShaders = ShaderCompiler.CompileGLSL(device,
-                Path.Combine(_shaderDir, "gizmo_line.vert"),
-                Path.Combine(_shaderDir, "gizmo_line.frag"));
+                ShaderRegistry.Resolve("gizmo_line.vert"),
+                ShaderRegistry.Resolve("gizmo_line.frag"));
         }
 
         private void CreateFramebuffer(uint width, uint height)
@@ -825,21 +823,6 @@ namespace IronRose.Rendering
 
             _pickCallback?.Invoke(pickedId);
             _pickCallback = null;
-        }
-
-        private static string FindShaderDirectory()
-        {
-            string[] candidates = { "Shaders", "../Shaders", "../../Shaders" };
-            foreach (var candidate in candidates)
-            {
-                string fullPath = Path.GetFullPath(candidate);
-                if (Directory.Exists(fullPath) &&
-                    File.Exists(Path.Combine(fullPath, "sceneview_matcap.vert")))
-                {
-                    return fullPath;
-                }
-            }
-            throw new FileNotFoundException("Could not find Shaders directory");
         }
 
         public void Dispose()

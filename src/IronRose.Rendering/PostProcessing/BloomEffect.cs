@@ -1,6 +1,17 @@
+// ------------------------------------------------------------
+// @file    BloomEffect.cs
+// @brief   HDR Bloom 포스트 프로세스. Threshold -> Gaussian Blur -> Composite 4-pass 파이프라인.
+// @deps    PostProcessEffect, ShaderCompiler
+// @exports
+//   class BloomEffect : PostProcessEffect
+//     Threshold: float [EffectParam]   — 밝기 임계값 (0~10)
+//     SoftKnee: float [EffectParam]    — 소프트 니 (0~1)
+//     Intensity: float [EffectParam]   — 블룸 강도 (0~5)
+// @note    Half-res 텍스처에서 블러 처리 후 원본과 합성.
+//          셰이더: fullscreen.vert, bloom_threshold.frag, gaussian_blur.frag, bloom_composite.frag
+// ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Veldrid;
@@ -92,13 +103,13 @@ namespace IronRose.Rendering
             var factory = Device.ResourceFactory;
 
             // Compile shaders
-            string fullscreenVert = Path.Combine(ShaderDir, "fullscreen.vert");
+            string fullscreenVert = ShaderResolver("fullscreen.vert");
             _thresholdShaders = ShaderCompiler.CompileGLSL(Device, fullscreenVert,
-                Path.Combine(ShaderDir, "bloom_threshold.frag"));
+                ShaderResolver("bloom_threshold.frag"));
             _blurShaders = ShaderCompiler.CompileGLSL(Device, fullscreenVert,
-                Path.Combine(ShaderDir, "gaussian_blur.frag"));
+                ShaderResolver("gaussian_blur.frag"));
             _compositeShaders = ShaderCompiler.CompileGLSL(Device, fullscreenVert,
-                Path.Combine(ShaderDir, "bloom_composite.frag"));
+                ShaderResolver("bloom_composite.frag"));
 
             // Uniform buffers
             _bloomParamsBuffer = factory.CreateBuffer(new BufferDescription(

@@ -1,6 +1,18 @@
+// ------------------------------------------------------------
+// @file    TonemapEffect.cs
+// @brief   HDR Tonemapping 포스트 프로세스. ACES 기반 톤맵 + Exposure/Saturation/Contrast/Gamma 조절.
+// @deps    PostProcessEffect, ShaderCompiler
+// @exports
+//   class TonemapEffect : PostProcessEffect
+//     Exposure: float [EffectParam]     — 노출 (0.01~10)
+//     Saturation: float [EffectParam]   — 채도 (0~3)
+//     Contrast: float [EffectParam]     — 대비 (0.5~2)
+//     WhitePoint: float [EffectParam]   — 화이트 포인트 (0.5~20)
+//     Gamma: float [EffectParam]        — 감마 (1~3)
+// @note    셰이더: fullscreen.vert, tonemap.frag
+// ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Runtime.InteropServices;
 using Veldrid;
 using RoseEngine;
@@ -60,9 +72,9 @@ namespace IronRose.Rendering
             var factory = Device.ResourceFactory;
 
             // Compile shader
-            string fullscreenVert = Path.Combine(ShaderDir, "fullscreen.vert");
+            string fullscreenVert = ShaderResolver("fullscreen.vert");
             _shaders = ShaderCompiler.CompileGLSL(Device, fullscreenVert,
-                Path.Combine(ShaderDir, "tonemap.frag"));
+                ShaderResolver("tonemap.frag"));
 
             // Uniform buffer
             _paramsBuffer = factory.CreateBuffer(new BufferDescription(

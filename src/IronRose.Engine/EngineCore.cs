@@ -5,9 +5,8 @@
 // @deps    RoseEngine/Input, RoseEngine/Cursor, RoseEngine/Camera, RoseEngine/Time,
 //          RoseEngine/SceneManager, RoseEngine/Debug, RoseEngine/Screen, RoseEngine/Application,
 //          IronRose.Rendering/GraphicsManager, IronRose.Rendering/RenderSystem,
-//          IronRose.AssetPipeline/AssetDatabase, IronRose.Engine/ProjectContext,
-//          IronRose.Engine.Editor/EditorPlayMode,
-//          IronRose.Engine.Editor.ImGuiEditor/ImGuiOverlay
+//          IronRose.AssetPipeline/AssetDatabase, IronRose.Engine.Editor/EditorPlayMode,
+//          IronRose.Engine.Editor.ImGuiEditor/ImGuiOverlay, ShaderRegistry
 // @exports
 //   class EngineCore
 //     Initialize(IWindow): void           — 엔진 초기화
@@ -119,8 +118,6 @@ namespace IronRose.Engine
             RoseEngine.Debug.LogSink = entry => EditorBridge.PushLog(entry);
             RoseEngine.Debug.Log("[Engine] EngineCore initializing...");
 
-            ProjectContext.Initialize();
-
             RoseConfig.Load();
             ProjectSettings.Load();
             _window = window;
@@ -130,6 +127,7 @@ namespace IronRose.Engine
             InitInput();
             InitGraphics();
             InitShaderCache();
+            ShaderRegistry.Initialize();
             InitRenderSystem();
             InitScreen();
             InitPluginApi();
@@ -507,7 +505,7 @@ namespace IronRose.Engine
         {
             if (!RoseConfig.DontUseCache)
             {
-                var shaderCacheDir = Path.Combine(ProjectContext.CachePath, "shaders");
+                var shaderCacheDir = Path.Combine(Directory.GetCurrentDirectory(), RoseEngine.EngineDirectories.CachePath, "shaders");
                 ShaderCompiler.SetCacheDirectory(shaderCacheDir);
 
                 if (RoseConfig.ForceClearCache)
@@ -569,7 +567,7 @@ namespace IronRose.Engine
         private void InitAssets()
         {
             _assetDatabase = new AssetDatabase();
-            string assetsPath = ProjectContext.AssetsPath;
+            string assetsPath = Path.GetFullPath("Assets");
             if (Directory.Exists(assetsPath))
                 _assetDatabase.ScanAssets(assetsPath);
             RoseEngine.Resources.SetAssetDatabase(_assetDatabase);
@@ -586,7 +584,7 @@ namespace IronRose.Engine
 
         private void EnsureDefaultRendererProfile()
         {
-            var settingsDir = Path.Combine(ProjectContext.AssetsPath, "Settings");
+            var settingsDir = Path.GetFullPath(Path.Combine("Assets", "Settings"));
             var defaultPath = Path.Combine(settingsDir, "Default.renderer");
             if (!File.Exists(defaultPath))
             {
@@ -595,7 +593,7 @@ namespace IronRose.Engine
                 RoseMetadata.LoadOrCreate(defaultPath);
                 Debug.Log("[Engine] Created default renderer profile: Assets/Settings/Default.renderer");
                 // 새로 생성한 파일을 AssetDatabase에 등록
-                _assetDatabase?.ScanAssets(ProjectContext.AssetsPath);
+                _assetDatabase?.ScanAssets(Path.GetFullPath("Assets"));
             }
 
             // ProjectSettings에 저장된 활성 프로파일 GUID 로드, 없으면 Default
@@ -606,14 +604,14 @@ namespace IronRose.Engine
 
             if (profile == null)
                 profile = _assetDatabase?.Load<RendererProfile>(
-                    Path.Combine(ProjectContext.AssetsPath, "Settings", "Default.renderer"));
+                    Path.Combine("Assets", "Settings", "Default.renderer"));
 
             if (profile != null)
             {
                 // 실제 로드된 프로파일의 GUID를 사용 (savedGuid 또는 Default 경로에서 조회)
                 var activeGuid = savedGuid;
                 if (string.IsNullOrEmpty(activeGuid))
-                    activeGuid = _assetDatabase?.GetGuidFromPath(Path.Combine(ProjectContext.AssetsPath, "Settings", "Default.renderer"));
+                    activeGuid = _assetDatabase?.GetGuidFromPath(Path.Combine("Assets", "Settings", "Default.renderer"));
                 RenderSettings.activeRendererProfile = profile;
                 RenderSettings.activeRendererProfileGuid = activeGuid;
                 profile.ApplyToRenderSettings();
@@ -640,7 +638,7 @@ namespace IronRose.Engine
             try
             {
                 _gpuCompressor = new GpuTextureCompressor(_graphicsManager.Device);
-                _gpuCompressor.Initialize(FindShaderDirectory());
+                _gpuCompressor.Initialize(ShaderRegistry.ShaderRoot);
                 RoseCache.SetGpuCompressor(_gpuCompressor);
             }
             catch (Exception ex)
@@ -661,7 +659,7 @@ namespace IronRose.Engine
                     _graphicsManager.Device,
                     _window!,
                     _inputContext,
-                    FindShaderDirectory());
+                    ShaderRegistry.ShaderRoot);
                 _graphicsManager.Resized += (w, h) => _imguiOverlay?.Resize(w, h);
                 RoseEngine.Debug.Log("[Engine] ImGui overlay initialized");
             }
@@ -790,15 +788,5 @@ namespace IronRose.Engine
             }
         }
 
-        private static string FindShaderDirectory()
-        {
-            string[] roots = { ".", "..", "../.." };
-            foreach (var root in roots)
-            {
-                var dir = Path.GetFullPath(Path.Combine(root, "Shaders"));
-                if (Directory.Exists(dir)) return dir;
-            }
-            throw new DirectoryNotFoundException("Shaders directory not found");
-        }
     }
 }

@@ -1,6 +1,22 @@
+// ------------------------------------------------------------
+// @file    PostProcessEffect.cs
+// @brief   포스트 프로세스 이펙트의 추상 기본 클래스. 셰이더 리졸버, GPU 디바이스, 샘플러를 공통 관리.
+//          파생 클래스는 OnInitialize/Resize/Execute/Dispose를 구현한다.
+// @deps    EffectParamAttribute, EffectParameterInfo
+// @exports
+//   abstract class PostProcessEffect : IDisposable
+//     Name: string                                         — 이펙트 이름
+//     Enabled: bool                                        — 활성/비활성
+//     InitializeBase(GraphicsDevice, Func<string,string>, Sampler, uint, uint): void — 기본 초기화
+//     GetParameters(): IReadOnlyList<EffectParameterInfo>   — 리플렉션 기반 파라미터 목록
+//     GetNeutralValues(): Dictionary<string, float>         — Volume 블렌딩 중립값
+//     Resize(uint, uint): void                              — 해상도 변경
+//     Execute(CommandList, TextureView, Framebuffer): void   — 이펙트 실행
+//     PendingDisposal: List<IDisposable>                    — 지연 해제 대기열
+// @note    셰이더 경로는 Func<string, string> ShaderResolver 델리게이트로 전달받는다.
+// ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using Veldrid;
@@ -14,7 +30,7 @@ namespace IronRose.Rendering
 
         protected GraphicsDevice Device = null!;
         protected Sampler LinearSampler = null!;
-        protected string ShaderDir = "";
+        protected Func<string, string> ShaderResolver = _ => "";
 
         /// <summary>
         /// Pending disposals collected during Resize. Flushed externally by RenderSystem.
@@ -29,10 +45,10 @@ namespace IronRose.Rendering
 
         private List<EffectParameterInfo>? _cachedParams;
 
-        public void InitializeBase(GraphicsDevice device, string shaderDir, Sampler linearSampler, uint width, uint height)
+        public void InitializeBase(GraphicsDevice device, Func<string, string> shaderResolver, Sampler linearSampler, uint width, uint height)
         {
             Device = device;
-            ShaderDir = shaderDir;
+            ShaderResolver = shaderResolver;
             LinearSampler = linearSampler;
             OnInitialize(width, height);
         }
