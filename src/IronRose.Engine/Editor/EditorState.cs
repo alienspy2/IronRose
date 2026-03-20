@@ -1,3 +1,27 @@
+// ------------------------------------------------------------
+// @file    EditorState.cs
+// @brief   에디터 상태 영속화 (.rose_editor_state.toml).
+//          마지막 씬 경로, 창 위치/크기, UI 스케일, 스냅 설정,
+//          패널 가시성, ImGui 레이아웃, 프리팹 편집 모드 상태를 저장/복원한다.
+// @deps    IronRose.Engine/ProjectContext, RoseEngine/Debug, Tomlyn
+// @exports
+//   static class EditorState
+//     LastScenePath: string?                     — 마지막으로 열었던 씬 절대 경로
+//     WindowX/Y/W/H: int?                       — 창 위치/크기
+//     UiScale: float                            — UI 스케일 (0.5~3.0)
+//     EditorFont: string                        — UI 폰트 이름
+//     SceneViewRenderStyle: string              — Scene View 렌더 스타일
+//     SnapTranslate/Rotate/Scale/Grid2D: float  — 스냅 설정
+//     ImGuiLayoutData: string?                  — ImGui 독 레이아웃 INI 데이터
+//     IsEditingPrefab: bool                     — 프리팹 편집 모드 여부
+//     Load(): void                              — 상태 파일 로드
+//     Save(): void                              — 상태 파일 저장
+//     UpdateLastScene(string?): void            — 씬 경로 업데이트 + 저장
+//     CleanupPrefabEditMode(): void             — 종료 시 프리팹 편집 상태 정리
+//   class PrefabEditContext (internal)           — 프리팹 편집 스택 한 레벨 컨텍스트
+// @note    경로 저장 시 ProjectRoot 기준 상대 경로로 변환하여 저장.
+//          FindOrCreatePath()는 ProjectContext.ProjectRoot를 기반으로 파일 경로를 결정한다.
+// ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -87,20 +111,11 @@ namespace IronRose.Engine.Editor
 
         private static string BoolStr(bool v) => v ? "true" : "false";
 
-        private static string FindOrCreatePath()
-        {
-            string[] searchPaths = { ".", "..", "../.." };
-            foreach (var dir in searchPaths)
-            {
-                var full = Path.GetFullPath(dir);
-                if (File.Exists(Path.Combine(full, "rose_config.toml")))
-                    return Path.Combine(full, FileName);
-            }
-            return Path.GetFullPath(FileName);
-        }
+        private static string FindOrCreatePath() =>
+            Path.Combine(ProjectContext.ProjectRoot, FileName);
 
-        /// <summary>프로젝트 루트 (.rose_editor_state.toml 기준 디렉토리).</summary>
-        private static string ProjectRoot => Path.GetDirectoryName(FindOrCreatePath())!;
+        /// <summary>프로젝트 루트 (ProjectContext 기반).</summary>
+        private static string ProjectRoot => ProjectContext.ProjectRoot;
 
         private static string ToAbsolute(string relative) =>
             Path.GetFullPath(Path.Combine(ProjectRoot, relative));

@@ -1,4 +1,19 @@
-﻿using System;
+﻿// ------------------------------------------------------------
+// @file    ImGuiScriptsPanel.cs
+// @brief   Scripts View 패널. LiveCode/FrozenCode 폴더의 .cs 파일을 트리로 표시하고
+//          새 스크립트 생성, 외부 에디터 열기, 드래그&드롭 등을 지원한다.
+// @deps    IronRose.Engine/ProjectContext, RoseEngine/EngineDirectories, RoseEngine/Debug
+// @exports
+//   class ImGuiScriptsPanel : IEditorPanel
+//     IsOpen: bool                          — 패널 열림/닫힘 상태
+//     SelectedScriptPath: string?           — 현재 선택된 스크립트 절대 경로
+//     Draw(): void                          — ImGui 패널 렌더링
+//   static _draggedScriptPath: string?      — 드래그 중인 스크립트 경로 (internal)
+//   const DragPayloadType: string           — 드래그 페이로드 타입 식별자 (internal)
+// @note    FindRootDirectories()에서 ProjectContext.LiveCodePath/FrozenCodePath를 사용.
+//          FileSystemWatcher로 파일 변경을 감지하여 자동 리빌드.
+// ------------------------------------------------------------
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -509,26 +524,19 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         private void FindRootDirectories()
         {
-            // Search for LiveCode and FrozenCode directories the same way LiveCodeManager does
-            string[] searchRoots = { ".", "..", "../.." };
-            foreach (var root in searchRoots)
-            {
-                string liveCodeDir = Path.GetFullPath(Path.Combine(root, EngineDirectories.LiveCodePath));
-                string frozenCodeDir = Path.GetFullPath(Path.Combine(root, EngineDirectories.FrozenCodePath));
+            // ProjectContext가 제공하는 절대 경로를 사용
+            string liveCodeDir = ProjectContext.LiveCodePath;
+            string frozenCodeDir = ProjectContext.FrozenCodePath;
 
-                if (Directory.Exists(liveCodeDir))
-                    _liveCodeRoot = liveCodeDir;
-                if (Directory.Exists(frozenCodeDir))
-                    _frozenCodeRoot = frozenCodeDir;
-
-                if (_liveCodeRoot != null || _frozenCodeRoot != null)
-                    break;
-            }
+            if (Directory.Exists(liveCodeDir))
+                _liveCodeRoot = liveCodeDir;
+            if (Directory.Exists(frozenCodeDir))
+                _frozenCodeRoot = frozenCodeDir;
 
             // Fallback: create LiveCode if not found
             if (_liveCodeRoot == null)
             {
-                _liveCodeRoot = Path.GetFullPath(EngineDirectories.LiveCodePath);
+                _liveCodeRoot = ProjectContext.LiveCodePath;
                 Directory.CreateDirectory(_liveCodeRoot);
             }
 

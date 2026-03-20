@@ -1,3 +1,21 @@
+// ------------------------------------------------------------
+// @file    PrefabVariantTree.cs
+// @brief   프로젝트 내 모든 .prefab 파일의 Variant 관계 맵을 구축/관리한다.
+//          AssetDatabase 초기화 시 1회 빌드 + .prefab 파일 변경 시 갱신.
+// @deps    IronRose.Engine/ProjectContext, IronRose.AssetPipeline/RoseMetadata,
+//          IronRose.AssetPipeline/PrefabImporter, RoseEngine/Resources
+// @exports
+//   class PrefabVariantTree
+//     Instance: PrefabVariantTree (static)                   -- 싱글턴 인스턴스
+//     Rebuild(): void                                        -- 모든 .prefab 스캔하여 Variant 관계 맵 구축
+//     FindRootBase(string): string                           -- 프리팹 GUID의 루트 Base GUID 반환
+//     BuildTree(string): TreeNode?                           -- 프리팹 기준 전체 트리 반환
+//     IsVariant(string): bool                                -- Variant 여부 확인
+//     GetParentGuid(string): string?                         -- 부모 Base GUID 반환
+//     GetChildVariants(string): IReadOnlyList<string>?       -- 자식 Variant GUID 목록 반환
+//   class PrefabVariantTree.TreeNode                         -- 트리 노드 (Guid, Path, DisplayName, IsVariant, Children)
+// @note    Rebuild()는 ProjectContext.AssetsPath 기준으로 .prefab 파일을 탐색한다.
+// ------------------------------------------------------------
 using System.Collections.Generic;
 using System.IO;
 using IronRose.AssetPipeline;
@@ -51,7 +69,7 @@ namespace IronRose.Engine.Editor
             if (db == null) return;
 
             // Assets 디렉토리에서 모든 .prefab 파일 찾기
-            var assetsDir = Path.Combine(Directory.GetCurrentDirectory(), "Assets");
+            var assetsDir = ProjectContext.AssetsPath;
             if (!Directory.Exists(assetsDir)) return;
 
             var prefabFiles = Directory.GetFiles(assetsDir, "*.prefab", SearchOption.AllDirectories);

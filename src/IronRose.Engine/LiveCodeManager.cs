@@ -1,3 +1,23 @@
+// ------------------------------------------------------------
+// @file    LiveCodeManager.cs
+// @brief   LiveCode 핫 리로드 관리자. LiveCode 디렉토리 감시, 컴파일, 스크립트 도메인
+//          로드/리로드, MonoBehaviour 상태 보존을 담당한다.
+// @deps    IronRose.Engine/ProjectContext, IronRose.Scripting/ScriptCompiler,
+//          IronRose.Scripting/ScriptDomain, RoseEngine/EngineDirectories, RoseEngine/Debug,
+//          IronRose.Engine.Editor.ImGuiEditor.Panels/ImGuiScriptsPanel
+// @exports
+//   class LiveCodeManager (internal)
+//     LiveCodeDemoTypes: Type[]              — LiveCode에서 발견된 MonoBehaviour 데모 타입 목록
+//     OnAfterReload: Action?                 — 리로드 완료 후 콜백
+//     ReloadRequested: bool                  — 리로드 요청 상태
+//     Initialize(): void                     — LiveCode 디렉토리 탐색 및 초기 컴파일
+//     ProcessReload(): void                  — 파일 변경 시 재컴파일 처리
+//     UpdateScripts(): void                  — 스크립트 도메인 업데이트
+//     Dispose(): void                        — 리소스 해제
+// @note    FindLiveCodeDirectories()에서 ProjectContext.LiveCodePath와
+//          ProjectContext.EngineRoot를 사용하여 경로 탐색.
+//          src/*/LiveCode/ 하위 프로젝트도 추가 탐색하여 확장성 확보.
+// ------------------------------------------------------------
 using IronRose.Rendering;
 using IronRose.Scripting;
 using IronRose.Engine.Editor;
@@ -124,26 +144,18 @@ namespace IronRose.Engine
 
         private void FindLiveCodeDirectories()
         {
-            // 1) 루트 LiveCode/ 디렉토리 탐색 (주요 경로)
-            string[] searchRoots = { ".", "..", "../.." };
-            foreach (var root in searchRoots)
+            // 1) ProjectContext가 제공하는 루트 LiveCode/ 디렉토리
+            string rootLiveCode = ProjectContext.LiveCodePath;
+            if (Directory.Exists(rootLiveCode) && !_liveCodePaths.Contains(rootLiveCode))
             {
-                string rootLiveCode = Path.GetFullPath(
-                    Path.Combine(root, RoseEngine.EngineDirectories.LiveCodePath));
-                if (Directory.Exists(rootLiveCode) && !_liveCodePaths.Contains(rootLiveCode))
-                {
-                    _liveCodePaths.Add(rootLiveCode);
-                    RoseEngine.Debug.Log($"[Engine] Found LiveCode directory: {rootLiveCode}");
-                    break;
-                }
+                _liveCodePaths.Add(rootLiveCode);
+                RoseEngine.Debug.Log($"[Engine] Found LiveCode directory: {rootLiveCode}");
             }
 
             // 2) src/*/LiveCode/ 하위 디렉토리도 추가 탐색 (확장성)
-            foreach (var root in searchRoots)
+            string srcDir = Path.Combine(ProjectContext.EngineRoot, "src");
+            if (Directory.Exists(srcDir))
             {
-                string srcDir = Path.GetFullPath(Path.Combine(root, "src"));
-                if (!Directory.Exists(srcDir)) continue;
-
                 foreach (var projectDir in Directory.GetDirectories(srcDir))
                 {
                     string liveCodeDir = Path.Combine(
@@ -157,13 +169,12 @@ namespace IronRose.Engine
                         RoseEngine.Debug.Log($"[Engine] Found LiveCode directory: {fullPath}");
                     }
                 }
-                break;
             }
 
             // 3) 아무것도 못 찾으면 생성
             if (_liveCodePaths.Count == 0)
             {
-                string fallback = Path.GetFullPath(RoseEngine.EngineDirectories.LiveCodePath);
+                string fallback = ProjectContext.LiveCodePath;
                 Directory.CreateDirectory(fallback);
                 _liveCodePaths.Add(fallback);
                 RoseEngine.Debug.Log($"[Engine] Created LiveCode directory: {fallback}");

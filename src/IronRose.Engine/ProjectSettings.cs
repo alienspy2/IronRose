@@ -1,4 +1,20 @@
-﻿using System;
+﻿// ------------------------------------------------------------
+// @file    ProjectSettings.cs
+// @brief   프로젝트 전역 설정 (rose_projectSettings.toml).
+//          활성 렌더러 프로파일, 빌드 시작 씬, 외부 스크립트 에디터 경로 등을 관리.
+// @deps    IronRose.Engine/ProjectContext, IronRose.Engine.Editor/EditorState,
+//          RoseEngine/Debug, Tomlyn
+// @exports
+//   static class ProjectSettings
+//     ActiveRendererProfileGuid: string?        — 활성 렌더러 프로파일 GUID
+//     StartScenePath: string?                   — Standalone 빌드 시작 씬 경로
+//     ExternalScriptEditor: string              — 외부 스크립트 에디터 (기본: "code")
+//     Load(): void                              — 설정 파일 로드 + EditorState 레거시 마이그레이션
+//     Save(): void                              — 설정 파일 저장
+// @note    FindOrCreatePath()는 ProjectContext.ProjectRoot를 기반으로 파일 경로를 결정한다.
+//          Load() 시 EditorState.ActiveRendererProfileGuid 레거시 값을 자동 마이그레이션한다.
+// ------------------------------------------------------------
+using System;
 using System.IO;
 using Tomlyn;
 using Tomlyn.Model;
@@ -23,17 +39,8 @@ namespace IronRose.Engine
         /// <summary>외부 스크립트 에디터 경로 (기본: "code").</summary>
         public static string ExternalScriptEditor { get; set; } = "code";
 
-        private static string FindOrCreatePath()
-        {
-            string[] searchPaths = { ".", "..", "../.." };
-            foreach (var dir in searchPaths)
-            {
-                var full = Path.GetFullPath(dir);
-                if (File.Exists(Path.Combine(full, "rose_config.toml")))
-                    return Path.Combine(full, FileName);
-            }
-            return Path.GetFullPath(FileName);
-        }
+        private static string FindOrCreatePath() =>
+            Path.Combine(ProjectContext.ProjectRoot, FileName);
 
         public static void Load()
         {

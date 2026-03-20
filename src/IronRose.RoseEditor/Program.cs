@@ -1,3 +1,18 @@
+// ------------------------------------------------------------
+// @file    Program.cs
+// @brief   IronRose 에디터 애플리케이션 진입점. 윈도우 생성, 엔진 초기화,
+//          씬 로드 체인(마지막 씬 → 기본 씬 → 새 씬 생성), 종료 처리를 담당한다.
+// @deps    IronRose.Engine/EngineCore, IronRose.Engine/ProjectContext,
+//          IronRose.Engine/RoseConfig, IronRose.Engine.Editor/EditorState,
+//          IronRose.Engine.Editor/SceneSerializer, IronRose.Editor/EditorUtils,
+//          RoseEngine/SceneManager, RoseEngine/Debug
+// @exports
+//   class Program (internal)
+//     Main(string[]): void               — 에디터 메인 진입점
+// @note    DefaultScenePath는 lazy 프로퍼티로 ProjectContext.AssetsPath를 사용.
+//          ProjectContext가 초기화된 후에만 올바른 경로를 반환한다.
+//          창 닫기 시 미저장 씬이 있으면 GLFW shouldClose를 해제하여 닫기를 취소한다.
+// ------------------------------------------------------------
 using System;
 using System.IO;
 using Silk.NET.Maths;
@@ -19,7 +34,7 @@ namespace IronRose.RoseEditor
 
         /// <summary>기본 씬 경로 (Assets/Scenes/DefaultScene.scene).</summary>
         private static string DefaultScenePath =>
-            Path.GetFullPath(Path.Combine("Assets", "Scenes", "DefaultScene.scene"));
+            Path.Combine(ProjectContext.AssetsPath, "Scenes", "DefaultScene.scene");
 
         private static bool _reimportAll;
 
