@@ -45,6 +45,7 @@ TestResults/
 # AI 테스트 출력물
 .claude/test_outputs/
 .claude/*.log
+.claude/worktrees/
 
 # Runtime logs
 logs/

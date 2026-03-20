@@ -1,6 +1,0 @@
-guid = "671d2345-63ce-46b3-8b26-08f4c333687e"
-version = 1
-[importer]
-type = "AnimationClipImporter"
-frame_rate = 60
-wrap_mode = "Once"
