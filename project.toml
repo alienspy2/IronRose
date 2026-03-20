@@ -1,0 +1,13 @@
+[project]
+name = "IronRose-Dev"
+version = "0.1.0"
+
+[engine]
+# 엔진 소스 경로 (엔진 레포 직접 실행이므로 현재 디렉토리)
+path = "."
+
+[editor]
+last_scene = ""
+
+[build]
+start_scene = ""

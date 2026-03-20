@@ -5,8 +5,8 @@
 // @deps    RoseEngine/Input, RoseEngine/Cursor, RoseEngine/Camera, RoseEngine/Time,
 //          RoseEngine/SceneManager, RoseEngine/Debug, RoseEngine/Screen, RoseEngine/Application,
 //          IronRose.Rendering/GraphicsManager, IronRose.Rendering/RenderSystem,
-//          IronRose.AssetPipeline/AssetDatabase, IronRose.Engine.Editor/EditorPlayMode,
-//          IronRose.Engine.Editor.ImGuiEditor/ImGuiOverlay
+//          IronRose.AssetPipeline/AssetDatabase, IronRose.Engine/ProjectContext,
+//          IronRose.Engine.Editor/EditorPlayMode, IronRose.Engine.Editor.ImGuiEditor/ImGuiOverlay
 // @exports
 //   class EngineCore
 //     Initialize(IWindow): void           — 엔진 초기화
@@ -117,6 +117,8 @@ namespace IronRose.Engine
         {
             RoseEngine.Debug.LogSink = entry => EditorBridge.PushLog(entry);
             RoseEngine.Debug.Log("[Engine] EngineCore initializing...");
+
+            ProjectContext.Initialize();
 
             RoseConfig.Load();
             ProjectSettings.Load();
