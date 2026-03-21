@@ -2,7 +2,10 @@
 // @file    CliCommandDispatcher.cs
 // @brief   CLI 요청 평문을 파싱하여 적절한 핸들러를 호출하고 JSON 응답을 반환한다.
 //          메인 스레드 실행이 필요한 명령은 큐에 넣고 결과를 대기한다.
-// @deps    System.Text.Json, RoseEngine/SceneManager, IronRose.Engine/ProjectContext
+// @deps    System.Text.Json, RoseEngine/SceneManager, IronRose.Engine/ProjectContext,
+//          IronRose.Engine.Editor/EditorPlayMode, IronRose.Engine.Editor/EditorSelection,
+//          IronRose.Engine.Editor/SceneSerializer, IronRose.Engine.Editor/GameObjectSnapshot,
+//          IronRose.Engine.Cli/CliLogBuffer
 // @exports
 //   class CliCommandDispatcher
 //     Dispatch(string requestLine): string  -- 요청 처리 후 응답 JSON 반환
@@ -10,13 +13,21 @@
 // @note    백그라운드 스레드(Pipe)에서 Dispatch()가 호출된다.
 //          메인 스레드 접근이 필요한 명령은 _mainThreadQueue에 넣고
 //          ManualResetEventSlim으로 완료를 대기한다 (타임아웃 5초).
+//          지원 명령: ping, scene.info, scene.list, scene.save, scene.load,
+//          go.get, go.find, go.set_active, go.set_field,
+//          select, play.enter, play.stop, play.pause, play.resume, play.state,
+//          log.recent
 // ------------------------------------------------------------
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using IronRose.Engine.Editor;
 using RoseEngine;
 
 namespace IronRose.Engine.Cli
@@ -88,10 +99,14 @@ namespace IronRose.Engine.Cli
 
         private void RegisterHandlers()
         {
+            // ----------------------------------------------------------------
             // ping -- 백그라운드 스레드에서 직접 실행
+            // ----------------------------------------------------------------
             _handlers["ping"] = args => JsonOk(new { pong = true, project = ProjectContext.ProjectName });
 
+            // ----------------------------------------------------------------
             // scene.info -- 메인 스레드 필요
+            // ----------------------------------------------------------------
             _handlers["scene.info"] = args => ExecuteOnMainThread(() =>
             {
                 var scene = SceneManager.GetActiveScene();
@@ -104,7 +119,9 @@ namespace IronRose.Engine.Cli
                 });
             });
 
+            // ----------------------------------------------------------------
             // scene.list -- 메인 스레드 필요
+            // ----------------------------------------------------------------
             _handlers["scene.list"] = args => ExecuteOnMainThread(() =>
             {
                 var gos = SceneManager.AllGameObjects;
@@ -122,6 +139,254 @@ namespace IronRose.Engine.Cli
                 }
                 return JsonOk(new { gameObjects = list });
             });
+
+            // ----------------------------------------------------------------
+            // scene.save -- 현재 씬 저장 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["scene.save"] = args => ExecuteOnMainThread(() =>
+            {
+                var scene = SceneManager.GetActiveScene();
+                var savePath = args.Length > 0 ? args[0] : scene.path;
+
+                if (string.IsNullOrEmpty(savePath))
+                    return JsonError("No save path specified and scene has no existing path");
+
+                SceneSerializer.Save(savePath);
+                return JsonOk(new { saved = true, path = savePath });
+            });
+
+            // ----------------------------------------------------------------
+            // scene.load -- 씬 파일 로드 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["scene.load"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: scene.load <path>");
+
+                var loadPath = args[0];
+                return ExecuteOnMainThread(() =>
+                {
+                    if (!System.IO.File.Exists(loadPath))
+                        return JsonError($"File not found: {loadPath}");
+
+                    SceneSerializer.Load(loadPath);
+                    return JsonOk(new { loaded = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // go.get -- 특정 GameObject 상세 정보 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["go.get"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: go.get <id|name>");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObject(args[0]);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {args[0]}");
+
+                    var snapshot = GameObjectSnapshot.From(go);
+                    return JsonOk(new
+                    {
+                        id = snapshot.InstanceId,
+                        name = snapshot.Name,
+                        active = snapshot.ActiveSelf,
+                        parentId = snapshot.ParentId,
+                        components = snapshot.Components.Select(c => new
+                        {
+                            typeName = c.TypeName,
+                            fields = c.Fields.Select(f => new
+                            {
+                                name = f.Name,
+                                typeName = f.TypeName,
+                                value = f.Value
+                            })
+                        })
+                    });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // go.find -- 이름으로 GameObject 검색 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["go.find"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: go.find <name>");
+
+                var searchName = args[0];
+                return ExecuteOnMainThread(() =>
+                {
+                    var matches = new List<object>();
+                    foreach (var go in SceneManager.AllGameObjects)
+                    {
+                        if (go._isDestroyed) continue;
+                        if (go.name == searchName)
+                        {
+                            matches.Add(new
+                            {
+                                id = go.GetInstanceID(),
+                                name = go.name
+                            });
+                        }
+                    }
+                    return JsonOk(new { gameObjects = matches });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // go.set_active -- GameObject 활성/비활성 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["go.set_active"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: go.set_active <id> <true|false>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                if (!bool.TryParse(args[1], out var active))
+                    return JsonError($"Invalid bool value: {args[1]}");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    go.SetActive(active);
+                    return JsonOk(new { ok = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // go.set_field -- 컴포넌트 필드 수정 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["go.set_field"] = args =>
+            {
+                if (args.Length < 4)
+                    return JsonError("Usage: go.set_field <id> <component> <field> <value>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                var componentType = args[1];
+                var fieldName = args[2];
+                var newValue = args[3];
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    var comp = go.InternalComponents
+                        .FirstOrDefault(c => c.GetType().Name == componentType);
+                    if (comp == null)
+                        return JsonError($"Component not found: {componentType}");
+
+                    var field = comp.GetType().GetField(fieldName,
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (field == null)
+                        return JsonError($"Field not found: {fieldName}");
+
+                    var value = ParseFieldValue(field.FieldType, newValue);
+                    if (value == null)
+                        return JsonError($"Cannot parse value '{newValue}' as {field.FieldType.Name}");
+
+                    field.SetValue(comp, value);
+                    SceneManager.GetActiveScene().isDirty = true;
+                    return JsonOk(new { ok = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // select -- 에디터 선택 변경 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["select"] = args =>
+            {
+                return ExecuteOnMainThread(() =>
+                {
+                    if (args.Length == 0 || args[0].Equals("none", StringComparison.OrdinalIgnoreCase))
+                    {
+                        EditorSelection.Clear();
+                        return JsonOk(new { ok = true });
+                    }
+
+                    if (!int.TryParse(args[0], out var id))
+                        return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                    EditorSelection.Select(id);
+                    return JsonOk(new { ok = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // play.enter -- Play 모드 진입 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["play.enter"] = args => ExecuteOnMainThread(() =>
+            {
+                EditorPlayMode.EnterPlayMode();
+                return JsonOk(new { state = EditorPlayMode.State.ToString() });
+            });
+
+            // ----------------------------------------------------------------
+            // play.stop -- Play 모드 종료 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["play.stop"] = args => ExecuteOnMainThread(() =>
+            {
+                EditorPlayMode.StopPlayMode();
+                return JsonOk(new { state = EditorPlayMode.State.ToString() });
+            });
+
+            // ----------------------------------------------------------------
+            // play.pause -- 일시정지 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["play.pause"] = args => ExecuteOnMainThread(() =>
+            {
+                EditorPlayMode.PausePlayMode();
+                return JsonOk(new { state = EditorPlayMode.State.ToString() });
+            });
+
+            // ----------------------------------------------------------------
+            // play.resume -- 재개 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["play.resume"] = args => ExecuteOnMainThread(() =>
+            {
+                EditorPlayMode.ResumePlayMode();
+                return JsonOk(new { state = EditorPlayMode.State.ToString() });
+            });
+
+            // ----------------------------------------------------------------
+            // play.state -- 현재 Play 상태 조회 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["play.state"] = args => ExecuteOnMainThread(() =>
+            {
+                return JsonOk(new { state = EditorPlayMode.State.ToString() });
+            });
+
+            // ----------------------------------------------------------------
+            // log.recent -- 최근 로그 조회 (스레드 안전, 직접 실행)
+            // ----------------------------------------------------------------
+            _handlers["log.recent"] = args =>
+            {
+                int count = 50;
+                if (args.Length > 0 && int.TryParse(args[0], out var c))
+                    count = c;
+
+                var entries = _logBuffer.GetRecent(count);
+                var logs = entries.Select(e => new
+                {
+                    level = e.Level.ToString(),
+                    source = e.Source.ToString(),
+                    message = e.Message,
+                    timestamp = e.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff")
+                });
+                return JsonOk(new { logs });
+            };
         }
 
         private string ExecuteOnMainThread(Func<string> action)
@@ -132,6 +397,78 @@ namespace IronRose.Engine.Cli
                 return JsonError("Main thread timeout (5s)");
             return task.Result!;
         }
+
+        // ================================================================
+        // 헬퍼 메서드
+        // ================================================================
+
+        /// <summary>ID 또는 이름으로 GameObject를 찾는다. 메인 스레드에서 호출해야 한다.</summary>
+        private static GameObject? FindGameObject(string idOrName)
+        {
+            if (int.TryParse(idOrName, out var id))
+                return FindGameObjectById(id);
+
+            // 이름으로 검색 (첫 번째 매칭)
+            foreach (var go in SceneManager.AllGameObjects)
+            {
+                if (!go._isDestroyed && go.name == idOrName)
+                    return go;
+            }
+            return null;
+        }
+
+        /// <summary>InstanceID로 GameObject를 찾는다. 메인 스레드에서 호출해야 한다.</summary>
+        private static GameObject? FindGameObjectById(int id)
+        {
+            foreach (var go in SceneManager.AllGameObjects)
+            {
+                if (!go._isDestroyed && go.GetInstanceID() == id)
+                    return go;
+            }
+            return null;
+        }
+
+        /// <summary>문자열 값을 지정한 타입으로 파싱한다.</summary>
+        private static object? ParseFieldValue(Type type, string raw)
+        {
+            try
+            {
+                if (type == typeof(float)) return float.Parse(raw, CultureInfo.InvariantCulture);
+                if (type == typeof(int)) return int.Parse(raw, CultureInfo.InvariantCulture);
+                if (type == typeof(bool)) return bool.Parse(raw);
+                if (type == typeof(string)) return raw;
+                if (type == typeof(Vector3)) return ParseVector3(raw);
+                if (type == typeof(Color)) return ParseColor(raw);
+                if (type.IsEnum) return Enum.Parse(type, raw);
+            }
+            catch { }
+            return null;
+        }
+
+        private static Vector3 ParseVector3(string raw)
+        {
+            var cleaned = raw.Trim('(', ')', ' ');
+            var parts = cleaned.Split(',');
+            return new Vector3(
+                float.Parse(parts[0].Trim(), CultureInfo.InvariantCulture),
+                float.Parse(parts[1].Trim(), CultureInfo.InvariantCulture),
+                float.Parse(parts[2].Trim(), CultureInfo.InvariantCulture));
+        }
+
+        private static Color ParseColor(string raw)
+        {
+            var cleaned = raw.Trim('(', ')', ' ');
+            var parts = cleaned.Split(',');
+            return new Color(
+                float.Parse(parts[0].Trim(), CultureInfo.InvariantCulture),
+                float.Parse(parts[1].Trim(), CultureInfo.InvariantCulture),
+                float.Parse(parts[2].Trim(), CultureInfo.InvariantCulture),
+                parts.Length > 3 ? float.Parse(parts[3].Trim(), CultureInfo.InvariantCulture) : 1f);
+        }
+
+        // ================================================================
+        // 파싱 / JSON
+        // ================================================================
 
         private static string[] ParseArgs(string requestLine)
         {
