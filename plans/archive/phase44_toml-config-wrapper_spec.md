@@ -1792,10 +1792,10 @@ SceneSerializer의 다음 메서드가 `TomlTable`/`TomlTableArray`를 반환하
 
 | Phase | 제목 | 파일 | 선행 | 상태 |
 |-------|------|------|------|------|
-| 44A | 래퍼 클래스 작성 | phase44_toml-config-wrapper_spec.md (Phase 44A 섹션) | - | 미완료 |
-| 44B | 설정 파일 마이그레이션 | phase44_toml-config-wrapper_spec.md (Phase 44B 섹션) | 44A | 미완료 |
-| 44C | 에셋 임포터 마이그레이션 | phase44_toml-config-wrapper_spec.md (Phase 44C 섹션) | 44A | 미완료 |
-| 44D | SceneSerializer + 기타 마이그레이션 | phase44_toml-config-wrapper_spec.md (Phase 44D 섹션) | 44A | 미완료 |
+| 44A | 래퍼 클래스 작성 | phase44_toml-config-wrapper_spec.md (Phase 44A 섹션) | - | 완료 |
+| 44B | 설정 파일 마이그레이션 | phase44_toml-config-wrapper_spec.md (Phase 44B 섹션) | 44A | 완료 |
+| 44C | 에셋 임포터 마이그레이션 | phase44_toml-config-wrapper_spec.md (Phase 44C 섹션) | 44A | 완료 |
+| 44D | SceneSerializer + 기타 마이그레이션 | phase44_toml-config-wrapper_spec.md (Phase 44D 섹션) | 44A | 완료 |
 | 44E | 에디터 내부 데이터 컨테이너 (선택적) | phase44_toml-config-wrapper_spec.md (Phase 44E 섹션) | 44D | 미완료 |
 
 ## 의존 관계

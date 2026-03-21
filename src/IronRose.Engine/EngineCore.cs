@@ -4,6 +4,7 @@
 //          입력, 그래픽, 물리, 에셋, 에디터, 스크립팅 서브시스템 초기화 및 매 프레임 업데이트.
 // @deps    RoseEngine/Input, RoseEngine/Cursor, RoseEngine/Camera, RoseEngine/Time,
 //          RoseEngine/SceneManager, RoseEngine/Debug, RoseEngine/Screen, RoseEngine/Application,
+//          RoseEngine/PlayerPrefs,
 //          IronRose.Rendering/GraphicsManager, IronRose.Rendering/RenderSystem,
 //          IronRose.AssetPipeline/AssetDatabase, IronRose.Engine.Editor/EditorPlayMode,
 //          IronRose.Engine.Editor/EditorState,
@@ -26,6 +27,8 @@
 //          InitShaderCache()는 IsProjectLoaded=true일 때만 호출 (Startup Panel 크래시 방지).
 //          EditorState.Load()는 InitEditor() 이전에 호출되어야 ImGui 레이아웃/폰트/UI스케일이 올바르게 복원됨.
 //          mid-session 프로젝트 전환은 지원하지 않음 (프로세스 = 프로젝트).
+//          InitApplication()에서 Application.InitializePaths() 및 PlayerPrefs.Initialize() 호출.
+//          Shutdown()에서 PlayerPrefs.Shutdown() 호출 (더티 상태면 자동 Save).
 // ------------------------------------------------------------
 using IronRose.API;
 using IronRose.AssetPipeline;
@@ -473,6 +476,7 @@ namespace IronRose.Engine
         public void Shutdown()
         {
             RoseEngine.EditorDebug.Log("[Engine] EngineCore shutting down...");
+            PlayerPrefs.Shutdown();  // 더티 상태면 자동 Save
             Application.isPlaying = false;
             Application.QuitAction = null;
             SceneManager.Clear();
@@ -521,6 +525,15 @@ namespace IronRose.Engine
             Application.QuitAction = () => _window!.Close();
             Application.PauseCallback = IronRose.Engine.Editor.EditorPlayMode.PausePlayMode;
             Application.ResumeCallback = IronRose.Engine.Editor.EditorPlayMode.ResumePlayMode;
+
+            // 경로 초기화 (ProjectContext가 이미 초기화된 상태)
+            var company = Application.companyName;  // ProjectContext.Initialize()에서 설정됨
+            var product = ProjectContext.ProjectName;
+            if (string.IsNullOrEmpty(product)) product = "DefaultProduct";
+            Application.InitializePaths(company, product);
+
+            // PlayerPrefs 초기화 (TOML 파일에서 로드)
+            PlayerPrefs.Initialize();
         }
 
         private void InitInput()

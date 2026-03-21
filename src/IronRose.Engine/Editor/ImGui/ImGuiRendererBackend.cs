@@ -91,7 +91,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 data.Swapchain = _device.ResourceFactory.CreateSwapchain(scDesc);
                 data.CommandList = _device.ResourceFactory.CreateCommandList();
 
-                Debug.Log($"[ImGui] Renderer: swapchain created for viewport {vp.ID}");
+                // Swapchain 생성/소멸 로그 생략
             }
             catch (Exception ex)
             {
@@ -114,7 +114,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 data.Swapchain?.Dispose();
                 data.Swapchain = null;
 
-                Debug.Log($"[ImGui] Renderer: swapchain destroyed for viewport {vp.ID}");
+                // Swapchain 생성/소멸 로그 생략
             }
             catch (Exception ex)
             {

@@ -303,7 +303,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                     else _focusedWindows.Remove(capturedWin);
                 };
 
-                Debug.Log($"[ImGui] Viewport created: {vp.ID} ({vp.Size.X}x{vp.Size.Y})");
+                // Viewport 생성/소멸 로그는 툴팁마다 반복되어 노이즈가 크므로 생략
             }
             catch (Exception ex)
             {
@@ -337,7 +337,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                     vp.PlatformUserData = IntPtr.Zero;
                 }
 
-                Debug.Log($"[ImGui] Viewport destroyed: {vp.ID}");
+                // Viewport 생성/소멸 로그 생략
             }
             catch (Exception ex)
             {

@@ -228,10 +228,6 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             if (ImGui.Selectable("(None)", isNoneSelected))
             {
                 _assetBrowserSelectedGuid = "";
-            }
-            if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
-            {
-                _assetBrowserSelectedGuid = "";
                 confirmed = true;
             }
 
@@ -241,14 +237,12 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 var (displayName, guid, path) = filtered[i];
                 bool selected = _assetBrowserSelectedGuid == guid;
                 if (ImGui.Selectable($"{displayName}##{guid}", selected))
-                    _assetBrowserSelectedGuid = guid;
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip(path);
-                if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
                 {
                     _assetBrowserSelectedGuid = guid;
                     confirmed = true;
                 }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip(path);
             }
 
             ImGui.EndChild();
@@ -267,6 +261,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
             if (ImGui.IsKeyPressed(ImGuiKey.Enter) || ImGui.IsKeyPressed(ImGuiKey.KeypadEnter))
                 confirmed = true;
+            if (ImGui.IsKeyPressed(ImGuiKey.Escape))
+                cancelled = true;
 
             if (confirmed)
             {

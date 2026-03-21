@@ -3,7 +3,7 @@
 // @brief   프로젝트 경로 컨텍스트. 에셋 프로젝트의 루트와 엔진 루트를 관리한다.
 //          project.toml에서 설정을 읽어 초기화된다.
 //          글로벌 설정(last_project 등)은 ~/.ironrose/settings.toml에 저장한다.
-// @deps    IronRose.Engine/TomlConfig, RoseEngine/Debug
+// @deps    IronRose.Engine/TomlConfig, RoseEngine/Debug, RoseEngine/Application
 // @exports
 //   class ProjectContext (static)
 //     Initialize(string?): void        -- 프로젝트 루트 탐색 및 초기화
@@ -22,6 +22,7 @@
 //          TOML 읽기/쓰기에 TomlConfig API를 사용한다.
 //          하위 호환: CWD의 .rose_last_project가 있으면 settings.toml로 마이그레이션 후 삭제.
 //          SaveLastProjectPath()는 read-modify-write 패턴으로 기존 settings.toml의 다른 섹션을 보존한다.
+//          Initialize()에서 [project] company 필드를 읽어 Application.companyName에 설정한다.
 // ------------------------------------------------------------
 using System;
 using System.IO;
@@ -92,7 +93,14 @@ namespace IronRose.Engine
                 {
                     var project = config.GetSection("project");
                     if (project != null)
+                    {
                         ProjectName = project.GetString("name", "");
+
+                        // [project] company 필드 읽기 -> Application.companyName 설정
+                        var company = project.GetString("company", "");
+                        if (!string.IsNullOrEmpty(company))
+                            RoseEngine.Application.companyName = company;
+                    }
 
                     var engineRelPath = "../IronRose";
                     var engine = config.GetSection("engine");

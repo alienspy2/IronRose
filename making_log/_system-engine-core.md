@@ -12,7 +12,7 @@
 2. `ProjectContext.Initialize()` — 프로젝트 경로 탐색
 3. 프로젝트 로드 성공 시 `Debug.SetLogDirectory(ProjectRoot/Logs/)` — 로그를 프로젝트 폴더로 전환
 4. `RoseConfig.Load()`, `ProjectSettings.Load()`, `EditorState.Load()`
-5. 서브시스템 초기화: Application, Input, Graphics, ShaderCache, RenderSystem, Screen, PluginApi, Physics
+5. 서브시스템 초기화: Application(경로 초기화 + PlayerPrefs 로드 포함), Input, Graphics, ShaderCache, RenderSystem, Screen, PluginApi, Physics
 6. 프로젝트 로드 시: Assets, LiveCode, GpuCompressor 초기화
 7. `HeadlessEditor`가 false이면 에디터(ImGuiOverlay) 초기화
 8. 에셋 캐시 워밍업 시작
@@ -31,6 +31,11 @@
 - **프로세스 = 프로젝트**: 하나의 프로세스는 하나의 프로젝트에 바인딩됨
 - mid-session 프로젝트 전환은 지원하지 않음 (코드 제거 완료)
 - 프로젝트 전환은 프로세스 재시작을 통해서만 가능
+
+### Shutdown() 흐름
+1. `PlayerPrefs.Shutdown()` — 더티 상태면 자동 Save
+2. `Application.isPlaying = false`, QuitAction 해제
+3. SceneManager, AssetDatabase, 각 서브시스템 정리/Dispose
 
 ## 주의사항
 - `HeadlessEditor = true`일 때 ImGuiOverlay 초기화를 완전히 스킵 (Standalone 빌드용)

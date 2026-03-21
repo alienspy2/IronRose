@@ -20,9 +20,12 @@
 
 ### 기존 TOML 사용 패턴
 - **Tomlyn 0.20.0** 패키지 사용 (`IronRose.Engine.csproj`에 이미 포함).
-- `Toml.ToModel()` / `Toml.FromModel()`로 읽기/쓰기.
-- `TomlTable`을 직접 조작하는 패턴이 표준 (EditorState, ProjectContext, ProjectSettings 등).
-- 파일 저장 시 문자열 직접 조합 방식 사용 (가독성 좋은 출력을 위해).
+- **`TomlConfig` 래퍼 클래스** (`src/IronRose.Engine/TomlConfig.cs`)가 표준 API.
+  - `TomlConfig.LoadFile()` / `TomlConfig.SaveToFile()`로 파일 I/O.
+  - `GetString()`, `GetInt()`, `GetFloat()`, `GetBool()` 등 타입 안전 API.
+  - `GetSection()` / `SetSection()`으로 하위 테이블 접근.
+  - `TomlConfig.CreateEmpty()`로 빈 설정 생성.
+- EditorState, ProjectContext, ProjectSettings 등 모든 설정 파일이 `TomlConfig` API를 사용 (Phase 44 마이그레이션 완료).
 
 ### 글로벌 설정 디렉토리
 - `~/.ironrose/` 디렉토리가 이미 사용되고 있음 (`settings.toml` 저장).
@@ -75,7 +78,7 @@ Initialize() ->
 // @file    PlayerPrefs.cs
 // @brief   Unity 호환 PlayerPrefs API. TOML 포맷으로 사용자 홈 디렉토리에 저장.
 //          에디터와 런타임이 같은 파일을 공유한다.
-// @deps    IronRose.Engine/ProjectContext, RoseEngine/Debug, Tomlyn
+// @deps    IronRose.Engine/ProjectContext, IronRose.Engine/TomlConfig, RoseEngine/Debug
 // @exports
 //   static class PlayerPrefs
 //     SetInt(string, int): void
@@ -162,9 +165,9 @@ language = "ko"
 - Unity와 동일하게 메인 스레드 제한은 두지 않지만, 동시 접근에 안전하게 설계.
 
 **초기화/종료 흐름**:
-- `Initialize()` : TOML 파일이 존재하면 로드하여 `_data`에 채움. 파일이 없으면 빈 상태로 시작.
+- `Initialize()` : `TomlConfig.LoadFile()`로 TOML 파일 로드하여 `_data`에 채움. 파일이 없으면 빈 상태로 시작.
 - `Shutdown()` : `_dirty`가 true이면 `Save()` 호출.
-- `Save()` : `_data`를 타입별 섹션으로 분류하여 TOML 파일에 기록. 디렉토리 없으면 생성.
+- `Save()` : `TomlConfig.CreateEmpty()`로 빈 설정을 만들고, `SetSection()`으로 타입별 섹션을 구성한 뒤 `SaveToFile()`로 기록. 디렉토리 없으면 생성.
 
 **키 유효성**:
 - 키에 `.`, `[`, `]`, `"`, `\` 문자가 포함되면 TOML 키로 사용 시 문제가 될 수 있으므로, 따옴표로 감싸는 TOML quoted key 문법을 사용한다.
@@ -323,9 +326,14 @@ public void Shutdown()
 **`ProjectContext.Initialize()`**에서 `company` 필드를 읽는 로직 추가:
 
 ```csharp
-// [project] 섹션에서 company 읽기
-if (projTable.TryGetValue("company", out var companyVal) && companyVal is string companyStr)
-    Application.companyName = companyStr;
+// [project] 섹션에서 company 읽기 (TomlConfig API 사용)
+var projSection = config.GetSection("project");
+if (projSection != null)
+{
+    var company = projSection.GetString("company", "");
+    if (!string.IsNullOrEmpty(company))
+        Application.companyName = company;
+}
 ```
 
 이 코드는 기존 `ProjectName` 읽기 바로 아래에 추가한다.
@@ -360,8 +368,8 @@ if (projTable.TryGetValue("company", out var companyVal) && companyVal is string
   - `PrefEntry` 내부 타입 정의
   - `SetInt/GetInt`, `SetFloat/GetFloat`, `SetString/GetString` 구현
   - `HasKey`, `DeleteKey`, `DeleteAll` 구현
-  - `Save()` 구현 (TOML 파일 쓰기)
-  - `Initialize()` 구현 (TOML 파일 읽기)
+  - `Save()` 구현 (`TomlConfig.CreateEmpty()` + `SetSection()` + `SaveToFile()`)
+  - `Initialize()` 구현 (`TomlConfig.LoadFile()`로 TOML 파일 읽기)
   - `Shutdown()` 구현 (더티 시 자동 Save)
   - `lock` 기반 스레드 안전성 적용
 

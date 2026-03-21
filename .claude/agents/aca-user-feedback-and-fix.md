@@ -90,6 +90,21 @@ System.IO.File.AppendAllText("_diag.log",
 2. **진단 로그 파일 삭제**: `_diag.log` 파일이 있으면 삭제한다.
 3. **최종 빌드 확인**: `dotnet build` 성공을 확인한다.
 
+### 5.5단계: Worktree 커밋 (worktree 환경에서만)
+
+현재 작업 디렉토리가 `.claude/worktrees/` 하위인 경우 (즉, worktree isolation 모드로 실행된 경우):
+
+- 빌드 성공 후 **반드시 변경사항을 커밋**한다.
+- 커밋하지 않으면 메인 에이전트가 `git merge`/`git checkout <branch>`로 변경을 가져올 수 없다.
+- 커밋 메시지 형식: `fix(scope): 수정 요약`
+
+```bash
+git add -A
+git commit -m "fix(scope): 수정 요약"
+```
+
+**주의**: 이 단계를 생략하면 worktree의 변경사항이 브랜치에 기록되지 않아, 메인 브랜치로 머지할 때 변경이 유실된다.
+
 ### 6단계: 작업 로그 작성
 
 `./making_log/` 디렉토리에 수정 로그를 작성한다.

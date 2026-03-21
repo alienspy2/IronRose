@@ -1,6 +1,7 @@
 [project]
 name = "{{ProjectName}}"
 version = "0.1.0"
+# company = "DefaultCompany"
 
 [engine]
 # 엔진 소스 경로 (상대 경로)
