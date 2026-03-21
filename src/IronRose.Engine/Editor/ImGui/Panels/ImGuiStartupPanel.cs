@@ -38,6 +38,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         private volatile bool _waitingForDialog;
         private bool _showRestartNotice;
         private string? _selectedProjectPath;
+        private string? _workspacePath;
 
         // 백그라운드 스레드 → 메인 스레드 전달용 (volatile)
         private volatile string? _pendingBrowsePath;
@@ -254,6 +255,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         {
             Debug.Log($"[StartupPanel] Project selected: {projectDir}");
             ProjectContext.SaveLastProjectPath(projectDir);
+            _workspacePath = ProjectCreator.UpdateEngineWorkspace(projectDir);
             _selectedProjectPath = projectDir;
             _showRestartNotice = true;
         }
@@ -290,7 +292,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             ImGui.OpenPopup("##RestartNotice");
             var center = ImGui.GetMainViewport().GetCenter();
             ImGui.SetNextWindowPos(center, ImGuiCond.Appearing, new Vector2(0.5f, 0.5f));
-            ImGui.SetNextWindowSize(new Vector2(400, 160));
+            ImGui.SetNextWindowSize(new Vector2(500, 240));
 
             if (ImGui.BeginPopupModal("##RestartNotice", ref _showRestartNotice,
                 ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove))
@@ -300,11 +302,24 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 ImGui.Spacing();
                 ImGui.TextDisabled(_selectedProjectPath ?? "");
                 ImGui.Spacing();
+
+                if (_workspacePath != null)
+                {
+                    ImGui.Separator();
+                    ImGui.Spacing();
+                    ImGui.TextWrapped("To open with VS Code, run:");
+                    ImGui.Spacing();
+                    ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.1f, 0.3f, 0.7f, 1.0f));
+                    ImGui.TextWrapped($"  code \"{_workspacePath}\"");
+                    ImGui.PopStyleColor();
+                }
+
+                ImGui.Spacing();
                 ImGui.Separator();
                 ImGui.Spacing();
 
                 float buttonWidth = 120;
-                ImGui.SetCursorPosX((400 - buttonWidth) * 0.5f);
+                ImGui.SetCursorPosX((500 - buttonWidth) * 0.5f);
                 if (ImGui.Button("Exit", new Vector2(buttonWidth, 0)))
                 {
                     NativeFileDialog.KillRunning();

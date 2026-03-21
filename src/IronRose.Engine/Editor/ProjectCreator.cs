@@ -12,6 +12,8 @@
 // ------------------------------------------------------------
 using System;
 using System.IO;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using RoseEngine;
 
 namespace IronRose.Engine.Editor
@@ -193,6 +195,87 @@ start_scene = """"
             foreach (var subDir in Directory.GetDirectories(dir))
             {
                 RenameFilesWithPlaceholder(subDir, projectName);
+            }
+        }
+
+        /// <summary>
+        /// 엔진 루트의 IronRose.code-workspace에 프로젝트 폴더를 추가/갱신합니다.
+        /// </summary>
+        /// <summary>
+        /// 엔진 루트의 IronRose.code-workspace를 생성/갱신합니다.
+        /// 파일이 없으면 새로 생성합니다.
+        /// </summary>
+        /// <returns>생성/갱신된 workspace 파일의 절대 경로. 실패 시 null.</returns>
+        public static string? UpdateEngineWorkspace(string projectDir)
+        {
+            var engineRoot = ProjectContext.EngineRoot;
+            if (string.IsNullOrEmpty(engineRoot)) return null;
+
+            var wsPath = Path.Combine(engineRoot, "IronRose.code-workspace");
+
+            try
+            {
+                var projectName = Path.GetFileName(projectDir);
+                var relPath = Path.GetRelativePath(engineRoot, projectDir).Replace('\\', '/');
+
+                JsonNode? doc;
+                if (File.Exists(wsPath))
+                {
+                    doc = JsonNode.Parse(File.ReadAllText(wsPath));
+                    if (doc == null) doc = new JsonObject();
+                }
+                else
+                {
+                    doc = new JsonObject();
+                }
+
+                var folders = doc["folders"]?.AsArray();
+                if (folders == null)
+                {
+                    folders = new JsonArray();
+                    doc["folders"] = folders;
+                }
+
+                // 기존 프로젝트 폴더 제거 (엔진 자체 "." 제외)
+                for (int i = folders.Count - 1; i >= 0; i--)
+                {
+                    var path = folders[i]?["path"]?.GetValue<string>();
+                    if (path != null && path != ".")
+                        folders.RemoveAt(i);
+                }
+
+                // 엔진 폴더가 없으면 추가 (primary)
+                bool hasEngine = false;
+                foreach (var f in folders)
+                {
+                    if (f?["path"]?.GetValue<string>() == ".")
+                    { hasEngine = true; break; }
+                }
+                if (!hasEngine)
+                {
+                    folders.Insert(0, new JsonObject
+                    {
+                        ["name"] = "RoseEngine",
+                        ["path"] = "."
+                    });
+                }
+
+                // 프로젝트 폴더 추가
+                folders.Add(new JsonObject
+                {
+                    ["name"] = projectName,
+                    ["path"] = relPath
+                });
+
+                var options = new JsonSerializerOptions { WriteIndented = true };
+                File.WriteAllText(wsPath, doc.ToJsonString(options) + "\n");
+                EditorDebug.Log($"[ProjectCreator] Workspace updated: {wsPath}");
+                return wsPath;
+            }
+            catch (Exception ex)
+            {
+                EditorDebug.LogWarning($"[ProjectCreator] Failed to update workspace: {ex.Message}");
+                return null;
             }
         }
 
