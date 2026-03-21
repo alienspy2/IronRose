@@ -44,6 +44,32 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 - Linux 실제 경로: `/tmp/CoreFxPipe_ironrose-cli-{name}` (.NET 런타임 규칙, Unix Domain Socket)
 - Windows 실제 경로: `\\.\pipe\ironrose-cli-{name}`
 
+## 지원 명령 목록 (Phase 46c 완료)
+
+| 명령 | 실행 위치 | 설명 |
+|------|-----------|------|
+| `ping` | 백그라운드 | 연결 테스트 |
+| `scene.info` | 메인 스레드 | 현재 씬 정보 |
+| `scene.list` | 메인 스레드 | 전체 GameObject 목록 |
+| `scene.save` | 메인 스레드 | 현재 씬 저장 ([path] 선택) |
+| `scene.load` | 메인 스레드 | 씬 파일 로드 |
+| `go.get` | 메인 스레드 | GO 상세 정보 (컴포넌트/필드 포함) |
+| `go.find` | 메인 스레드 | 이름으로 GO 검색 (정확 매칭) |
+| `go.set_active` | 메인 스레드 | GO 활성/비활성 |
+| `go.set_field` | 메인 스레드 | 컴포넌트 필드 수정 (리플렉션) |
+| `select` | 메인 스레드 | 에디터 선택 변경 |
+| `play.enter` | 메인 스레드 | Play 모드 진입 |
+| `play.stop` | 메인 스레드 | Play 모드 종료 |
+| `play.pause` | 메인 스레드 | 일시정지 |
+| `play.resume` | 메인 스레드 | 재개 |
+| `play.state` | 메인 스레드 | 현재 Play 상태 조회 |
+| `log.recent` | 백그라운드 | 최근 로그 조회 (스레드 안전) |
+
+### go.set_field 지원 타입
+- float, int, bool, string, Vector3, Color, enum
+- `ParseFieldValue`/`ParseVector3`/`ParseColor` 헬퍼 메서드로 파싱
+- `SetFieldCommand.ParseValue`와 동일한 로직 (private이므로 별도 복사)
+
 ## 주의사항
 - CLI 서버는 프로젝트 미로드 상태에서도 동작한다 (ping 등 기본 명령만 사용 가능)
 - 메인 스레드 큐 대기 타임아웃은 5초. 모달 대화상자 등으로 메인 스레드가 블로킹되면 타임아웃 에러 반환
