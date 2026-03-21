@@ -24,10 +24,11 @@ IronRose는 **엔진 레포**와 **에셋 프로젝트 레포**로 분리된 구
 
 ### 실행
 
-엔진 레포 자체에는 실행 프로젝트가 없다. 에셋 프로젝트의 `*.RoseEditor.csproj`로 실행한다.
-개발 시에는 엔진 루트의 `project.toml` (`engine.path = "."`)을 사용하여 엔진 레포에서 직접 실행도 가능.
-
+- `src/IronRose.RoseEditor/` — 에디터 실행 프로젝트 (엔진 개발용 진입점)
 - `src/IronRose.Standalone/` — Standalone 빌드. 에디터 Build 메뉴용 (별도 Phase에서 처리 예정).
+
+에셋 프로젝트는 자체 `*.RoseEditor.csproj`로 실행한다.
+엔진 개발 시에는 엔진 루트의 `project.toml` (`engine.path = "."`)과 `src/IronRose.RoseEditor/`로 직접 실행.
 
 ### 엔진 핵심 라이브러리
 
@@ -93,13 +94,21 @@ IronRose는 **엔진 레포**와 **에셋 프로젝트 레포**로 분리된 구
 | `ProjectContext.ProjectRoot` | 에셋 프로젝트 루트 (`project.toml` 위치) |
 | `ProjectContext.EngineRoot` | 엔진 소스 루트 |
 | `ProjectContext.AssetsPath` | `ProjectRoot/Assets` |
-| `ProjectContext.EditorAssetsPath` | `ProjectRoot/EditorAssets` |
+| `ProjectContext.EditorAssetsPath` | `EngineRoot/EditorAssets` (엔진 전용, internal) |
 | `ProjectContext.CachePath` | `ProjectRoot/RoseCache` |
 | `ProjectContext.LiveCodePath` | `ProjectRoot/LiveCode` |
 | `ProjectContext.FrozenCodePath` | `ProjectRoot/FrozenCode` |
 | `ProjectContext.IsProjectLoaded` | `project.toml` 발견 여부 |
 
 `ShaderRegistry.Resolve(filename)` — 셰이더 파일명 → 절대 경로 변환.
+
+### 글로벌 설정
+
+| 경로 | 설명 |
+|------|------|
+| `~/.ironrose/settings.toml` | 마지막 프로젝트 경로 등 유저 로컬 설정 (`[editor] last_project`) |
+
+프로젝트 미지정 시 StartupPanel이 표시되며, New/Open Project 후 설정 저장 → 프로세스 재시작 흐름.
 
 ### 기타
 

@@ -35,8 +35,8 @@ namespace RoseEngine
         static Debug()
         {
             _logFileName = $"ironrose_{DateTime.Now:yyyyMMdd_HHmmss}.log";
-            Directory.CreateDirectory("logs");
-            _logPath = Path.Combine("logs", _logFileName);
+            Directory.CreateDirectory("Logs");
+            _logPath = Path.Combine("Logs", _logFileName);
         }
 
         /// <summary>

@@ -299,7 +299,7 @@ namespace IronRose.Engine
             if (ScreenCaptureEnabled && (_frameCount == 1 || _frameCount == 60 || _frameCount % 300 == 0))
             {
                 var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                var filename = Path.Combine("logs", $"screenshot_frame{_frameCount}_{timestamp}.png");
+                var filename = Path.Combine("Logs", $"screenshot_frame{_frameCount}_{timestamp}.png");
                 _graphicsManager.RequestScreenshot(filename);
             }
 

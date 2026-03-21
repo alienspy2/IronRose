@@ -590,8 +590,8 @@ templates/default/
 
 - [ ] E1: 엔진 레포에서 `EditorAssets/`, `Assets/`, `FrozenCode/`, `LiveCode/` 제거
 - [ ] E2: `src/IronRose.RoseEditor/` 제거 (템플릿 csproj로 대체됨)
-- [ ] E3: `doc/ProjectStructure.md` 업데이트
-- [ ] E4: `.gitignore` 정리
+- [x] E3: `doc/ProjectStructure.md` 업데이트
+- [x] E4: `.gitignore` 정리
 
 > **Standalone 빌드**: `src/IronRose.Standalone/`은 이 Phase에서 제거하지 않는다. Unity의 Build Settings처럼 에디터의 Build 메뉴에서 최종 빌드를 출력하는 용도로, 별도 Phase(Phase F 이후)에서 에셋 프로젝트와 연동하는 빌드 파이프라인을 설계한다.
 

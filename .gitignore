@@ -48,7 +48,7 @@ TestResults/
 .claude/worktrees/
 
 # Runtime logs
-logs/
+Logs/
 
 # OS generated files
 .DS_Store
