@@ -10,7 +10,8 @@
 //     ShaderRoot: string         -- Shaders/ 절대 경로
 // @note    Initialize()는 반드시 ProjectContext.Initialize() 이후에 호출해야 한다.
 //          탐색 우선순위: EngineRoot/Shaders > ProjectRoot/Shaders > CWD 폴백.
-//          Shaders/ 디렉토리를 찾지 못하면 DirectoryNotFoundException 발생.
+//          Shaders/ 디렉토리를 찾지 못하고 IsProjectLoaded=false이면 경고만 출력 후 return (Startup Panel 모드).
+//          IsProjectLoaded=true인데 Shaders/를 찾지 못하면 DirectoryNotFoundException 발생.
 // ------------------------------------------------------------
 using System;
 using System.IO;
@@ -62,6 +63,15 @@ namespace IronRose.Engine
                     Debug.LogWarning($"[ShaderRegistry] Shader root (fallback): {ShaderRoot}");
                     return;
                 }
+            }
+
+            // IsProjectLoaded = false인 경우(Startup Panel 모드) 크래시 방지
+            if (!ProjectContext.IsProjectLoaded)
+            {
+                Debug.LogWarning(
+                    "[ShaderRegistry] Shaders directory not found, but no project loaded. " +
+                    "Shader features will be unavailable until a project is opened.");
+                return;
             }
 
             throw new DirectoryNotFoundException(

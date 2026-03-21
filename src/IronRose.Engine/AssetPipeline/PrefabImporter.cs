@@ -1,3 +1,16 @@
+// ------------------------------------------------------------
+// @file    PrefabImporter.cs
+// @brief   .prefab 파일을 IronRose TOML 포맷으로 임포트. Base/Variant 프리팹 모두 지원하며
+//          Variant는 재귀적으로 base를 로드 후 오버라이드를 적용한다.
+// @deps    AssetDatabase, SceneSerializer, PrefabUtility, RoseEngine.Debug
+// @exports
+//   class PrefabImporter
+//     LoadPrefab(string prefabPath): GameObject?                           -- .prefab 파일을 로드하여 루트 GO 반환
+//     static IsVariantPrefab(string prefabPath): bool                     -- Variant 프리팹 여부 확인
+//     static GetBasePrefabGuidFromFile(string prefabPath): string?        -- basePrefabGuid 반환 (Variant가 아니면 null)
+// @note    MaxVariantDepth=16으로 무한 재귀 방지.
+//          IsVariantPrefab/GetBasePrefabGuidFromFile은 IOException 발생 시 안전하게 false/null 반환.
+// ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -131,9 +144,16 @@ namespace IronRose.AssetPipeline
         /// </summary>
         public static bool IsVariantPrefab(string prefabPath)
         {
-            if (!File.Exists(prefabPath)) return false;
-            var tomlStr = File.ReadAllText(prefabPath);
-            return SceneSerializer.GetBasePrefabGuid(tomlStr) != null;
+            try
+            {
+                if (!File.Exists(prefabPath)) return false;
+                var tomlStr = File.ReadAllText(prefabPath);
+                return SceneSerializer.GetBasePrefabGuid(tomlStr) != null;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
         }
 
         /// <summary>
@@ -141,9 +161,16 @@ namespace IronRose.AssetPipeline
         /// </summary>
         public static string? GetBasePrefabGuidFromFile(string prefabPath)
         {
-            if (!File.Exists(prefabPath)) return null;
-            var tomlStr = File.ReadAllText(prefabPath);
-            return SceneSerializer.GetBasePrefabGuid(tomlStr);
+            try
+            {
+                if (!File.Exists(prefabPath)) return null;
+                var tomlStr = File.ReadAllText(prefabPath);
+                return SceneSerializer.GetBasePrefabGuid(tomlStr);
+            }
+            catch (IOException)
+            {
+                return null;
+            }
         }
     }
 }

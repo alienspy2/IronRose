@@ -1,4 +1,19 @@
-﻿using Microsoft.CodeAnalysis;
+﻿// ------------------------------------------------------------
+// @file    ScriptCompiler.cs
+// @brief   Roslyn 기반 C# 스크립트 동적 컴파일러. 파일/소스 문자열에서 DLL 바이트 배열을 생성한다.
+// @deps    RoseEngine.Debug
+// @exports
+//   class ScriptCompiler
+//     AddReference(Type type): void                                        -- 타입의 어셈블리를 참조에 추가
+//     AddReference(string assemblyPath): void                              -- 어셈블리 파일 경로로 참조 추가
+//     CompileFromFiles(string[] filePaths, string assemblyName): CompilationResult  -- 파일 목록으로 컴파일
+//     CompileFromSource(string sourceCode, string assemblyName): CompilationResult  -- 소스 문자열로 컴파일
+//     CompileFromFile(string csFilePath): CompilationResult                -- 단일 파일 컴파일
+//   class CompilationResult
+//     Success: bool, AssemblyBytes: byte[]?, Errors: List<string>
+// @note    CompileFromFiles는 IOException 발생 시 해당 파일을 건너뛰고 경고 로그를 출력한다.
+// ------------------------------------------------------------
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Emit;
 using System;
@@ -55,12 +70,22 @@ namespace IronRose.Scripting
         {
             Debug.Log($"[Scripting] Compiling {filePaths.Length} files: {assemblyName}");
 
-            var syntaxTrees = filePaths
-                .Where(f => File.Exists(f))
-                .Select(f => CSharpSyntaxTree.ParseText(File.ReadAllText(f), path: f))
-                .ToArray();
+            var syntaxTrees = new List<SyntaxTree>();
+            foreach (var f in filePaths)
+            {
+                try
+                {
+                    if (!File.Exists(f)) continue;
+                    var source = File.ReadAllText(f);
+                    syntaxTrees.Add(CSharpSyntaxTree.ParseText(source, path: f));
+                }
+                catch (IOException ex)
+                {
+                    Debug.LogWarning($"[Scripting] Skipping file {f}: {ex.Message}");
+                }
+            }
 
-            return CompileFromSyntaxTrees(syntaxTrees, assemblyName);
+            return CompileFromSyntaxTrees(syntaxTrees.ToArray(), assemblyName);
         }
 
         public CompilationResult CompileFromSource(string sourceCode, string assemblyName = "DynamicScript")

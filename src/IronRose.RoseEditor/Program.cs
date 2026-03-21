@@ -3,7 +3,7 @@
 // @brief   IronRose 에디터 애플리케이션 진입점. 윈도우 생성, 엔진 초기화,
 //          씬 로드 체인(마지막 씬 → 기본 씬 → 새 씬 생성), 종료 처리를 담당한다.
 // @deps    IronRose.Engine/EngineCore, IronRose.Engine/ProjectContext,
-//          IronRose.Engine/RoseConfig, IronRose.Engine.Editor/EditorState,
+//          IronRose.Engine.Editor/EditorState,
 //          IronRose.Engine.Editor/SceneSerializer, IronRose.Editor/EditorUtils,
 //          RoseEngine/SceneManager, RoseEngine/Debug
 // @exports
@@ -36,20 +36,9 @@ namespace IronRose.RoseEditor
         private static string DefaultScenePath =>
             Path.Combine(ProjectContext.AssetsPath, "Scenes", "DefaultScene.scene");
 
-        private static bool _reimportAll;
-
         static void Main(string[] _)
         {
             Debug.Log("[IronRose Editor] Starting...");
-
-            // Reimport All sentinel 확인 (이전 실행에서 요청)
-            var sentinelPath = Path.Combine(Directory.GetCurrentDirectory(), ".reimport_all");
-            if (File.Exists(sentinelPath))
-            {
-                _reimportAll = true;
-                File.Delete(sentinelPath);
-                Debug.Log("[IronRose Editor] Reimport All requested — will clear cache on startup");
-            }
 
             var options = WindowOptions.DefaultVulkan;
             options.Size = new Vector2D<int>(1280, 720);
@@ -76,13 +65,6 @@ namespace IronRose.RoseEditor
 
             // 화면 밖이면 기본 위치로 리셋
             ValidateWindowPosition();
-
-            // Reimport All: 설정 로드 후 ForceClearCache 강제 활성화
-            if (_reimportAll)
-            {
-                RoseConfig.Load();
-                RoseConfig.EnableForceClearCache();
-            }
 
             _engine = new EngineCore();
 

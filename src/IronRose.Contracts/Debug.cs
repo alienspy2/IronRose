@@ -11,9 +11,9 @@
 //     LogWarning(object): void                          — WARNING 레벨 로그
 //     LogError(object): void                            — ERROR 레벨 로그
 //     SetLogDirectory(string logDir): void              — 로그 디렉토리 변경 (기존 내용 복사)
-// @note    정적 생성자에서 CWD/logs/ fallback 경로로 초기화.
+// @note    정적 생성자에서 CWD/Logs/ 생성 시도, 실패 시 임시 디렉토리로 폴백.
 //          SetLogDirectory() 호출 시 기존 로그 내용을 새 경로로 복사 후 원본 삭제.
-//          Write()에서 _lock으로 파일 접근 동기화.
+//          Write()에서 _lock으로 파일 접근 동기화. IOException 발생 시 무시 (콘솔 출력은 완료).
 // ------------------------------------------------------------
 using System;
 using System.IO;
@@ -35,8 +35,18 @@ namespace RoseEngine
         static Debug()
         {
             _logFileName = $"ironrose_{DateTime.Now:yyyyMMdd_HHmmss}.log";
-            Directory.CreateDirectory("Logs");
-            _logPath = Path.Combine("Logs", _logFileName);
+            try
+            {
+                Directory.CreateDirectory("Logs");
+                _logPath = Path.Combine("Logs", _logFileName);
+            }
+            catch
+            {
+                // CWD에 Logs/ 생성 실패 시 임시 디렉토리에 로그 작성
+                var tempDir = Path.Combine(Path.GetTempPath(), "IronRose", "Logs");
+                try { Directory.CreateDirectory(tempDir); } catch { }
+                _logPath = Path.Combine(tempDir, _logFileName);
+            }
         }
 
         /// <summary>
@@ -77,7 +87,14 @@ namespace RoseEngine
 
             lock (_lock)
             {
-                File.AppendAllText(_logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {line}{Environment.NewLine}");
+                try
+                {
+                    File.AppendAllText(_logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {line}{Environment.NewLine}");
+                }
+                catch (IOException)
+                {
+                    // 디스크 풀, 권한 문제 등 — 콘솔 출력은 이미 완료되었으므로 무시
+                }
             }
 
             var logLevel = level switch

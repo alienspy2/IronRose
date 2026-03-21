@@ -53,7 +53,7 @@ namespace IronRose.Standalone
             if (string.IsNullOrEmpty(scenePath) || !File.Exists(scenePath))
             {
                 // 폴백: Assets/Scenes/DefaultScene.scene
-                scenePath = Path.GetFullPath(Path.Combine("Assets", "Scenes", "DefaultScene.scene"));
+                scenePath = Path.GetFullPath(Path.Combine(ProjectContext.AssetsPath, "Scenes", "DefaultScene.scene"));
             }
 
             if (File.Exists(scenePath))

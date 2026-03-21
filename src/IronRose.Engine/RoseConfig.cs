@@ -4,7 +4,7 @@
 //          EnableEditor는 독립적으로 유지 (프로젝트 설정이 아닌 엔진 설정).
 //          Load()는 하위 호환을 위해 유지하되, rose_config.toml의 [cache] 값을
 //          ProjectSettings로 마이그레이션한 뒤 더 이상 읽지 않는다.
-// @deps    IronRose.Engine/ProjectSettings, RoseEngine/Debug
+// @deps    IronRose.Engine/ProjectSettings, IronRose.Engine/ProjectContext, RoseEngine/Debug
 // @exports
 //   static class RoseConfig
 //     DontUseCache: bool                  — ProjectSettings.DontUseCache 위임
@@ -15,6 +15,7 @@
 //     Load(): void                        — 레거시 rose_config.toml 마이그레이션
 // @note    캐시 프로퍼티는 ProjectSettings에서 관리. RoseConfig는 기존 호출 코드와의
 //          호환성을 위한 래퍼로만 유지된다.
+//          Load()는 ProjectContext.ProjectRoot 기반으로 우선 탐색하고 CWD로 폴백한다.
 // ------------------------------------------------------------
 using System;
 using System.IO;
@@ -62,7 +63,22 @@ namespace IronRose.Engine
 
             // 레거시 rose_config.toml에서 [editor] 섹션만 읽기 (EnableEditor)
             // [cache] 섹션은 ProjectSettings.Load()에서 읽으므로 여기서는 처리하지 않는다.
-            string[] searchPaths = { "rose_config.toml", "../rose_config.toml", "../../rose_config.toml" };
+            // ProjectContext.ProjectRoot 기반 탐색 (우선) + CWD 폴백
+            string[] searchPaths;
+            if (!string.IsNullOrEmpty(ProjectContext.ProjectRoot))
+            {
+                searchPaths = new[]
+                {
+                    Path.Combine(ProjectContext.ProjectRoot, "rose_config.toml"),
+                    "rose_config.toml",
+                    Path.Combine("..", "rose_config.toml"),
+                    Path.Combine("..", "..", "rose_config.toml"),
+                };
+            }
+            else
+            {
+                searchPaths = new[] { "rose_config.toml", Path.Combine("..", "rose_config.toml"), Path.Combine("..", "..", "rose_config.toml") };
+            }
 
             foreach (var rel in searchPaths)
             {

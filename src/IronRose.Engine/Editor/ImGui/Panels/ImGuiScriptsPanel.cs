@@ -1,4 +1,22 @@
-﻿using System;
+﻿// ------------------------------------------------------------
+// @file    ImGuiScriptsPanel.cs
+// @brief   Scripts View 패널. LiveCode/FrozenCode 폴더의 .cs 파일을 트리로 표시하고
+//          생성/삭제/이름변경/복제/외부 에디터 열기 등의 파일 관리 기능 제공.
+// @deps    IronRose.Engine/ProjectContext, IronRose.Engine/ProjectSettings,
+//          IronRose.Engine.Editor.ImGuiEditor.Panels/EditorModal, RoseEngine/Debug, RoseEngine/Component
+// @exports
+//   class ImGuiScriptsPanel : IEditorPanel
+//     IsOpen: bool                           — 패널 열림/닫힘 상태
+//     SelectedScriptPath: string?            — 현재 선택된 스크립트 절대 경로
+//     Draw(): void                           — ImGui 패널 렌더링
+//     ResolveComponentType(string): Type?    — .cs 경로에서 Component 타입 검색 (internal)
+//     _draggedScriptPath: string?            — 드래그 중인 스크립트 경로 (internal static)
+//     DragPayloadType: string                — 드래그 페이로드 타입 식별자 (internal const)
+// @note    Draw() 첫 호출 시 lazy 초기화 (ProjectContext.IsProjectLoaded 이후).
+//          FindRootDirectories()는 ProjectContext.LiveCodePath/FrozenCodePath 기반.
+//          FileSystemWatcher로 .cs 파일 변경 감지하여 트리 자동 갱신.
+// ------------------------------------------------------------
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -35,6 +53,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         private ScriptFolderNode? _liveCodeTree;
         private ScriptFolderNode? _frozenCodeTree;
         private bool _needsRebuild = true;
+        private bool _initialized;
         private readonly HashSet<string> _openFolders = new();
         private string _selectedPath = "";
         private string _searchFilter = "";
@@ -61,13 +80,19 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         public ImGuiScriptsPanel()
         {
-            FindRootDirectories();
-            SetupWatchers();
         }
 
         public void Draw()
         {
             if (!ProjectContext.IsProjectLoaded) return;
+
+            if (!_initialized)
+            {
+                _initialized = true;
+                FindRootDirectories();
+                SetupWatchers();
+                _needsRebuild = true;
+            }
 
             if (!IsOpen) return;
 
@@ -511,26 +536,20 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         private void FindRootDirectories()
         {
-            // Search for LiveCode and FrozenCode directories the same way LiveCodeManager does
-            string[] searchRoots = { ".", "..", "../.." };
-            foreach (var root in searchRoots)
-            {
-                string liveCodeDir = Path.GetFullPath(Path.Combine(root, EngineDirectories.LiveCodePath));
-                string frozenCodeDir = Path.GetFullPath(Path.Combine(root, EngineDirectories.FrozenCodePath));
+            // ProjectContext 기반으로 LiveCode/FrozenCode 디렉토리 설정
+            var liveCodeDir = ProjectContext.LiveCodePath;
+            var frozenCodeDir = ProjectContext.FrozenCodePath;
 
-                if (Directory.Exists(liveCodeDir))
-                    _liveCodeRoot = liveCodeDir;
-                if (Directory.Exists(frozenCodeDir))
-                    _frozenCodeRoot = frozenCodeDir;
+            if (Directory.Exists(liveCodeDir))
+                _liveCodeRoot = liveCodeDir;
 
-                if (_liveCodeRoot != null || _frozenCodeRoot != null)
-                    break;
-            }
+            if (Directory.Exists(frozenCodeDir))
+                _frozenCodeRoot = frozenCodeDir;
 
-            // Fallback: create LiveCode if not found
+            // Fallback: LiveCode 디렉토리가 없으면 생성
             if (_liveCodeRoot == null)
             {
-                _liveCodeRoot = Path.GetFullPath(EngineDirectories.LiveCodePath);
+                _liveCodeRoot = liveCodeDir;
                 Directory.CreateDirectory(_liveCodeRoot);
             }
 

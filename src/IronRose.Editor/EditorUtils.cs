@@ -1,3 +1,17 @@
+// ------------------------------------------------------------
+// @file    EditorUtils.cs
+// @brief   에디터/데모 공통 유틸리티. 카메라 생성, 폰트 로딩 등 보일러플레이트 제거용.
+// @deps    RoseEngine (Camera, Transform, Font, GameObject, etc.),
+//          IronRose.Engine/ProjectContext
+// @exports
+//   static class EditorUtils
+//     CreateCamera(position, lookAt?, clearFlags, bgColor): (Camera, Transform)  — 카메라 생성
+//     LoadFont(int size): Font                                                   — NotoSans 폰트 로드 (EngineRoot/EditorAssets 기반)
+//     CreateDefaultSceneCamera(): Camera                                         — 기본 씬 카메라
+//     CreateDefaultScene(): void                                                 — 기본 씬 오브젝트 세트 생성
+// @note    LoadFont()는 ProjectContext.EngineRoot/EditorAssets/Fonts/NotoSans.ttf를 사용.
+//          폰트 로드 실패 시 Font.CreateDefault()로 폴백.
+// ------------------------------------------------------------
 using RoseEngine;
 
 namespace IronRose.Editor
@@ -26,7 +40,7 @@ namespace IronRose.Editor
         public static Font LoadFont(int size = 32)
         {
             var fontPath = System.IO.Path.Combine(
-                System.IO.Directory.GetCurrentDirectory(), "Assets", "Fonts", "NotoSans_eng.ttf");
+                IronRose.Engine.ProjectContext.EngineRoot, "EditorAssets", "Fonts", "NotoSans.ttf");
             try { return Font.CreateFromFile(fontPath, size); }
             catch { return Font.CreateDefault(size); }
         }

@@ -21,6 +21,7 @@
 //          Directory.Build.props의 IronRoseRoot와 engine.path 불일치 시 경고 로그 출력.
 //          A2(TomlConfig) 미완료로 Tomlyn 직접 사용 패턴 적용.
 //          하위 호환: CWD의 .rose_last_project가 있으면 settings.toml로 마이그레이션 후 삭제.
+//          SaveLastProjectPath()는 read-modify-write 패턴으로 기존 settings.toml의 다른 섹션을 보존한다.
 // ------------------------------------------------------------
 using System;
 using System.IO;
@@ -199,8 +200,36 @@ namespace IronRose.Engine
             try
             {
                 Directory.CreateDirectory(GlobalSettingsDir);
-                var content = $"[editor]\nlast_project = \"{Path.GetFullPath(projectPath).Replace("\\", "/")}\"\n";
-                File.WriteAllText(GlobalSettingsPath, content);
+                var normalizedPath = Path.GetFullPath(projectPath).Replace("\\", "/");
+
+                // 기존 settings.toml이 있으면 읽어서 수정, 없으면 새로 생성
+                TomlTable table;
+                if (File.Exists(GlobalSettingsPath))
+                {
+                    try
+                    {
+                        table = Toml.ToModel(File.ReadAllText(GlobalSettingsPath));
+                    }
+                    catch
+                    {
+                        // 파싱 실패 시 새로 생성
+                        table = new TomlTable();
+                    }
+                }
+                else
+                {
+                    table = new TomlTable();
+                }
+
+                // [editor] 섹션 업데이트
+                if (!table.TryGetValue("editor", out var editorVal) || editorVal is not TomlTable editorTable)
+                {
+                    editorTable = new TomlTable();
+                    table["editor"] = editorTable;
+                }
+                editorTable["last_project"] = normalizedPath;
+
+                File.WriteAllText(GlobalSettingsPath, Toml.FromModel(table));
                 Debug.Log($"[ProjectContext] Saved last project to settings: {projectPath}");
             }
             catch (Exception ex)

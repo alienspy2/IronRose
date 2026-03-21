@@ -2,7 +2,7 @@
 // @file    NativeFileDialog.cs
 // @brief   크로스 플랫폼 OS 네이티브 파일 다이얼로그.
 //          Linux: zenity / kdialog, Windows: comdlg32.dll / shell32.dll P/Invoke.
-// @deps    (없음 - 외부 OS API만 사용)
+// @deps    IronRose.Engine/ProjectContext
 // @exports
 //   static class NativeFileDialog
 //     SaveFileDialog(title, defaultName, filter, initialDir): string?  — 파일 저장 다이얼로그
@@ -10,6 +10,7 @@
 //     PickFolder(title, initialDir): string?                           — 폴더 선택 다이얼로그
 // @note    Linux에서 zenity 우선, 없으면 kdialog 폴백.
 //          Windows에서 comdlg32 GetSaveFileName/GetOpenFileName, shell32 SHBrowseForFolder 사용.
+//          initialDir 미지정 시 ProjectContext.ProjectRoot 우선, 미로드 시 CWD 폴백.
 // ------------------------------------------------------------
 using System;
 using System.Diagnostics;
@@ -154,7 +155,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor
 
         private static string? LinuxSaveDialog(string title, string defaultName, string filter, string? initialDir)
         {
-            var dir = initialDir ?? Directory.GetCurrentDirectory();
+            var dir = initialDir
+                ?? (ProjectContext.IsProjectLoaded ? ProjectContext.ProjectRoot : Directory.GetCurrentDirectory());
             var defaultPath = Path.Combine(dir, defaultName);
             var label = BuildFilterLabel(filter);
 
@@ -171,7 +173,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor
 
         private static string? LinuxOpenDialog(string title, string filter, string? initialDir)
         {
-            var dir = initialDir ?? Directory.GetCurrentDirectory();
+            var dir = initialDir
+                ?? (ProjectContext.IsProjectLoaded ? ProjectContext.ProjectRoot : Directory.GetCurrentDirectory());
             var label = BuildFilterLabel(filter);
 
             var result = RunProcess("zenity",
@@ -185,7 +188,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor
 
         private static string? LinuxPickFolder(string title, string? initialDir)
         {
-            var dir = initialDir ?? Directory.GetCurrentDirectory();
+            var dir = initialDir
+                ?? (ProjectContext.IsProjectLoaded ? ProjectContext.ProjectRoot : Directory.GetCurrentDirectory());
 
             // Try zenity first
             var result = RunProcess("zenity",
@@ -221,7 +225,14 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 try
                 {
                     var output = process.StandardOutput.ReadToEnd().Trim();
-                    process.WaitForExit(30000);
+                    bool exited = process.WaitForExit(30000);
+
+                    if (!exited)
+                    {
+                        // 타임아웃: 좀비 프로세스 방지를 위해 강제 종료
+                        try { process.Kill(); } catch { }
+                        return null;
+                    }
 
                     if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(output))
                         return null;

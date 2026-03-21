@@ -22,6 +22,8 @@
 //          UpdateImGuiInputState()에서 Game View 클릭으로 커서 잠금 재진입.
 //          InitInput()에서 Cursor.Initialize() 호출.
 //          Initialize()에서 ProjectContext 로드 후 Debug.SetLogDirectory()로 로그를 프로젝트 Logs/로 전환.
+//          Initialize()에서 .reimport_all sentinel 파일을 ProjectRoot 기준으로 확인/삭제하여 ForceClearCache 설정.
+//          InitShaderCache()는 IsProjectLoaded=true일 때만 호출 (Startup Panel 크래시 방지).
 //          EditorState.Load()는 InitEditor() 이전에 호출되어야 ImGui 레이아웃/폰트/UI스케일이 올바르게 복원됨.
 //          mid-session 프로젝트 전환은 지원하지 않음 (프로세스 = 프로젝트).
 // ------------------------------------------------------------
@@ -130,6 +132,15 @@ namespace IronRose.Engine
                 var projectLogDir = Path.Combine(ProjectContext.ProjectRoot, "Logs");
                 RoseEngine.Debug.SetLogDirectory(projectLogDir);
                 RoseEngine.Debug.Log($"[Engine] Log directory switched to: {projectLogDir}");
+
+                // Reimport All sentinel 확인 (ProjectContext 초기화 이후, 경로 통일)
+                var sentinelPath = Path.Combine(ProjectContext.ProjectRoot, ".reimport_all");
+                if (File.Exists(sentinelPath))
+                {
+                    File.Delete(sentinelPath);
+                    RoseEngine.Debug.Log("[Engine] Reimport All requested — will clear cache on startup");
+                    ProjectSettings.ForceClearCache = true;
+                }
             }
 
             RoseConfig.Load();
@@ -141,7 +152,10 @@ namespace IronRose.Engine
             InitApplication();
             InitInput();
             InitGraphics();
-            InitShaderCache();
+            if (ProjectContext.IsProjectLoaded)
+            {
+                InitShaderCache();
+            }
             ShaderRegistry.Initialize();
             InitRenderSystem();
             InitScreen();

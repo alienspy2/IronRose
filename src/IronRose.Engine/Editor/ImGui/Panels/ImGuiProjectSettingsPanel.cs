@@ -33,6 +33,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         public void Draw()
         {
+            if (!ProjectContext.IsProjectLoaded) return;
             if (!IsOpen) return;
 
             if (ImGui.Begin("Project Settings", ref _isOpen))
@@ -182,12 +183,12 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             _sceneListFrame = 0;
 
             _sceneList.Clear();
-            var scenesDir = Path.Combine("Assets", "Scenes");
+            var scenesDir = Path.Combine(ProjectContext.AssetsPath, "Scenes");
             if (!Directory.Exists(scenesDir)) return;
 
             foreach (var file in Directory.GetFiles(scenesDir, "*.scene", SearchOption.AllDirectories))
             {
-                var relPath = Path.GetRelativePath(".", file).Replace('\\', '/');
+                var relPath = Path.GetRelativePath(ProjectContext.ProjectRoot, file).Replace('\\', '/');
                 var name = Path.GetFileNameWithoutExtension(file);
                 _sceneList.Add((relPath, name));
             }

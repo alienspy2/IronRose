@@ -10,4 +10,4 @@ path = "../IronRose"
 last_scene = ""
 
 [build]
-start_scene = "Assets/Scenes/DefaultScene.scene"
+start_scene = "Assets/Scenes/Sample.scene"

@@ -22,6 +22,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         public void Draw()
         {
+            if (!ProjectContext.IsProjectLoaded) return;
             if (!_isOpen) return;
 
             if (ImGui.Begin("Variant Tree", ref _isOpen))
