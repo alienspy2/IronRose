@@ -31,6 +31,7 @@ using BepuPhysics;
 using BepuPhysics.Collidables;
 using BepuPhysics.CollisionDetection;
 using BepuPhysics.Constraints;
+using BepuPhysics.Trees;
 using BepuUtilities;
 using BepuUtilities.Memory;
 using RoseEngine;
@@ -52,6 +53,69 @@ namespace IronRose.Physics
         public Vector3 HitPosition;
         /// <summary>충돌한 오브젝트의 BepuPhysics CollidableReference.</summary>
         public CollidableReference Collidable;
+    }
+
+    /// <summary>RayCast 쿼리의 충돌 결과를 담는 구조체.</summary>
+    public struct RayHit
+    {
+        /// <summary>origin으로부터의 히트 거리.</summary>
+        public float Distance;
+        /// <summary>충돌 법선 (world space).</summary>
+        public Vector3 Normal;
+        /// <summary>충돌 지점 (world space).</summary>
+        public Vector3 Point;
+        /// <summary>충돌한 오브젝트에 연결된 UserData (Collider 또는 Rigidbody).</summary>
+        public object? UserData;
+    }
+
+    // --- IRayHitHandler 구현: 가장 가까운 레이 충돌만 수집 ---
+
+    internal struct ClosestRayHitHandler : IRayHitHandler
+    {
+        public float ClosestT;
+        public Vector3 ClosestNormal;
+        public CollidableReference ClosestCollidable;
+        public bool HasHit;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool AllowTest(CollidableReference collidable) => true;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool AllowTest(CollidableReference collidable, int childIndex) => true;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void OnRayHit(in RayData ray, ref float maximumT, float t,
+                             in Vector3 normal, CollidableReference collidable, int childIndex)
+        {
+            if (t < ClosestT)
+            {
+                ClosestT = t;
+                ClosestNormal = normal;
+                ClosestCollidable = collidable;
+                HasHit = true;
+                maximumT = t;
+            }
+        }
+    }
+
+    // --- IRayHitHandler 구현: 모든 레이 충돌 수집 ---
+
+    internal struct AllRayHitHandler : IRayHitHandler
+    {
+        public List<(float T, Vector3 Normal, CollidableReference Collidable)> Hits;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool AllowTest(CollidableReference collidable) => true;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool AllowTest(CollidableReference collidable, int childIndex) => true;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void OnRayHit(in RayData ray, ref float maximumT, float t,
+                             in Vector3 normal, CollidableReference collidable, int childIndex)
+        {
+            Hits.Add((t, normal, collidable));
+        }
     }
 
     // --- ISweepHitHandler 구현: 가장 가까운 충돌만 수집 ---
@@ -513,6 +577,95 @@ namespace IronRose.Physics
                 results[i] = buffer[i];
 
             return handler.Count;
+        }
+
+        // --- RayCast 쿼리 ---
+
+        /// <summary>가장 가까운 충돌을 반환하는 3D 레이캐스트. UserData를 포함한 RayHit를 반환한다.</summary>
+        public bool RayCast(Vector3 origin, Vector3 direction, float maxDistance, out RayHit hit)
+        {
+            hit = default;
+
+            var dirLen = direction.Length();
+            if (dirLen < 1e-8f || maxDistance <= 0f) return false;
+
+            var normalizedDir = direction / dirLen;
+
+            var handler = new ClosestRayHitHandler
+            {
+                ClosestT = float.MaxValue,
+                HasHit = false,
+            };
+
+            _simulation.RayCast(origin, normalizedDir, maxDistance, ref handler);
+
+            if (!handler.HasHit) return false;
+
+            hit = new RayHit
+            {
+                Distance = handler.ClosestT,
+                Normal = handler.ClosestNormal,
+                Point = origin + normalizedDir * handler.ClosestT,
+                UserData = GetUserData(handler.ClosestCollidable),
+            };
+            return true;
+        }
+
+        /// <summary>모든 충돌을 반환하는 3D 레이캐스트. UserData를 포함한 RayHit 리스트를 반환한다.</summary>
+        public List<RayHit> RayCastAll(Vector3 origin, Vector3 direction, float maxDistance)
+        {
+            var dirLen = direction.Length();
+            if (dirLen < 1e-8f || maxDistance <= 0f)
+                return new List<RayHit>();
+
+            var normalizedDir = direction / dirLen;
+
+            var handler = new AllRayHitHandler
+            {
+                Hits = new List<(float, Vector3, CollidableReference)>(),
+            };
+
+            _simulation.RayCast(origin, normalizedDir, maxDistance, ref handler);
+
+            var results = new List<RayHit>(handler.Hits.Count);
+            foreach (var (t, normal, collidable) in handler.Hits)
+            {
+                results.Add(new RayHit
+                {
+                    Distance = t,
+                    Normal = normal,
+                    Point = origin + normalizedDir * t,
+                    UserData = GetUserData(collidable),
+                });
+            }
+            return results;
+        }
+
+        /// <summary>구 오버랩 쿼리 — Sweep 근사 방식. UserData 배열을 반환한다.</summary>
+        public List<object?> OverlapSphere(Vector3 center, float radius, int maxResults = 64)
+        {
+            var sphere = new Sphere(radius);
+            var pose = new RigidPose(center, Quaternion.Identity);
+
+            const float tinyDistance = 0.001f;
+            var velocity = new BodyVelocity(new Vector3(0, tinyDistance, 0));
+
+            var buffer = new CollidableReference[maxResults];
+            var handler = new OverlapCollectHandler
+            {
+                Results = buffer,
+                MaxCount = maxResults,
+                Count = 0,
+                ExcludeStaticHandle = -1,
+            };
+
+            _simulation.Sweep(sphere, pose, velocity, 1.0f, _bufferPool, ref handler);
+
+            var results = new List<object?>(handler.Count);
+            for (int i = 0; i < handler.Count; i++)
+                results.Add(GetUserData(buffer[i]));
+
+            return results;
         }
 
         // --- UserData 매핑 ---

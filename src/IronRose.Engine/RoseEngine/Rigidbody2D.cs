@@ -114,6 +114,7 @@ namespace RoseEngine
 
             if (aetherBody == null) return;
 
+            aetherBody.Tag = this;
             aetherBody.IgnoreGravity = gravityScale == 0f;
             aetherBody.LinearDamping = drag;
             aetherBody.AngularDamping = angularDrag;
