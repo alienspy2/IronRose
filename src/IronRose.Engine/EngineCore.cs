@@ -42,6 +42,7 @@ using Silk.NET.Input;
 using Silk.NET.Windowing;
 using System;
 using System.IO;
+using System.Reflection;
 
 namespace IronRose.Engine
 {
@@ -173,6 +174,7 @@ namespace IronRose.Engine
             if (ProjectContext.IsProjectLoaded)
             {
                 InitAssets();
+                InitFrozenCode();
                 InitLiveCode();
                 InitGpuCompressor();
             }
@@ -686,6 +688,47 @@ namespace IronRose.Engine
                 }
 
                 EditorDebug.Log($"[Engine] Loaded renderer profile: {profile.name}");
+            }
+        }
+
+        private void InitFrozenCode()
+        {
+            var frozenCodePath = ProjectContext.FrozenCodePath;
+            if (!Directory.Exists(frozenCodePath))
+                return;
+
+            var csFiles = Directory.GetFiles(frozenCodePath, "*.cs");
+            if (csFiles.Length == 0)
+                return;
+
+            RoseEngine.EditorDebug.Log($"[Engine] Compiling {csFiles.Length} FrozenCode files...");
+
+            var compiler = new Scripting.ScriptCompiler();
+            compiler.AddReference(typeof(IronRose.API.Screen));
+            compiler.AddReference(typeof(EngineCore).Assembly.Location);
+            compiler.AddReference(typeof(PostProcessStack).Assembly.Location);
+            compiler.AddReference(typeof(IronRose.Scripting.IHotReloadable).Assembly.Location);
+
+            var entryAsm = Assembly.GetEntryAssembly();
+            if (entryAsm != null && !string.IsNullOrEmpty(entryAsm.Location))
+                compiler.AddReference(entryAsm.Location);
+
+            var result = compiler.CompileFromFiles(csFiles, "FrozenCode");
+            if (result.Success && result.AssemblyBytes != null)
+            {
+                Assembly.Load(result.AssemblyBytes);
+                RoseEngine.EditorDebug.Log("[Engine] FrozenCode loaded successfully");
+
+                // Add Component 메뉴 캐시 무효화
+                ImGuiInspectorPanel.InvalidateComponentTypeCache();
+                ImGuiHierarchyPanel.InvalidateComponentTypeCache();
+                SceneSerializer.InvalidateComponentTypeCache();
+            }
+            else
+            {
+                RoseEngine.EditorDebug.LogError("[Engine] FrozenCode compilation failed:");
+                foreach (var err in result.Errors)
+                    RoseEngine.EditorDebug.LogError($"  {err}");
             }
         }
 
