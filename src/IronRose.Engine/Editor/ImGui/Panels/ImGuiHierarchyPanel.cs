@@ -43,6 +43,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         private int? _renamingId;
         private string _renameBuffer = "";
         private bool _focusRenameInput;
+        private bool _renameSuppressEnter;
 
         // ── Search / Filter ──
         private string _searchFilter = "";
@@ -222,13 +223,20 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 }
 
                 ImGui.SetNextItemWidth(-1);
+                // Enter 키가 릴리스되면 suppress 해제
+                if (_renameSuppressEnter
+                    && !ImGui.IsKeyDown(ImGuiKey.Enter) && !ImGui.IsKeyDown(ImGuiKey.KeypadEnter))
+                {
+                    _renameSuppressEnter = false;
+                }
+
                 bool entered = ImGui.InputText($"##rename_{id}", ref _renameBuffer, 256,
                     ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll);
                 bool isActive = ImGui.IsItemActive();
 
-                // 매 프레임 진단 (첫 몇 프레임만 로그)
-                if (justRequested || !isActive)
-                    Debug.Log($"[DiagRename] Hierarchy InputText frame: id={id}, entered={entered}, isActive={isActive}, justRequested={justRequested}, escKey={ImGui.IsKeyPressed(ImGuiKey.Escape)}, windowFocused={ImGui.IsWindowFocused()}");
+                // 잔존 Enter 키 이벤트 무시
+                if (_renameSuppressEnter)
+                    entered = false;
 
                 if (entered)
                 {
@@ -241,7 +249,6 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 else if (!isActive && !justRequested)
                 {
                     // 포커스를 잃으면 적용
-                    Debug.LogWarning($"[DiagRename] Hierarchy InputText lost focus unexpectedly: id={id}");
                     CommitRename("focus lost");
                 }
 
@@ -507,14 +514,13 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             _renamingId = id;
             _renameBuffer = go.name;
             _focusRenameInput = true;
-            Debug.Log($"[DiagRename] Hierarchy BeginRename: id={id}, name='{go.name}'");
+            _renameSuppressEnter = ImGui.IsKeyDown(ImGuiKey.Enter) || ImGui.IsKeyDown(ImGuiKey.KeypadEnter);
         }
 
         private void CommitRename(string caller = "unknown")
         {
             if (_renamingId == null) return;
             var go = UndoUtility.FindGameObjectById(_renamingId.Value);
-            Debug.Log($"[DiagRename] Hierarchy CommitRename from '{caller}': id={_renamingId}, buffer='{_renameBuffer}'");
             if (go != null && _renameBuffer.Length > 0 && _renameBuffer != go.name)
             {
                 string oldName = go.name;
@@ -528,7 +534,6 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         private void CancelRename(string caller = "unknown")
         {
-            Debug.Log($"[DiagRename] Hierarchy CancelRename from '{caller}': id={_renamingId}");
             _renamingId = null;
         }
 

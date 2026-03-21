@@ -4,31 +4,23 @@
 - F2(Rename) 또는 Create Folder 시 이름 입력창이 뜨자마자 닫힘
 - 처음에는 정상 동작하다가 어느 순간부터 발생
 
-## 진단 로그 위치
+## 원인
+Multi-Viewport 모드에서 모달 팝업이 별도 OS 윈도우(보조 뷰포트)로 열림.
+Enter로 팝업을 확인하면, 같은 프레임에 팝업이 닫히고 보조 윈도우가 파괴됨.
+Enter key-up 이벤트가 파괴된 윈도우에 도착하여 유실 → ImGui가 Enter를 영원히 눌린 상태로 인식.
+이후 새 팝업을 열면 잔존 Enter 키 리피트로 InputText가 즉시 `enter=True` 반환 → 팝업 즉시 닫힘.
 
-### 태그: `[DiagPopup]` — Project 패널 모달 팝업
-| 파일 | 내용 |
-|------|------|
-| `EditorModal.cs` | `OpenPopup` 요청, `BeginPopupModal` 실패, 닫힘 사유(enter/confirm/cancel/esc) |
-| `ImGuiProjectPanel.cs` | F2/CreateFolder/Rename 트리거 지점 (어디서 팝업이 열렸는지) |
+## 수정 내용
 
-### 태그: `[DiagRename]` — Hierarchy 패널 인라인 리네임
-| 파일 | 내용 |
-|------|------|
-| `ImGuiHierarchyPanel.cs` | `BeginRename`, `CommitRename(caller)`, `CancelRename(caller)`, `InputText` 프레임별 상태 (isActive, justRequested, windowFocused) |
+### 근본 수정: `ImGuiInputHandler.RemoveSecondaryInput()`
+- 보조 뷰포트 파괴 시 현재 눌린 키/마우스 상태를 ImGui IO에 릴리스 이벤트로 전달
+- "stuck key" 문제를 원천 차단
 
-## 핵심 의심 포인트
-1. **포커스 빼앗김**: 다른 패널/윈도우가 포커스를 가져가면 InputText가 비활성 → CommitRename("focus lost") 호출
-2. **Escape 키 잔존**: 이전 조작의 Escape가 다음 프레임에 남아서 팝업을 즉시 닫음
-3. **중복 트리거**: F2가 여러 곳에서 동시에 처리되어 팝업이 열렸다 닫힘
+### 방어적 보험: `EditorModal.InputTextPopup()` / `ImGuiHierarchyPanel`
+- 팝업 열릴 때 Enter가 이미 눌려있으면 릴리스될 때까지 `enter` 결과 무시
+- 근본 수정이 커버하지 못하는 엣지 케이스 대비
 
-## 테스트 절차
-1. 빌드 후 실행
-2. 정상 동작할 때 F2/Create Folder를 몇 번 사용
-3. 문제가 재발하면 콘솔 로그에서 `[DiagPopup]` / `[DiagRename]` 확인
-4. 특히 `BeginPopupModal FAILED` 또는 `lost focus unexpectedly` 로그 주목
-
-## 다음 단계
-- 사용자 테스트 결과를 기반으로 로그 분석
-- 원인 확정 후 수정
-- 수정 완료 후 모든 `[DiagPopup]` / `[DiagRename]` 로그 제거
+## 수정 파일
+- `src/IronRose.Engine/Editor/ImGui/ImGuiInputHandler.cs` — RemoveSecondaryInput에 키 릴리스 전달
+- `src/IronRose.Engine/Editor/ImGui/EditorModal.cs` — _suppressEnterUntilRelease 가드
+- `src/IronRose.Engine/Editor/ImGui/Panels/ImGuiHierarchyPanel.cs` — _renameSuppressEnter 가드

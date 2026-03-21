@@ -72,14 +72,32 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         /// <summary>보조 뷰포트 윈도우의 입력 컨텍스트를 해제.</summary>
         public void RemoveSecondaryInput(IInputContext ctx)
         {
+            // 보조 윈도우가 파괴되기 전에, 현재 눌려있는 키/마우스 버튼의
+            // 릴리스 이벤트를 ImGui IO에 전달하여 "stuck key" 방지
+            var io = ImGui.GetIO();
             foreach (var kb in ctx.Keyboards)
             {
+                foreach (SilkKey key in Enum.GetValues(typeof(SilkKey)))
+                {
+                    if (key != SilkKey.Unknown && kb.IsKeyPressed(key))
+                    {
+                        var imKey = MapKey(key);
+                        if (imKey != ImGuiKey.None)
+                            io.AddKeyEvent(imKey, false);
+                    }
+                }
                 kb.KeyDown -= OnKeyDown;
                 kb.KeyUp -= OnKeyUp;
                 kb.KeyChar -= OnKeyChar;
             }
             foreach (var mouse in ctx.Mice)
             {
+                for (int i = 0; i < 5; i++)
+                {
+                    var btn = (SilkMouseButton)i;
+                    if (mouse.IsButtonPressed(btn))
+                        io.AddMouseButtonEvent(MapMouseButton(btn), false);
+                }
                 mouse.MouseDown -= OnMouseDown;
                 mouse.MouseUp -= OnMouseUp;
                 // MouseMove lambda 캡처는 -= 불가 — IInputContext.Dispose()에서 정리
