@@ -10,6 +10,7 @@
 //     SaveLastProjectPath(string): void -- 마지막 프로젝트 경로를 글로벌 설정에 저장
 //     ProjectRoot: string              -- 에셋 프로젝트 루트 절대 경로
 //     EngineRoot: string               -- 엔진 소스 루트 절대 경로
+//     ProjectName: string              -- 프로젝트 이름 (project.toml [project] name)
 //     IsProjectLoaded: bool            -- project.toml 발견 여부
 //     AssetsPath: string               -- Assets/ 절대 경로
 //     EditorAssetsPath: string         -- EditorAssets/ 절대 경로
@@ -41,6 +42,9 @@ namespace IronRose.Engine
 
         /// <summary>엔진 소스 루트 (IronRose/ 디렉토리).</summary>
         public static string EngineRoot { get; private set; } = "";
+
+        /// <summary>프로젝트 이름 (project.toml [project] name).</summary>
+        public static string ProjectName { get; private set; } = "";
 
         /// <summary>project.toml이 발견되어 프로젝트가 로드된 상태인지 여부.</summary>
         public static bool IsProjectLoaded { get; private set; } = false;
@@ -82,6 +86,13 @@ namespace IronRose.Engine
                 try
                 {
                     var table = Toml.ToModel(File.ReadAllText(tomlPath));
+                    // [project] name
+                    if (table.TryGetValue("project", out var projVal) && projVal is TomlTable projTable)
+                    {
+                        if (projTable.TryGetValue("name", out var nameVal) && nameVal is string nameStr)
+                            ProjectName = nameStr;
+                    }
+
                     var engineRelPath = "../IronRose"; // 기본값
                     if (table.TryGetValue("engine", out var engineVal) && engineVal is TomlTable engineTable)
                     {

@@ -2525,7 +2525,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 PlayModeState.Paused => " [PAUSED]",
                 _ => ""
             };
-            _window.Title = $"IronRose Editor \u2014 {scene.name}{dirty}{playState}";
+            var projectName = !string.IsNullOrEmpty(ProjectContext.ProjectName)
+                ? $" [{ProjectContext.ProjectName}]"
+                : "";
+            _window.Title = $"IronRose Editor{projectName} \u2014 {scene.name}{dirty}{playState}";
         }
 
         private void DrawPropertyWindows()
