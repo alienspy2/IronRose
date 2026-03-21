@@ -89,3 +89,4 @@ Screenshots/
 
 # Editor local state
 .rose_editor_state.toml
+.rose_last_project

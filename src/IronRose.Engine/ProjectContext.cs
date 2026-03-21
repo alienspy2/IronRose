@@ -2,10 +2,12 @@
 // @file    ProjectContext.cs
 // @brief   프로젝트 경로 컨텍스트. 에셋 프로젝트의 루트와 엔진 루트를 관리한다.
 //          project.toml에서 설정을 읽어 초기화된다.
+//          글로벌 설정(last_project 등)은 ~/.ironrose/settings.toml에 저장한다.
 // @deps    RoseEngine/Debug
 // @exports
 //   class ProjectContext (static)
 //     Initialize(string?): void        -- 프로젝트 루트 탐색 및 초기화
+//     SaveLastProjectPath(string): void -- 마지막 프로젝트 경로를 글로벌 설정에 저장
 //     ProjectRoot: string              -- 에셋 프로젝트 루트 절대 경로
 //     EngineRoot: string               -- 엔진 소스 루트 절대 경로
 //     IsProjectLoaded: bool            -- project.toml 발견 여부
@@ -17,6 +19,7 @@
 // @note    project.toml이 없으면 CWD를 프로젝트 루트로 폴백 (엔진 레포 직접 실행 케이스).
 //          Directory.Build.props의 IronRoseRoot와 engine.path 불일치 시 경고 로그 출력.
 //          A2(TomlConfig) 미완료로 Tomlyn 직접 사용 패턴 적용.
+//          하위 호환: CWD의 .rose_last_project가 있으면 settings.toml로 마이그레이션 후 삭제.
 // ------------------------------------------------------------
 using System;
 using System.IO;
@@ -45,8 +48,8 @@ namespace IronRose.Engine
         /// <summary>Assets/ 절대 경로.</summary>
         public static string AssetsPath => Path.Combine(ProjectRoot, "Assets");
 
-        /// <summary>EditorAssets/ 절대 경로.</summary>
-        public static string EditorAssetsPath => Path.Combine(ProjectRoot, "EditorAssets");
+        /// <summary>EditorAssets/ 절대 경로 (엔진 레포에서 공유).</summary>
+        public static string EditorAssetsPath => Path.Combine(EngineRoot, "EditorAssets");
 
         /// <summary>RoseCache/ 절대 경로.</summary>
         public static string CachePath => Path.Combine(ProjectRoot, "RoseCache");
@@ -103,11 +106,95 @@ namespace IronRose.Engine
             }
             else
             {
-                // project.toml이 없으면 엔진 레포 직접 실행 케이스.
-                // EngineRoot를 ProjectRoot 자신으로 폴백.
+                // project.toml이 없으면 ~/.ironrose/settings.toml에서 마지막 프로젝트 경로 시도
+                var lastProjectPath = ReadLastProjectPath();
+                if (lastProjectPath != null)
+                {
+                    Debug.Log($"[ProjectContext] Trying last project: {lastProjectPath}");
+                    Initialize(lastProjectPath);
+                    if (IsProjectLoaded) return;
+                }
+
+                // 엔진 레포 직접 실행 케이스. EngineRoot를 ProjectRoot 자신으로 폴백.
                 EngineRoot = ProjectRoot;
                 IsProjectLoaded = false;
                 Debug.Log($"[ProjectContext] No project.toml found. Fallback: ProjectRoot = EngineRoot = {ProjectRoot}");
+            }
+        }
+
+        /// <summary>글로벌 설정 디렉토리 (~/.ironrose/).</summary>
+        private static string GlobalSettingsDir =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ironrose");
+
+        /// <summary>글로벌 설정 파일 경로 (~/.ironrose/settings.toml).</summary>
+        private static string GlobalSettingsPath =>
+            Path.Combine(GlobalSettingsDir, "settings.toml");
+
+        /// <summary>레거시 설정 파일명 (하위 호환 마이그레이션용).</summary>
+        private const string LEGACY_LAST_PROJECT_FILE = ".rose_last_project";
+
+        /// <summary>
+        /// ~/.ironrose/settings.toml에서 마지막 프로젝트 경로를 읽는다.
+        /// settings.toml이 없으면 CWD의 .rose_last_project를 마이그레이션한다.
+        /// </summary>
+        private static string? ReadLastProjectPath()
+        {
+            // 1. ~/.ironrose/settings.toml에서 읽기
+            var settingsPath = GlobalSettingsPath;
+            if (File.Exists(settingsPath))
+            {
+                try
+                {
+                    var table = Toml.ToModel(File.ReadAllText(settingsPath));
+                    if (table.TryGetValue("editor", out var editorVal) && editorVal is TomlTable editorTable)
+                    {
+                        if (editorTable.TryGetValue("last_project", out var pathVal) && pathVal is string pathStr)
+                        {
+                            if (!string.IsNullOrEmpty(pathStr) && File.Exists(Path.Combine(pathStr, "project.toml")))
+                                return pathStr;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[ProjectContext] Failed to parse {settingsPath}: {ex.Message}");
+                }
+            }
+
+            // 2. 하위 호환: CWD의 .rose_last_project 마이그레이션
+            var legacyPath = Path.Combine(Directory.GetCurrentDirectory(), LEGACY_LAST_PROJECT_FILE);
+            if (File.Exists(legacyPath))
+            {
+                try
+                {
+                    var path = File.ReadAllText(legacyPath).Trim();
+                    if (!string.IsNullOrEmpty(path) && File.Exists(Path.Combine(path, "project.toml")))
+                    {
+                        SaveLastProjectPath(path);
+                        try { File.Delete(legacyPath); } catch { }
+                        Debug.Log($"[ProjectContext] Migrated legacy .rose_last_project to settings.toml");
+                        return path;
+                    }
+                }
+                catch { }
+            }
+
+            return null;
+        }
+
+        /// <summary>마지막으로 열린 프로젝트 경로를 ~/.ironrose/settings.toml에 저장한다.</summary>
+        public static void SaveLastProjectPath(string projectPath)
+        {
+            try
+            {
+                Directory.CreateDirectory(GlobalSettingsDir);
+                var content = $"[editor]\nlast_project = \"{Path.GetFullPath(projectPath).Replace("\\", "/")}\"\n";
+                File.WriteAllText(GlobalSettingsPath, content);
+                Debug.Log($"[ProjectContext] Saved last project to settings: {projectPath}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[ProjectContext] Failed to save settings: {ex.Message}");
             }
         }
 

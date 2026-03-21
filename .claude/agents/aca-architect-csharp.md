@@ -21,7 +21,7 @@ color: magenta
 
 ### 1단계: 설계 문서 분석
 
-- `./Plans/` 디렉토리에서 설계 문서를 읽는다.
+- `./plans/` 디렉토리에서 설계 문서를 읽는다.
 - 구현 단계, 기술 스택, 프로젝트 구조, 상세 설계를 파악한다.
 - 기존 코드가 있으면 현재 상태도 확인한다.
 
@@ -35,7 +35,7 @@ color: magenta
 
 ### 3단계: Phase 명세서 작성
 
-`./Plans/` 디렉토리에 phase별 명세서를 저장한다.
+`./plans/` 디렉토리에 phase별 명세서를 저장한다.
 
 파일명 형식: `phase[번호]_[영문-kebab-case-제목].md`
 - 번호는 두 자리 zero-padding (00, 01, 02, ...)
@@ -86,7 +86,7 @@ color: magenta
 
 ### 4단계: 전체 Phase 목록 작성
 
-모든 phase 명세서 작성 후, `./Plans/phase-index.md`를 생성한다.
+모든 phase 명세서 작성 후, `./plans/phase-index.md`를 생성한다.
 
 ```markdown
 # Phase Index

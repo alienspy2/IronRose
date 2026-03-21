@@ -6,6 +6,7 @@
 //          RoseEngine/SceneManager, RoseEngine/Debug, RoseEngine/Screen, RoseEngine/Application,
 //          IronRose.Rendering/GraphicsManager, IronRose.Rendering/RenderSystem,
 //          IronRose.AssetPipeline/AssetDatabase, IronRose.Engine.Editor/EditorPlayMode,
+//          IronRose.Engine.Editor/EditorState,
 //          IronRose.Engine.Editor.ImGuiEditor/ImGuiOverlay, ShaderRegistry
 // @exports
 //   class EngineCore
@@ -20,6 +21,9 @@
 // @note    ProcessEngineKeys()에서 ESC 키로 커서 잠금 임시 해제 (에디터만).
 //          UpdateImGuiInputState()에서 Game View 클릭으로 커서 잠금 재진입.
 //          InitInput()에서 Cursor.Initialize() 호출.
+//          Initialize()에서 ProjectContext 로드 후 Debug.SetLogDirectory()로 로그를 프로젝트 Logs/로 전환.
+//          EditorState.Load()는 InitEditor() 이전에 호출되어야 ImGui 레이아웃/폰트/UI스케일이 올바르게 복원됨.
+//          mid-session 프로젝트 전환은 지원하지 않음 (프로세스 = 프로젝트).
 // ------------------------------------------------------------
 using IronRose.API;
 using IronRose.AssetPipeline;
@@ -120,8 +124,17 @@ namespace IronRose.Engine
 
             ProjectContext.Initialize();
 
+            // 프로젝트 로드 성공 시 로그 경로를 프로젝트 폴더로 전환
+            if (ProjectContext.IsProjectLoaded)
+            {
+                var projectLogDir = Path.Combine(ProjectContext.ProjectRoot, "Logs");
+                RoseEngine.Debug.SetLogDirectory(projectLogDir);
+                RoseEngine.Debug.Log($"[Engine] Log directory switched to: {projectLogDir}");
+            }
+
             RoseConfig.Load();
             ProjectSettings.Load();
+            EditorState.Load();
             _window = window;
             SetWindowIcon(_window);
 

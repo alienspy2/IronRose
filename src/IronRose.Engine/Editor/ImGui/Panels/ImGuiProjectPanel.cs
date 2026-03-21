@@ -1874,7 +1874,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             var savedAssetPaths = new HashSet<string>(_selectedAssetPaths);
             var savedPrimary = _selectedAssetPath;
 
-            _root = new FolderNode { Name = "Assets", FullPath = "Assets" };
+            _root = new FolderNode { Name = "Assets", FullPath = ProjectContext.AssetsPath };
             _selectedFolder = null;
             _selectedAssetPath = null;
             _selectedAssetPaths.Clear();
@@ -1902,7 +1902,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                         child = new FolderNode
                         {
                             Name = parts[i],
-                            FullPath = string.Join("/", parts, 0, i + 1),
+                            FullPath = Path.Combine(current.FullPath, parts[i]),
                             Parent = current,
                         };
                         current.Children[parts[i]] = child;

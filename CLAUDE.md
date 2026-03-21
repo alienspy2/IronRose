@@ -22,19 +22,29 @@
 
 ---
 
+## 필수 규칙
+
+- **코드 작성/수정 전** 반드시 `doc/CodingGuide.md`를 Read 할 것.
+- **디버깅/버그 수정 전** 반드시 `doc/DebuggingGuide.md`를 Read 할 것.
+- 디버깅 로그는 반드시 `Debug.Log`(`using RoseEngine`)를 사용. `File.WriteAllText`, `File.AppendAllText` 등으로 별도 로그 파일 생성 금지.
+- 서브에이전트(aca-fix 등)에게 작업 위임 시에도 위 규칙을 프롬프트에 명시할 것.
+- **코드 수정 후 반드시 `dotnet build`로 빌드 확인.** 빌드 에러는 반드시 수정. 워닝도 가능하면 수정할 것.
+
+---
+
 ## 참조 문서
 
-코드 작성, 디버깅, 프로젝트 구조 파악 시 아래 문서를 참조할 것:
+작업 유형에 따라 해당 문서를 **반드시 먼저 Read한 뒤** 작업을 시작할 것:
 
-| 문서 | 내용 |
-|------|------|
-| [doc/CodingGuide.md](doc/CodingGuide.md) | 코딩 스타일, 네이밍 컨벤션, Inspector 규칙, Unity와의 차이점, 디자인 테마 색상 |
-| [doc/DebuggingGuide.md](doc/DebuggingGuide.md) | 로깅 전략, 디버깅 원칙, 스크린캡처 활용, 자동화 테스트 명령 |
-| [doc/ScriptHotReloading.md](doc/ScriptHotReloading.md) | FrozenCode/LiveCode 구조, 핫 리로드, `/digest` 편입 워크플로우 |
-| [doc/ProjectStructure.md](doc/ProjectStructure.md) | 프로젝트 디렉토리 구조 |
-| [doc/RenderPipiline.md](doc/RenderPipiline.md) | 렌더링 파이프라인 |
-| [doc/DesignGuide.md](doc/DesignGuide.md) | 디자인 가이드 |
-| [doc/Worktree_PR_Guide.md](doc/Worktree_PR_Guide.md) | Worktree 기반 PR 가이드 |
+| 문서 | 언제 읽는가 |
+|------|------------|
+| [doc/CodingGuide.md](doc/CodingGuide.md) | 코드 작성/수정 시 |
+| [doc/DebuggingGuide.md](doc/DebuggingGuide.md) | 디버깅/버그 수정 시 |
+| [doc/DesignGuide.md](doc/DesignGuide.md) | UI/에디터 디자인 작업 시 |
+| [doc/ProjectStructure.md](doc/ProjectStructure.md) | 프로젝트 구조 파악 필요 시 |
+| [doc/ScriptHotReloading.md](doc/ScriptHotReloading.md) | 스크립트/핫 리로드 관련 작업 시 |
+| [doc/RenderPipiline.md](doc/RenderPipiline.md) | 렌더링 관련 작업 시 |
+| [doc/Worktree_PR_Guide.md](doc/Worktree_PR_Guide.md) | PR 생성 시 |
 
 ### 매 커밋/PR 전 확인
 - [ ] UTF-8 BOM 인코딩 확인 (C# 파일)

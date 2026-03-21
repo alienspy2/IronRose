@@ -419,6 +419,14 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             ImGui.NewFrame();
             PushCurrentFont();
 
+            // ── 프로젝트 미로드 시: startup panel만 표시 ──
+            if (!ProjectContext.IsProjectLoaded)
+            {
+                _startupPanel?.Draw();
+                PopCurrentFont();
+                return;
+            }
+
             // ── Dockspace ──
             var viewport = ImGui.GetMainViewport();
             ImGui.SetNextWindowPos(viewport.WorkPos);

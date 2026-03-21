@@ -51,16 +51,9 @@ namespace IronRose.RoseEditor
                 Debug.Log("[IronRose Editor] Reimport All requested — will clear cache on startup");
             }
 
-            // 에디터 상태 먼저 로드 (창 위치 복원용)
-            EditorState.Load();
-
             var options = WindowOptions.DefaultVulkan;
-            options.Size = new Vector2D<int>(
-                EditorState.WindowW ?? 1280,
-                EditorState.WindowH ?? 720);
-            options.Position = new Vector2D<int>(
-                EditorState.WindowX ?? 100,
-                EditorState.WindowY ?? 100);
+            options.Size = new Vector2D<int>(1280, 720);
+            options.Position = new Vector2D<int>(100, 100);
             options.Title = "IronRose Editor";
             options.UpdatesPerSecond = 60;
             options.FramesPerSecond = 60;
@@ -100,6 +93,14 @@ namespace IronRose.RoseEditor
             IronRose.API.EditorScene.CreateDefaultSceneImpl = EditorUtils.CreateDefaultScene;
 
             _engine.Initialize(_window);
+
+            // EditorState는 EngineCore.Initialize() 내부에서 로드됨
+            if (EditorState.WindowW.HasValue)
+            {
+                _window.Size = new Vector2D<int>(EditorState.WindowW.Value, EditorState.WindowH ?? 720);
+                _window.Position = new Vector2D<int>(EditorState.WindowX ?? 100, EditorState.WindowY ?? 100);
+                ValidateWindowPosition();
+            }
 
             // 에디터 UI 즉시 표시
             _engine.ShowEditor();

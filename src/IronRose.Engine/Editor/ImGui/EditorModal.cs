@@ -90,11 +90,14 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 ImGuiInputTextFlags.EnterReturnsTrue);
 
             var result = Result.None;
-            if (enter || ImGui.Button(confirmLabel))
-                result = Result.Confirmed;
-
+            bool confirmBtn = ImGui.Button(confirmLabel);
             ImGui.SameLine();
-            if (ImGui.Button($"Cancel##{popupId}_cancel") || ImGui.IsKeyPressed(ImGuiKey.Escape))
+            bool cancelBtn = ImGui.Button($"Cancel##{popupId}_cancel");
+            bool escKey = ImGui.IsKeyPressed(ImGuiKey.Escape);
+
+            if (enter || confirmBtn)
+                result = Result.Confirmed;
+            else if (cancelBtn || escKey)
                 result = Result.Cancelled;
 
             if (result != Result.None)

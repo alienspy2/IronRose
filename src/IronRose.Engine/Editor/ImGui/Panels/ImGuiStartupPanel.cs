@@ -4,21 +4,22 @@
 //          "IronRose Engine" 타이틀, New Project / Open Project 버튼을 표시한다.
 //          New Project 클릭 시 프로젝트 생성 다이얼로그를 표시하고,
 //          Open Project 클릭 시 폴더 선택 다이얼로그를 표시한다.
+//          프로젝트 선택 후에는 설정 파일에 경로를 저장하고 재시작 안내 다이얼로그를 표시한다.
 // @deps    Editor/ProjectContext, Editor/ProjectCreator,
-//          Editor/ImGui/NativeFileDialog, Editor/ImGui/Panels/IEditorPanel
+//          Editor/ImGui/NativeFileDialog
 // @exports
 //   class ImGuiStartupPanel
-//     IsOpen: bool                                    — 패널 표시 여부
 //     Draw(): void                                    — ImGui 렌더링
 //     ShowNewProjectDialog(): void                    — 외부에서 New Project 다이얼로그 표시
 //     OpenExistingProject(): void                     — 외부에서 Open Project 실행
-// @note    프로젝트 생성/열기 후 프로세스를 재시작한다 (새 CWD로).
-//          ProjectContext.IsProjectLoaded == true이면 Draw()에서 아무것도 하지 않는다.
+// @note    프로젝트 생성/열기 후 설정 파일에 경로를 저장하고, 재시작 안내 모달을 표시한 뒤
+//          사용자가 "Exit" 버튼을 누르면 Environment.Exit(0)으로 프로세스를 종료한다.
+//          ProjectContext.IsProjectLoaded == true이면 Draw()에서 welcome 화면을 건너뛴다.
 // ------------------------------------------------------------
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Numerics;
+using System.Threading.Tasks;
 using ImGuiNET;
 using IronRose.Engine.Editor.ImGuiEditor;
 using Debug = RoseEngine.Debug;
@@ -34,83 +35,82 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         private string _newProjectName = "MyGame";
         private string _newProjectPath = "";
         private string? _errorMessage;
+        private bool _waitingForDialog;
+        private bool _showRestartNotice;
+        private string? _selectedProjectPath;
 
         public void Draw()
         {
-            if (ProjectContext.IsProjectLoaded) return;
-
-            // 전체 화면 크기로 중앙 정렬된 시작 패널
-            var viewport = ImGui.GetMainViewport();
-            ImGui.SetNextWindowPos(
-                viewport.WorkPos + viewport.WorkSize * 0.5f,
-                ImGuiCond.Always,
-                new Vector2(0.5f, 0.5f));
-            ImGui.SetNextWindowSize(new Vector2(420, 320));
-
-            var flags = ImGuiWindowFlags.NoResize
-                      | ImGuiWindowFlags.NoMove
-                      | ImGuiWindowFlags.NoCollapse
-                      | ImGuiWindowFlags.NoTitleBar
-                      | ImGuiWindowFlags.NoDocking;
-
-            if (ImGui.Begin("##Startup", flags))
+            // 프로젝트 미로드 시: welcome 화면 표시
+            if (!ProjectContext.IsProjectLoaded)
             {
-                // 타이틀
-                var title = "IronRose Engine";
-                var textSize = ImGui.CalcTextSize(title);
-                ImGui.SetCursorPosX((420 - textSize.X) * 0.5f);
-                ImGui.TextColored(new Vector4(0.9f, 0.7f, 0.3f, 1.0f), title);
+                var viewport = ImGui.GetMainViewport();
+                ImGui.SetNextWindowPos(
+                    viewport.WorkPos + viewport.WorkSize * 0.5f,
+                    ImGuiCond.Always,
+                    new Vector2(0.5f, 0.5f));
+                ImGui.SetNextWindowSize(new Vector2(420, 320));
 
-                ImGui.Spacing();
-                ImGui.Separator();
-                ImGui.Spacing();
-                ImGui.Spacing();
+                var flags = ImGuiWindowFlags.NoResize
+                          | ImGuiWindowFlags.NoMove
+                          | ImGuiWindowFlags.NoCollapse
+                          | ImGuiWindowFlags.NoTitleBar
+                          | ImGuiWindowFlags.NoDocking;
 
-                // 설명 텍스트
-                var desc = "Create a new project or open an existing one.";
-                var descSize = ImGui.CalcTextSize(desc);
-                ImGui.SetCursorPosX((420 - descSize.X) * 0.5f);
-                ImGui.TextDisabled(desc);
-
-                ImGui.Spacing();
-                ImGui.Spacing();
-                ImGui.Spacing();
-
-                // 버튼
-                float buttonWidth = 220;
-                float buttonHeight = 40;
-
-                ImGui.SetCursorPosX((420 - buttonWidth) * 0.5f);
-                if (ImGui.Button("New Project", new Vector2(buttonWidth, buttonHeight)))
+                if (ImGui.Begin("##Startup", flags))
                 {
-                    ShowNewProjectDialog();
-                }
+                    var title = "IronRose Engine";
+                    var textSize = ImGui.CalcTextSize(title);
+                    ImGui.SetCursorPosX((420 - textSize.X) * 0.5f);
+                    ImGui.TextColored(new Vector4(0.9f, 0.7f, 0.3f, 1.0f), title);
 
-                ImGui.Spacing();
-                ImGui.SetCursorPosX((420 - buttonWidth) * 0.5f);
-                if (ImGui.Button("Open Project", new Vector2(buttonWidth, buttonHeight)))
-                {
-                    OpenExistingProject();
-                }
+                    ImGui.Spacing();
+                    ImGui.Separator();
+                    ImGui.Spacing();
+                    ImGui.Spacing();
 
-                ImGui.Spacing();
-                ImGui.Spacing();
-                ImGui.Spacing();
+                    var desc = "Create a new project or open an existing one.";
+                    var descSize = ImGui.CalcTextSize(desc);
+                    ImGui.SetCursorPosX((420 - descSize.X) * 0.5f);
+                    ImGui.TextDisabled(desc);
 
-                // 에러 메시지 표시
-                if (_errorMessage != null)
-                {
-                    ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1.0f, 0.3f, 0.3f, 1.0f));
-                    var errSize = ImGui.CalcTextSize(_errorMessage);
-                    ImGui.SetCursorPosX((420 - errSize.X) * 0.5f);
-                    ImGui.TextWrapped(_errorMessage);
-                    ImGui.PopStyleColor();
+                    ImGui.Spacing();
+                    ImGui.Spacing();
+                    ImGui.Spacing();
+
+                    float buttonWidth = 220;
+                    float buttonHeight = 40;
+
+                    ImGui.SetCursorPosX((420 - buttonWidth) * 0.5f);
+                    if (ImGui.Button("New Project", new Vector2(buttonWidth, buttonHeight)))
+                        ShowNewProjectDialog();
+
+                    ImGui.Spacing();
+                    ImGui.SetCursorPosX((420 - buttonWidth) * 0.5f);
+                    if (ImGui.Button("Open Project", new Vector2(buttonWidth, buttonHeight)))
+                        OpenExistingProject();
+
+                    ImGui.Spacing();
+                    ImGui.Spacing();
+                    ImGui.Spacing();
+
+                    if (_errorMessage != null)
+                    {
+                        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1.0f, 0.3f, 0.3f, 1.0f));
+                        var errSize = ImGui.CalcTextSize(_errorMessage);
+                        ImGui.SetCursorPosX((420 - errSize.X) * 0.5f);
+                        ImGui.TextWrapped(_errorMessage);
+                        ImGui.PopStyleColor();
+                    }
                 }
+                ImGui.End();
             }
-            ImGui.End();
 
+            // New Project 다이얼로그는 프로젝트 로드 여부와 무관하게 표시
             if (_showNewProjectDialog)
                 DrawNewProjectDialog();
+
+            DrawRestartNoticeDialog();
         }
 
         /// <summary>New Project 다이얼로그를 표시합니다.</summary>
@@ -125,19 +125,25 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         /// <summary>폴더 선택 다이얼로그를 열어 기존 프로젝트를 엽니다.</summary>
         public void OpenExistingProject()
         {
+            if (_waitingForDialog) return;
             _errorMessage = null;
-            var folder = NativeFileDialog.PickFolder("Open Project");
-            if (string.IsNullOrEmpty(folder)) return;
+            _waitingForDialog = true;
 
-            // project.toml이 있는지 확인
-            if (!File.Exists(Path.Combine(folder, "project.toml")))
+            Task.Run(() =>
             {
-                _errorMessage = "Selected folder does not contain a project.toml file.";
-                Debug.LogWarning($"[StartupPanel] Not a valid project: {folder}");
-                return;
-            }
+                var folder = NativeFileDialog.PickFolder("Open Project");
+                _waitingForDialog = false;
+                if (string.IsNullOrEmpty(folder)) return;
 
-            RestartWithProject(folder);
+                if (!File.Exists(Path.Combine(folder, "project.toml")))
+                {
+                    _errorMessage = "Selected folder does not contain a project.toml file.";
+                    Debug.LogWarning($"[StartupPanel] Not a valid project: {folder}");
+                    return;
+                }
+
+                SetProjectAndNotifyRestart(folder);
+            });
         }
 
         private void DrawNewProjectDialog()
@@ -159,11 +165,17 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 ImGui.SetNextItemWidth(-80);
                 ImGui.InputText("##path", ref _newProjectPath, 1024);
                 ImGui.SameLine();
-                if (ImGui.Button("Browse...", new Vector2(70, 0)))
+                if (ImGui.Button("Browse...", new Vector2(70, 0)) && !_waitingForDialog)
                 {
-                    var result = NativeFileDialog.PickFolder("Select Location", _newProjectPath);
-                    if (result != null)
-                        _newProjectPath = result;
+                    _waitingForDialog = true;
+                    var initialPath = _newProjectPath;
+                    Task.Run(() =>
+                    {
+                        var result = NativeFileDialog.PickFolder("Select Location", initialPath);
+                        _waitingForDialog = false;
+                        if (result != null)
+                            _newProjectPath = result;
+                    });
                 }
 
                 ImGui.Spacing();
@@ -196,7 +208,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     {
                         _showNewProjectDialog = false;
                         _errorMessage = null;
-                        RestartWithProject(fullPath);
+                        SetProjectAndNotifyRestart(fullPath);
                     }
                     else
                     {
@@ -226,32 +238,42 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             ImGui.End();
         }
 
-        /// <summary>지정한 프로젝트 디렉토리에서 프로세스를 재시작합니다.</summary>
-        private static void RestartWithProject(string projectDir)
+        /// <summary>프로젝트 경로를 설정 파일에 저장하고 재시작 안내를 표시합니다.</summary>
+        private void SetProjectAndNotifyRestart(string projectDir)
         {
-            Debug.Log($"[StartupPanel] Restarting with project: {projectDir}");
+            Debug.Log($"[StartupPanel] Project selected: {projectDir}");
+            ProjectContext.SaveLastProjectPath(projectDir);
+            _selectedProjectPath = projectDir;
+            _showRestartNotice = true;
+        }
 
-            var exePath = Environment.ProcessPath;
-            if (string.IsNullOrEmpty(exePath))
-            {
-                Debug.LogError("[StartupPanel] Cannot determine process path for restart.");
-                return;
-            }
+        private void DrawRestartNoticeDialog()
+        {
+            if (!_showRestartNotice) return;
 
-            try
+            ImGui.OpenPopup("##RestartNotice");
+            var center = ImGui.GetMainViewport().GetCenter();
+            ImGui.SetNextWindowPos(center, ImGuiCond.Appearing, new Vector2(0.5f, 0.5f));
+            ImGui.SetNextWindowSize(new Vector2(400, 160));
+
+            if (ImGui.BeginPopupModal("##RestartNotice", ref _showRestartNotice,
+                ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove))
             {
-                var startInfo = new ProcessStartInfo
+                ImGui.Spacing();
+                ImGui.TextWrapped("Project has been set. Please restart the editor.");
+                ImGui.Spacing();
+                ImGui.TextDisabled(_selectedProjectPath ?? "");
+                ImGui.Spacing();
+                ImGui.Separator();
+                ImGui.Spacing();
+
+                float buttonWidth = 120;
+                ImGui.SetCursorPosX((400 - buttonWidth) * 0.5f);
+                if (ImGui.Button("Exit", new Vector2(buttonWidth, 0)))
                 {
-                    FileName = exePath,
-                    WorkingDirectory = projectDir,
-                    UseShellExecute = false,
-                };
-                Process.Start(startInfo);
-                Environment.Exit(0);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[StartupPanel] Restart failed: {ex.Message}");
+                    Environment.Exit(0);
+                }
+                ImGui.EndPopup();
             }
         }
     }

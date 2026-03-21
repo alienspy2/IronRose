@@ -1,7 +1,8 @@
 ﻿// ------------------------------------------------------------
 // @file    ProjectSettings.cs
 // @brief   프로젝트 전역 설정 (rose_projectSettings.toml).
-//          활성 렌더러 프로파일, 빌드 시작 씬, 외부 스크립트 에디터 경로 등을 관리.
+//          활성 렌더러 프로파일, 빌드 시작 씬, 외부 스크립트 에디터 경로, 캐시 설정 등을 관리.
+//          [renderer], [build], [editor], [cache] 섹션을 읽고 쓴다.
 // @deps    IronRose.Engine/ProjectContext, IronRose.Engine.Editor/EditorState,
 //          RoseEngine/Debug, Tomlyn
 // @exports
@@ -9,10 +10,14 @@
 //     ActiveRendererProfileGuid: string?        — 활성 렌더러 프로파일 GUID
 //     StartScenePath: string?                   — Standalone 빌드 시작 씬 경로
 //     ExternalScriptEditor: string              — 외부 스크립트 에디터 (기본: "code")
+//     DontUseCache: bool                        — 캐시 사용 안 함 플래그
+//     DontUseCompressTexture: bool              — 텍스처 압축 사용 안 함 플래그
+//     ForceClearCache: bool                     — 캐시 강제 삭제 플래그
 //     Load(): void                              — 설정 파일 로드 + EditorState 레거시 마이그레이션
 //     Save(): void                              — 설정 파일 저장
 // @note    FindOrCreatePath()는 ProjectContext.ProjectRoot를 기반으로 파일 경로를 결정한다.
 //          Load() 시 EditorState.ActiveRendererProfileGuid 레거시 값을 자동 마이그레이션한다.
+//          [cache] 섹션은 기존 rose_config.toml에서 통합되었다.
 // ------------------------------------------------------------
 using System;
 using System.IO;
@@ -24,7 +29,8 @@ namespace IronRose.Engine
 {
     /// <summary>
     /// Project-wide settings (rose_projectSettings.toml).
-    /// 프로젝트 루트(rose_config.toml 옆)에 저장되며 버전 관리 가능.
+    /// 프로젝트 루트에 저장되며 버전 관리 가능.
+    /// [renderer], [build], [editor], [cache] 섹션을 포함한다.
     /// </summary>
     public static class ProjectSettings
     {
@@ -39,11 +45,24 @@ namespace IronRose.Engine
         /// <summary>외부 스크립트 에디터 경로 (기본: "code").</summary>
         public static string ExternalScriptEditor { get; set; } = "code";
 
+        /// <summary>캐시 사용을 비활성화합니다.</summary>
+        public static bool DontUseCache { get; set; }
+
+        /// <summary>텍스처 압축을 비활성화합니다.</summary>
+        public static bool DontUseCompressTexture { get; set; }
+
+        /// <summary>캐시를 강제로 삭제합니다.</summary>
+        public static bool ForceClearCache { get; set; }
+
         private static string FindOrCreatePath() =>
             Path.Combine(ProjectContext.ProjectRoot, FileName);
 
         public static void Load()
         {
+            // Load() 이전에 프로그래밍 방식으로 설정된 값을 보존한다.
+            // (예: Reimport All에서 RoseConfig.EnableForceClearCache() 호출)
+            var preForceClear = ForceClearCache;
+
             var path = FindOrCreatePath();
             if (File.Exists(path))
             {
@@ -68,6 +87,15 @@ namespace IronRose.Engine
                             && ve is string se && !string.IsNullOrEmpty(se))
                             ExternalScriptEditor = se;
                     }
+                    if (table.TryGetValue("cache", out var cv) && cv is TomlTable cache)
+                    {
+                        if (cache.TryGetValue("dont_use_cache", out var vc1) && vc1 is bool bc1)
+                            DontUseCache = bc1;
+                        if (cache.TryGetValue("dont_use_compress_texture", out var vc2) && vc2 is bool bc2)
+                            DontUseCompressTexture = bc2;
+                        if (cache.TryGetValue("force_clear_cache", out var vc3) && vc3 is bool bc3)
+                            ForceClearCache = bc3;
+                    }
                     Debug.Log($"[ProjectSettings] Loaded: {path}");
                 }
                 catch (Exception ex)
@@ -75,6 +103,10 @@ namespace IronRose.Engine
                     Debug.LogWarning($"[ProjectSettings] Failed to load {path}: {ex.Message}");
                 }
             }
+
+            // 프로그래밍 방식으로 활성화된 ForceClearCache는 파일 값보다 우선한다.
+            if (preForceClear)
+                ForceClearCache = true;
 
             // 마이그레이션: EditorState에 저장된 레거시 값 이전
             if (string.IsNullOrEmpty(ActiveRendererProfileGuid))
@@ -104,6 +136,11 @@ namespace IronRose.Engine
 
                 toml += "\n[editor]\n";
                 toml += $"external_script_editor = \"{ExternalScriptEditor}\"\n";
+
+                toml += "\n[cache]\n";
+                toml += $"dont_use_cache = {DontUseCache.ToString().ToLowerInvariant()}\n";
+                toml += $"dont_use_compress_texture = {DontUseCompressTexture.ToString().ToLowerInvariant()}\n";
+                toml += $"force_clear_cache = {ForceClearCache.ToString().ToLowerInvariant()}\n";
 
                 File.WriteAllText(path, toml);
             }

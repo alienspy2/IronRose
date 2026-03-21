@@ -2,6 +2,7 @@
 bin/
 obj/
 RoseCache/
+Logs/
 
 # Editor state (local)
 .rose_editor_state.toml
