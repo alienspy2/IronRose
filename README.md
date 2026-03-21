@@ -18,6 +18,12 @@
 
 ---
 
+## 🗺️ Roadmap
+
+<p align="center">
+  <img src="engine_roadmap.svg" alt="IronRose Roadmap" width="680"/>
+</p>
+
 ## 📸 스크린샷
 
 <p align="center">
