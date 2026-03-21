@@ -27,6 +27,7 @@
 - mid-session 프로젝트 전환은 더 이상 지원하지 않음. 프로젝트 변경은 반드시 프로세스 재시작을 통해서만 이루어짐.
 - `NativeFileDialog.PickFolder()`는 `Task.Run()`에서 비동기 호출됨. `_waitingForDialog` 플래그로 중복 호출 방지.
 - `DrawRestartNoticeDialog()`는 `Draw()` 끝에서 호출되어, New Project 다이얼로그와 동시에 표시 가능 (New Project 다이얼로그는 닫힌 후 모달이 뜸).
+- `Environment.Exit(0)` 호출 전에 반드시 `NativeFileDialog.KillRunning()`을 호출해야 함. Linux에서 zenity/kdialog는 독립 프로세스로 실행되므로, .NET 런타임 종료 시 자동으로 종료되지 않아 좀비 프로세스가 남을 수 있음.
 
 ## 사용하는 외부 라이브러리
 - ImGuiNET: ImGui 바인딩 (모달 팝업, 버튼, 텍스트 등)

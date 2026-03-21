@@ -26,6 +26,34 @@ namespace IronRose.Engine.Editor.ImGuiEditor
     /// </summary>
     public static class NativeFileDialog
     {
+        /// <summary>현재 실행 중인 네이티브 다이얼로그 프로세스 (zenity/kdialog).</summary>
+        private static readonly object _processLock = new();
+        private static Process? _runningProcess;
+
+        /// <summary>
+        /// 실행 중인 네이티브 다이얼로그 프로세스가 있다면 강제 종료합니다.
+        /// Environment.Exit() 호출 전에 호출하여 좀비 프로세스를 방지합니다.
+        /// </summary>
+        public static void KillRunning()
+        {
+            lock (_processLock)
+            {
+                if (_runningProcess != null)
+                {
+                    try
+                    {
+                        if (!_runningProcess.HasExited)
+                            _runningProcess.Kill();
+                    }
+                    catch
+                    {
+                        // 프로세스가 이미 종료되었거나 접근 불가 — 무시
+                    }
+                    _runningProcess = null;
+                }
+            }
+        }
+
         /// <summary>파일 저장 다이얼로그. 취소 시 null.</summary>
         public static string? SaveFileDialog(
             string title = "Save Scene",
@@ -187,13 +215,24 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 using var process = Process.Start(psi);
                 if (process == null) return null;
 
-                var output = process.StandardOutput.ReadToEnd().Trim();
-                process.WaitForExit(30000);
+                lock (_processLock)
+                    _runningProcess = process;
 
-                if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(output))
-                    return null;
+                try
+                {
+                    var output = process.StandardOutput.ReadToEnd().Trim();
+                    process.WaitForExit(30000);
 
-                return output;
+                    if (process.ExitCode != 0 || string.IsNullOrWhiteSpace(output))
+                        return null;
+
+                    return output;
+                }
+                finally
+                {
+                    lock (_processLock)
+                        _runningProcess = null;
+                }
             }
             catch
             {

@@ -35,12 +35,20 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         private string _newProjectName = "MyGame";
         private string _newProjectPath = "";
         private string? _errorMessage;
-        private bool _waitingForDialog;
+        private volatile bool _waitingForDialog;
         private bool _showRestartNotice;
         private string? _selectedProjectPath;
 
+        // 백그라운드 스레드 → 메인 스레드 전달용 (volatile)
+        private volatile string? _pendingBrowsePath;
+        private volatile string? _pendingOpenProjectPath;
+        private volatile string? _pendingErrorFromOpen;
+
         public void Draw()
         {
+            // 백그라운드 스레드 결과를 메인 스레드에서 적용
+            DrainPendingResults();
+
             // 프로젝트 미로드 시: welcome 화면 표시
             if (!ProjectContext.IsProjectLoaded)
             {
@@ -132,17 +140,19 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             Task.Run(() =>
             {
                 var folder = NativeFileDialog.PickFolder("Open Project");
-                _waitingForDialog = false;
-                if (string.IsNullOrEmpty(folder)) return;
-
-                if (!File.Exists(Path.Combine(folder, "project.toml")))
+                if (!string.IsNullOrEmpty(folder))
                 {
-                    _errorMessage = "Selected folder does not contain a project.toml file.";
-                    Debug.LogWarning($"[StartupPanel] Not a valid project: {folder}");
-                    return;
+                    if (!File.Exists(Path.Combine(folder, "project.toml")))
+                    {
+                        _pendingErrorFromOpen = "Selected folder does not contain a project.toml file.";
+                        Debug.LogWarning($"[StartupPanel] Not a valid project: {folder}");
+                    }
+                    else
+                    {
+                        _pendingOpenProjectPath = folder;
+                    }
                 }
-
-                SetProjectAndNotifyRestart(folder);
+                _waitingForDialog = false;
             });
         }
 
@@ -172,9 +182,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     Task.Run(() =>
                     {
                         var result = NativeFileDialog.PickFolder("Select Location", initialPath);
-                        _waitingForDialog = false;
                         if (result != null)
-                            _newProjectPath = result;
+                            _pendingBrowsePath = result;
+                        _waitingForDialog = false;
                     });
                 }
 
@@ -208,6 +218,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     {
                         _showNewProjectDialog = false;
                         _errorMessage = null;
+                        NativeFileDialog.KillRunning();
                         SetProjectAndNotifyRestart(fullPath);
                     }
                     else
@@ -247,6 +258,31 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             _showRestartNotice = true;
         }
 
+        /// <summary>백그라운드 스레드에서 설정된 결과를 메인 스레드에서 적용합니다.</summary>
+        private void DrainPendingResults()
+        {
+            var browsePath = _pendingBrowsePath;
+            if (browsePath != null)
+            {
+                _newProjectPath = browsePath;
+                _pendingBrowsePath = null;
+            }
+
+            var openPath = _pendingOpenProjectPath;
+            if (openPath != null)
+            {
+                _pendingOpenProjectPath = null;
+                SetProjectAndNotifyRestart(openPath);
+            }
+
+            var openError = _pendingErrorFromOpen;
+            if (openError != null)
+            {
+                _errorMessage = openError;
+                _pendingErrorFromOpen = null;
+            }
+        }
+
         private void DrawRestartNoticeDialog()
         {
             if (!_showRestartNotice) return;
@@ -271,6 +307,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 ImGui.SetCursorPosX((400 - buttonWidth) * 0.5f);
                 if (ImGui.Button("Exit", new Vector2(buttonWidth, 0)))
                 {
+                    NativeFileDialog.KillRunning();
                     Environment.Exit(0);
                 }
                 ImGui.EndPopup();
