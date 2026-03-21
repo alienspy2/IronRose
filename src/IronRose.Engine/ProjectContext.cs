@@ -48,8 +48,8 @@ namespace IronRose.Engine
         /// <summary>Assets/ 절대 경로.</summary>
         public static string AssetsPath => Path.Combine(ProjectRoot, "Assets");
 
-        /// <summary>EditorAssets/ 절대 경로 (엔진 레포에서 공유).</summary>
-        public static string EditorAssetsPath => Path.Combine(EngineRoot, "EditorAssets");
+        /// <summary>EditorAssets/ 절대 경로 (엔진 전용, 프로젝트 접근 불가).</summary>
+        internal static string EditorAssetsPath => Path.Combine(EngineRoot, "EditorAssets");
 
         /// <summary>RoseCache/ 절대 경로.</summary>
         public static string CachePath => Path.Combine(ProjectRoot, "RoseCache");
