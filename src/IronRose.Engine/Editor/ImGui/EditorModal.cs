@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Numerics;
 using ImGuiNET;
+using Debug = RoseEngine.Debug;
 
 namespace IronRose.Engine.Editor.ImGuiEditor
 {
@@ -11,6 +12,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         // ── Alert queue ──
         private static readonly Queue<string> _alertQueue = new();
         private static bool _alertOpen;
+
+        // ── Diagnostic tracking ──
+        private static string? _lastOpenedPopupId;
 
         /// <summary>
         /// 알림 메시지를 큐에 추가한다. 다음 프레임부터 모달로 표시된다.
@@ -76,18 +80,33 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         {
             if (open)
             {
+                Debug.Log($"[DiagPopup] OpenPopup requested: '{popupId}'");
                 ImGui.OpenPopup(popupId);
                 open = false;
             }
             if (!ImGui.BeginPopupModal(popupId, ImGuiWindowFlags.AlwaysAutoResize))
+            {
+                // 팝업이 열려야 하는데 열리지 않은 경우만 로그 (매 프레임 노이즈 방지)
+                if (open == false && _lastOpenedPopupId == popupId)
+                {
+                    Debug.LogWarning($"[DiagPopup] BeginPopupModal FAILED for '{popupId}' — popup closed unexpectedly");
+                    _lastOpenedPopupId = null;
+                }
                 return Result.None;
+            }
+            _lastOpenedPopupId = popupId;
 
             ImGui.Text(label);
-            if (ImGui.IsWindowAppearing())
+            bool appearing = ImGui.IsWindowAppearing();
+            if (appearing)
+            {
+                Debug.Log($"[DiagPopup] Window appearing, setting keyboard focus: '{popupId}'");
                 ImGui.SetKeyboardFocusHere();
+            }
 
             bool enter = ImGui.InputText($"##{popupId}_input", ref buffer, 256,
                 ImGuiInputTextFlags.EnterReturnsTrue);
+            bool inputActive = ImGui.IsItemActive();
 
             var result = Result.None;
             bool confirmBtn = ImGui.Button(confirmLabel);
@@ -101,7 +120,11 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 result = Result.Cancelled;
 
             if (result != Result.None)
+            {
+                Debug.Log($"[DiagPopup] Closing '{popupId}': result={result}, enter={enter}, confirmBtn={confirmBtn}, cancelBtn={cancelBtn}, escKey={escKey}, inputActive={inputActive}");
+                _lastOpenedPopupId = null;
                 ImGui.CloseCurrentPopup();
+            }
 
             ImGui.EndPopup();
             return result;

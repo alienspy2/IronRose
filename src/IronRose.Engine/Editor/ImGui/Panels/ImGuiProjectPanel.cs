@@ -11,6 +11,7 @@ using IronRose.AssetPipeline;
 using Tomlyn.Model;
 using IronRose.Engine.Editor;
 using RoseEngine;
+using Debug = RoseEngine.Debug;
 using Vector2 = System.Numerics.Vector2;
 
 namespace IronRose.Engine.Editor.ImGuiEditor.Panels
@@ -259,6 +260,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                             _renameFolderTarget = _selectedFolder;
                             _renameFolderName = _selectedFolder.Name;
                             _openRenameFolderPopup = true;
+                            Debug.Log($"[DiagPopup] Project F2 rename folder: '{_selectedFolder.Name}'");
                         }
 
                         // Ctrl+V → 선택된 폴더에 에셋 붙여넣기
@@ -279,6 +281,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                             _createFolderTarget = _selectedFolder ?? _root;
                             _openCreateFolderPopup = true;
                             _newFolderName = "New Folder";
+                            Debug.Log($"[DiagPopup] Project Create Folder from context menu, target='{_createFolderTarget?.Name}'");
                         }
                         if (ImGui.MenuItem("Open Containing Folder"))
                         {
@@ -411,6 +414,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                                 _renameAssetPath = _selectedAssetPath;
                                 _renameAssetName = Path.GetFileNameWithoutExtension(_selectedAssetPath);
                                 _openRenameAssetPopup = true;
+                                Debug.Log($"[DiagPopup] Project F2 rename asset (list): '{_selectedAssetPath}'");
                             }
 
                             // Ctrl+C / X / V — 에셋 복사·잘라내기·붙여넣기
@@ -462,6 +466,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                                     _createFolderTarget = _selectedFolder;
                                     _openCreateFolderPopup = true;
                                     _newFolderName = "New Folder";
+                                    Debug.Log($"[DiagPopup] Project Create Folder from asset context, target='{_selectedFolder?.Name}'");
                                 }
                                 if (ImGui.MenuItem("Material"))
                                 {
@@ -823,6 +828,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     _renameAssetPath = asset.FullPath;
                     _renameAssetName = Path.GetFileNameWithoutExtension(asset.FullPath);
                     _openRenameAssetPopup = true;
+                    Debug.Log($"[DiagPopup] Project Rename Asset from context: '{asset.FullPath}'");
                 }
                 ImGui.Separator();
                 if (ImGui.MenuItem("Delete"))
@@ -1092,6 +1098,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                         _createFolderTarget = node;
                         _openCreateFolderPopup = true;
                         _newFolderName = "New Folder";
+                        Debug.Log($"[DiagPopup] Project Create Folder from folder context, target='{node.Name}'");
                     }
                     if (ImGui.MenuItem("Material"))
                     {
@@ -1124,6 +1131,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     _renameFolderTarget = node;
                     _renameFolderName = node.Name;
                     _openRenameFolderPopup = true;
+                    Debug.Log($"[DiagPopup] Project Rename Folder from context: '{node.Name}'");
                 }
                 if (ImGui.MenuItem("Delete Folder"))
                 {
@@ -2134,6 +2142,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     _renameAssetPath = _selectedAssetPath;
                     _renameAssetName = Path.GetFileNameWithoutExtension(_selectedAssetPath);
                     _openRenameAssetPopup = true;
+                    Debug.Log($"[DiagPopup] Project F2 rename asset (grid): '{_selectedAssetPath}'");
                 }
 
                 // Keyboard: Ctrl+C / X / V — 에셋 복사·잘라내기·붙여넣기

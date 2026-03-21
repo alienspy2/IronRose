@@ -224,19 +224,25 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 ImGui.SetNextItemWidth(-1);
                 bool entered = ImGui.InputText($"##rename_{id}", ref _renameBuffer, 256,
                     ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll);
+                bool isActive = ImGui.IsItemActive();
+
+                // 매 프레임 진단 (첫 몇 프레임만 로그)
+                if (justRequested || !isActive)
+                    Debug.Log($"[DiagRename] Hierarchy InputText frame: id={id}, entered={entered}, isActive={isActive}, justRequested={justRequested}, escKey={ImGui.IsKeyPressed(ImGuiKey.Escape)}, windowFocused={ImGui.IsWindowFocused()}");
 
                 if (entered)
                 {
-                    CommitRename();
+                    CommitRename("Enter key");
                 }
                 else if (ImGui.IsKeyPressed(ImGuiKey.Escape))
                 {
-                    CancelRename();
+                    CancelRename("Escape key");
                 }
-                else if (!ImGui.IsItemActive() && !justRequested)
+                else if (!isActive && !justRequested)
                 {
                     // 포커스를 잃으면 적용
-                    CommitRename();
+                    Debug.LogWarning($"[DiagRename] Hierarchy InputText lost focus unexpectedly: id={id}");
+                    CommitRename("focus lost");
                 }
 
                 // rename 모드에서는 자식 노드 렌더링만 계속
@@ -501,12 +507,14 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             _renamingId = id;
             _renameBuffer = go.name;
             _focusRenameInput = true;
+            Debug.Log($"[DiagRename] Hierarchy BeginRename: id={id}, name='{go.name}'");
         }
 
-        private void CommitRename()
+        private void CommitRename(string caller = "unknown")
         {
             if (_renamingId == null) return;
             var go = UndoUtility.FindGameObjectById(_renamingId.Value);
+            Debug.Log($"[DiagRename] Hierarchy CommitRename from '{caller}': id={_renamingId}, buffer='{_renameBuffer}'");
             if (go != null && _renameBuffer.Length > 0 && _renameBuffer != go.name)
             {
                 string oldName = go.name;
@@ -518,8 +526,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             _renamingId = null;
         }
 
-        private void CancelRename()
+        private void CancelRename(string caller = "unknown")
         {
+            Debug.Log($"[DiagRename] Hierarchy CancelRename from '{caller}': id={_renamingId}");
             _renamingId = null;
         }
 
