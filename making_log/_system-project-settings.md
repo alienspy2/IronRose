@@ -35,6 +35,7 @@
 - **ForceClearCache 프로그래밍 오버라이드**: Reimport All 시 Program.cs에서 `RoseConfig.EnableForceClearCache()`를 ProjectSettings.Load() 이전에 호출함. Load()에서 이 값이 덮어쓰이지 않도록 보존 로직이 있음.
 - **초기화 순서**: EngineCore.Initialize()에서 RoseConfig.Load() -> ProjectSettings.Load() 순서. RoseConfig.Load()는 [editor] 섹션만 읽고, ProjectSettings.Load()가 [cache] 포함 전체를 읽음.
 - **rose_config.toml은 아직 사용 중**: EnableEditor 설정을 위해 RoseConfig.Load()에서 여전히 읽음. [cache] 섹션만 rose_projectSettings.toml로 이관된 상태.
+- **ActiveRendererProfileGuid 자동 수정**: `EngineCore.EnsureDefaultRendererProfile()`에서 저장된 GUID로 프로파일 로드가 실패하면, Default.renderer를 fallback으로 로드하고 그 GUID를 ProjectSettings에 자동 저장한다. 템플릿의 `active_profile_guid`는 빈 문자열이어야 한다 (하드코딩된 GUID 금지).
 
 ## 사용하는 외부 라이브러리
 - Tomlyn: TOML 파싱 (`Toml.ToModel()`, `TomlTable`)
