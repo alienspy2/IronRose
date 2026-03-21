@@ -24,6 +24,7 @@ temp-hot/
 # User-specific files
 *.user
 *.suo
+*.code-workspace
 *.userosscache
 *.sln.docstates
 

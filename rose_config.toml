@@ -1,6 +1,0 @@
-# RoseEngine Configuration
-
-[cache]
-dont_use_cache = false
-dont_use_compress_texture = false
-force_clear_cache = false
