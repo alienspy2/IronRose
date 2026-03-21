@@ -1,5 +1,25 @@
-using Tomlyn;
+// ------------------------------------------------------------
+// @file    RoseMetadata.cs
+// @brief   .rose 메타데이터 파일의 로드/저장을 담당한다. 에셋의 GUID, 버전,
+//          라벨, 임포터 설정, 서브에셋 목록을 관리한다.
+// @deps    IronRose.Engine/TomlConfig, IronRose.Engine/TomlConfigArray,
+//          Tomlyn.Model (InferImporter가 TomlTable/TomlArray 직접 사용)
+// @exports
+//   class SubAssetEntry
+//     name, type, index, guid                                   — 서브에셋 엔트리 정보
+//   class RoseMetadata
+//     guid, version, labels, importer (TomlTable), subAssets    — 메타데이터 필드
+//     static OnSaved: event Action<string>                      — 저장 시 이벤트
+//     static LoadOrCreate(string): RoseMetadata                 — .rose 파일 로드 또는 생성
+//     Save(string): void                                        — .rose 파일 저장
+//     GetOrCreateSubAsset(string, string, int): SubAssetEntry  — 서브에셋 찾기/생성
+//     PruneSubAssets(HashSet<string>): void                     — 미사용 서브에셋 제거
+// @note    importer 필드 타입은 TomlTable을 유지한다 (10+ 파일에서 직접 접근).
+//          InferImporter()는 TomlTable을 직접 사용하므로 변경하지 않는다.
+//          using Tomlyn.Model은 InferImporter 때문에 유지해야 한다.
+// ------------------------------------------------------------
 using Tomlyn.Model;
+using IronRose.Engine;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -35,8 +55,9 @@ namespace IronRose.AssetPipeline
 
             if (File.Exists(rosePath))
             {
-                var toml = Toml.ToModel(File.ReadAllText(rosePath));
-                return FromToml(toml);
+                var config = TomlConfig.LoadFile(rosePath, "[RoseMetadata]");
+                if (config != null)
+                    return FromToml(config.GetRawTable());
             }
 
             var meta = new RoseMetadata();
@@ -47,8 +68,8 @@ namespace IronRose.AssetPipeline
 
         public void Save(string rosePath)
         {
-            var toml = ToToml();
-            File.WriteAllText(rosePath, Toml.FromModel(toml));
+            var config = ToConfig();
+            config.SaveToFile(rosePath);
 
             if (rosePath.EndsWith(".rose", StringComparison.OrdinalIgnoreCase))
                 OnSaved?.Invoke(rosePath[..^5]);
@@ -159,80 +180,72 @@ namespace IronRose.AssetPipeline
             };
         }
 
-        private TomlTable ToToml()
+        private TomlConfig ToConfig()
         {
-            var table = new TomlTable
-            {
-                ["guid"] = guid,
-                ["version"] = (long)version,
-            };
+            var config = TomlConfig.CreateEmpty();
+            config.SetValue("guid", guid);
+            config.SetValue("version", (long)version);
 
             if (labels != null && labels.Length > 0)
             {
                 var arr = new TomlArray();
                 foreach (var label in labels)
                     arr.Add(label);
-                table["labels"] = arr;
+                config.SetValue("labels", arr);
             }
 
             if (importer.Count > 0)
-            {
-                table["importer"] = importer;
-            }
+                config.GetRawTable()["importer"] = importer; // TomlTable 직접 삽입
 
             if (subAssets.Count > 0)
             {
-                var subArr = new TomlTableArray();
+                var subArr = new TomlConfigArray();
                 foreach (var sub in subAssets)
                 {
-                    subArr.Add(new TomlTable
-                    {
-                        ["name"] = sub.name,
-                        ["type"] = sub.type,
-                        ["index"] = (long)sub.index,
-                        ["guid"] = sub.guid,
-                    });
+                    var subConfig = TomlConfig.CreateEmpty();
+                    subConfig.SetValue("name", sub.name);
+                    subConfig.SetValue("type", sub.type);
+                    subConfig.SetValue("index", (long)sub.index);
+                    subConfig.SetValue("guid", sub.guid);
+                    subArr.Add(subConfig);
                 }
-                table["sub_assets"] = subArr;
+                config.SetArray("sub_assets", subArr);
             }
 
-            return table;
+            return config;
         }
 
         private static RoseMetadata FromToml(TomlTable table)
         {
+            var config = new TomlConfig(table); // internal 생성자 사용
             var meta = new RoseMetadata();
 
-            if (table.TryGetValue("guid", out var guidVal))
-                meta.guid = guidVal?.ToString() ?? meta.guid;
+            meta.guid = config.GetString("guid", meta.guid);
+            meta.version = config.GetInt("version", meta.version);
 
-            if (table.TryGetValue("version", out var verVal) && verVal is long v)
-                meta.version = (int)v;
-
-            if (table.TryGetValue("labels", out var labelsVal) && labelsVal is TomlArray labelsArr)
+            var labelsValues = config.GetValues("labels");
+            if (labelsValues != null)
             {
-                meta.labels = labelsArr
+                meta.labels = labelsValues
                     .Where(x => x != null)
                     .Select(x => x!.ToString()!)
                     .ToArray();
             }
 
+            // importer는 TomlTable 그대로 사용 (Phase 5까지 유지)
             if (table.TryGetValue("importer", out var impVal) && impVal is TomlTable impTable)
                 meta.importer = impTable;
 
-            if (table.TryGetValue("sub_assets", out var subVal) && subVal is TomlTableArray subArr)
+            var subArr = config.GetArray("sub_assets");
+            if (subArr != null)
             {
-                foreach (TomlTable subTable in subArr)
+                foreach (var subConfig in subArr)
                 {
                     var entry = new SubAssetEntry();
-                    if (subTable.TryGetValue("name", out var nameVal))
-                        entry.name = nameVal?.ToString() ?? "";
-                    if (subTable.TryGetValue("type", out var typeVal))
-                        entry.type = typeVal?.ToString() ?? "";
-                    if (subTable.TryGetValue("index", out var idxVal) && idxVal is long idx)
-                        entry.index = (int)idx;
-                    if (subTable.TryGetValue("guid", out var gVal))
-                        entry.guid = gVal?.ToString() ?? entry.guid;
+                    entry.name = subConfig.GetString("name", "");
+                    entry.type = subConfig.GetString("type", "");
+                    entry.index = subConfig.GetInt("index", 0);
+                    entry.guid = subConfig.GetString("guid", entry.guid);
                     meta.subAssets.Add(entry);
                 }
             }

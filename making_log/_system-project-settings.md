@@ -38,4 +38,4 @@
 - **ActiveRendererProfileGuid 자동 수정**: `EngineCore.EnsureDefaultRendererProfile()`에서 저장된 GUID로 프로파일 로드가 실패하면, Default.renderer를 fallback으로 로드하고 그 GUID를 ProjectSettings에 자동 저장한다. 템플릿의 `active_profile_guid`는 빈 문자열이어야 한다 (하드코딩된 GUID 금지).
 
 ## 사용하는 외부 라이브러리
-- Tomlyn: TOML 파싱 (`Toml.ToModel()`, `TomlTable`)
+- TomlConfig (내부): TOML 파일 로드/섹션 접근 (`LoadFile`, `GetSection`, `GetString`, `GetBool`). Save()는 문자열 직접 조합 유지.

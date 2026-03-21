@@ -1,8 +1,21 @@
-﻿using System;
+// ------------------------------------------------------------
+// @file    PostProcessProfileImporter.cs
+// @brief   .ppprofile (TOML) 파일을 PostProcessProfile로 임포트/익스포트한다.
+//          각 TOML 섹션이 이펙트(Bloom, Tonemap 등)에 대응하며
+//          enabled + 파라미터(float) 쌍으로 구성된다.
+// @deps    IronRose.Engine/TomlConfig, RoseEngine (EditorDebug, PostProcessProfile, EffectOverride),
+//          AssetPipeline/RoseMetadata
+// @exports
+//   class PostProcessProfileImporter
+//     Import(string, RoseMetadata?): PostProcessProfile?        — .ppprofile 파일에서 로드
+//     static Export(PostProcessProfile, string): void           — PostProcessProfile을 TOML로 저장
+//     static WriteDefault(string): void                         — 기본 프로파일 생성
+// @note    기존 로컬 ToFloat 메서드를 제거하고 TomlConfig.GetFloat()로 대체.
+// ------------------------------------------------------------
+using System;
 using System.IO;
 using RoseEngine;
-using Tomlyn;
-using Tomlyn.Model;
+using IronRose.Engine;
 
 namespace IronRose.AssetPipeline
 {
@@ -34,44 +47,34 @@ namespace IronRose.AssetPipeline
                 return null;
             }
 
-            try
-            {
-                var text = File.ReadAllText(path);
-                var doc = Toml.ToModel(text);
-                return ParseProfile(doc, path);
-            }
-            catch (Exception ex)
-            {
-                EditorDebug.LogError($"[PostProcessProfileImporter] Parse failed: {path} — {ex.Message}");
-                return null;
-            }
+            var config = TomlConfig.LoadFile(path, "[PostProcessProfileImporter]");
+            if (config == null) return null;
+
+            return ParseProfile(config, path);
         }
 
-        private static PostProcessProfile ParseProfile(TomlTable doc, string path)
+        private static PostProcessProfile ParseProfile(TomlConfig config, string path)
         {
             var profile = new PostProcessProfile
             {
                 name = Path.GetFileNameWithoutExtension(path),
             };
 
-            // 각 키는 이펙트 이름 (Bloom, Tonemap 등)
-            foreach (var kvp in doc)
+            foreach (var key in config.Keys)
             {
-                if (kvp.Value is not TomlTable effectTable) continue;
+                var effectSection = config.GetSection(key);
+                if (effectSection == null) continue;
 
-                var effectName = kvp.Key;
-                var ov = new EffectOverride { effectName = effectName };
+                var ov = new EffectOverride { effectName = key };
+                ov.enabled = effectSection.GetBool("enabled", false);
 
-                if (effectTable.TryGetValue("enabled", out var ev) && ev is bool eb)
-                    ov.enabled = eb;
-
-                foreach (var param in effectTable)
+                foreach (var paramKey in effectSection.Keys)
                 {
-                    if (param.Key == "enabled") continue;
-                    ov.parameters[param.Key] = ToFloat(param.Value);
+                    if (paramKey == "enabled") continue;
+                    ov.parameters[paramKey] = effectSection.GetFloat(paramKey, 0f);
                 }
 
-                profile.effects[effectName] = ov;
+                profile.effects[key] = ov;
             }
 
             return profile;
@@ -79,26 +82,21 @@ namespace IronRose.AssetPipeline
 
         public static void Export(PostProcessProfile profile, string path)
         {
-            var doc = new TomlTable();
+            var config = TomlConfig.CreateEmpty();
 
             foreach (var kvp in profile.effects)
             {
                 var ov = kvp.Value;
-                var effectTable = new TomlTable
-                {
-                    ["enabled"] = ov.enabled,
-                };
+                var effectSection = TomlConfig.CreateEmpty();
+                effectSection.SetValue("enabled", ov.enabled);
 
                 foreach (var param in ov.parameters)
-                {
-                    effectTable[param.Key] = (double)param.Value;
-                }
+                    effectSection.SetValue(param.Key, (double)param.Value);
 
-                doc[kvp.Key] = effectTable;
+                config.SetSection(kvp.Key, effectSection);
             }
 
-            var toml = Toml.FromModel(doc);
-            File.WriteAllText(path, toml);
+            config.SaveToFile(path);
             EditorDebug.Log($"[PostProcessProfileImporter] Exported: {path}");
         }
 
@@ -128,13 +126,5 @@ namespace IronRose.AssetPipeline
 
             Export(profile, path);
         }
-
-        private static float ToFloat(object? val) => val switch
-        {
-            double d => (float)d,
-            long l => l,
-            float f => f,
-            _ => 0f,
-        };
     }
 }

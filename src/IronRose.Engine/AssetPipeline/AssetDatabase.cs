@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using IronRose.Engine;
 using RoseEngine;
-using Tomlyn;
 using Tomlyn.Model;
 
 namespace IronRose.AssetPipeline
@@ -951,31 +950,30 @@ namespace IronRose.AssetPipeline
 
             try
             {
-                var tomlStr = File.ReadAllText(prefabPath);
-                TomlTable root = Toml.ToModel(tomlStr);
+                var config = TomlConfig.LoadFile(prefabPath, "[AssetDatabase]");
+                if (config == null) return;
 
                 // 1. Variant의 basePrefabGuid
-                if (root.TryGetValue("prefab", out var pVal) && pVal is TomlTable prefabTable)
+                var prefabSection = config.GetSection("prefab");
+                if (prefabSection != null)
                 {
-                    if (prefabTable.TryGetValue("basePrefabGuid", out var bgVal)
-                        && bgVal is string bg && !string.IsNullOrEmpty(bg))
-                    {
+                    var bg = prefabSection.GetString("basePrefabGuid", "");
+                    if (!string.IsNullOrEmpty(bg))
                         oldDeps.Add(bg);
-                    }
                 }
 
                 // 2. Nested prefab의 prefabGuid (gameObjects 배열)
-                if (root.TryGetValue("gameObjects", out var goVal) && goVal is TomlTableArray goArray)
+                var goArray = config.GetArray("gameObjects");
+                if (goArray != null)
                 {
-                    foreach (TomlTable goTable in goArray)
+                    foreach (var goConfig in goArray)
                     {
-                        if (goTable.TryGetValue("prefabInstance", out var piObj) && piObj is TomlTable piTable)
+                        var piSection = goConfig.GetSection("prefabInstance");
+                        if (piSection != null)
                         {
-                            if (piTable.TryGetValue("prefabGuid", out var pgVal)
-                                && pgVal is string pg && !string.IsNullOrEmpty(pg))
-                            {
+                            var pg = piSection.GetString("prefabGuid", "");
+                            if (!string.IsNullOrEmpty(pg))
                                 oldDeps.Add(pg);
-                            }
                         }
                     }
                 }

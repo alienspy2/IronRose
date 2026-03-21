@@ -3,7 +3,7 @@
 // @brief   프로젝트 경로 컨텍스트. 에셋 프로젝트의 루트와 엔진 루트를 관리한다.
 //          project.toml에서 설정을 읽어 초기화된다.
 //          글로벌 설정(last_project 등)은 ~/.ironrose/settings.toml에 저장한다.
-// @deps    RoseEngine/Debug
+// @deps    IronRose.Engine/TomlConfig, RoseEngine/Debug
 // @exports
 //   class ProjectContext (static)
 //     Initialize(string?): void        -- 프로젝트 루트 탐색 및 초기화
@@ -19,15 +19,13 @@
 //     FrozenCodePath: string           -- FrozenCode/ 절대 경로
 // @note    project.toml이 없으면 CWD를 프로젝트 루트로 폴백 (엔진 레포 직접 실행 케이스).
 //          Directory.Build.props의 IronRoseRoot와 engine.path 불일치 시 경고 로그 출력.
-//          A2(TomlConfig) 미완료로 Tomlyn 직접 사용 패턴 적용.
+//          TOML 읽기/쓰기에 TomlConfig API를 사용한다.
 //          하위 호환: CWD의 .rose_last_project가 있으면 settings.toml로 마이그레이션 후 삭제.
 //          SaveLastProjectPath()는 read-modify-write 패턴으로 기존 settings.toml의 다른 섹션을 보존한다.
 // ------------------------------------------------------------
 using System;
 using System.IO;
 using System.Xml.Linq;
-using Tomlyn;
-using Tomlyn.Model;
 using RoseEngine;
 
 namespace IronRose.Engine
@@ -84,22 +82,23 @@ namespace IronRose.Engine
             var tomlPath = Path.Combine(ProjectRoot, "project.toml");
             if (File.Exists(tomlPath))
             {
-                try
+                var config = TomlConfig.LoadFile(tomlPath, "[ProjectContext]");
+                if (config == null)
                 {
-                    var table = Toml.ToModel(File.ReadAllText(tomlPath));
-                    // [project] name
-                    if (table.TryGetValue("project", out var projVal) && projVal is TomlTable projTable)
-                    {
-                        if (projTable.TryGetValue("name", out var nameVal) && nameVal is string nameStr)
-                            ProjectName = nameStr;
-                    }
+                    EngineRoot = ProjectRoot;
+                    IsProjectLoaded = false;
+                }
+                else
+                {
+                    var project = config.GetSection("project");
+                    if (project != null)
+                        ProjectName = project.GetString("name", "");
 
-                    var engineRelPath = "../IronRose"; // 기본값
-                    if (table.TryGetValue("engine", out var engineVal) && engineVal is TomlTable engineTable)
-                    {
-                        if (engineTable.TryGetValue("path", out var pathVal) && pathVal is string pathStr)
-                            engineRelPath = pathStr;
-                    }
+                    var engineRelPath = "../IronRose";
+                    var engine = config.GetSection("engine");
+                    if (engine != null)
+                        engineRelPath = engine.GetString("path", "../IronRose");
+
                     EngineRoot = Path.GetFullPath(Path.Combine(ProjectRoot, engineRelPath));
                     IsProjectLoaded = true;
 
@@ -108,12 +107,6 @@ namespace IronRose.Engine
 
                     // Directory.Build.props와 engine.path 불일치 검증
                     ValidateBuildPropsAlignment();
-                }
-                catch (Exception ex)
-                {
-                    EditorDebug.LogWarning($"[ProjectContext] Failed to parse {tomlPath}: {ex.Message}");
-                    EngineRoot = ProjectRoot;
-                    IsProjectLoaded = false;
                 }
             }
             else
@@ -155,21 +148,16 @@ namespace IronRose.Engine
             var settingsPath = GlobalSettingsPath;
             if (File.Exists(settingsPath))
             {
-                try
+                var config = TomlConfig.LoadFile(settingsPath, "[ProjectContext]");
+                if (config != null)
                 {
-                    var table = Toml.ToModel(File.ReadAllText(settingsPath));
-                    if (table.TryGetValue("editor", out var editorVal) && editorVal is TomlTable editorTable)
+                    var editor = config.GetSection("editor");
+                    if (editor != null)
                     {
-                        if (editorTable.TryGetValue("last_project", out var pathVal) && pathVal is string pathStr)
-                        {
-                            if (!string.IsNullOrEmpty(pathStr) && File.Exists(Path.Combine(pathStr, "project.toml")))
-                                return pathStr;
-                        }
+                        var pathStr = editor.GetString("last_project", "");
+                        if (!string.IsNullOrEmpty(pathStr) && File.Exists(Path.Combine(pathStr, "project.toml")))
+                            return pathStr;
                     }
-                }
-                catch (Exception ex)
-                {
-                    EditorDebug.LogWarning($"[ProjectContext] Failed to parse {settingsPath}: {ex.Message}");
                 }
             }
 
@@ -202,34 +190,19 @@ namespace IronRose.Engine
                 Directory.CreateDirectory(GlobalSettingsDir);
                 var normalizedPath = Path.GetFullPath(projectPath).Replace("\\", "/");
 
-                // 기존 settings.toml이 있으면 읽어서 수정, 없으면 새로 생성
-                TomlTable table;
-                if (File.Exists(GlobalSettingsPath))
-                {
-                    try
-                    {
-                        table = Toml.ToModel(File.ReadAllText(GlobalSettingsPath));
-                    }
-                    catch
-                    {
-                        // 파싱 실패 시 새로 생성
-                        table = new TomlTable();
-                    }
-                }
-                else
-                {
-                    table = new TomlTable();
-                }
+                // 기존 settings.toml 로드 또는 빈 생성
+                var config = TomlConfig.LoadFile(GlobalSettingsPath) ?? TomlConfig.CreateEmpty();
 
-                // [editor] 섹션 업데이트
-                if (!table.TryGetValue("editor", out var editorVal) || editorVal is not TomlTable editorTable)
+                // [editor] 섹션 가져오기 또는 생성
+                var editor = config.GetSection("editor");
+                if (editor == null)
                 {
-                    editorTable = new TomlTable();
-                    table["editor"] = editorTable;
+                    editor = TomlConfig.CreateEmpty();
+                    config.SetSection("editor", editor);
                 }
-                editorTable["last_project"] = normalizedPath;
+                editor.SetValue("last_project", normalizedPath);
 
-                File.WriteAllText(GlobalSettingsPath, Toml.FromModel(table));
+                config.SaveToFile(GlobalSettingsPath, "[ProjectContext]");
                 EditorDebug.Log($"[ProjectContext] Saved last project to settings: {projectPath}");
             }
             catch (Exception ex)

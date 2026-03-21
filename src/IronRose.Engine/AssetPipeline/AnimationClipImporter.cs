@@ -1,9 +1,22 @@
+// ------------------------------------------------------------
+// @file    AnimationClipImporter.cs
+// @brief   .anim (TOML) 파일을 AnimationClip으로 임포트/익스포트한다.
+//          커브([[curves]])와 이벤트([[events]])를 TomlConfigArray로 처리한다.
+// @deps    IronRose.Engine/TomlConfig, IronRose.Engine/TomlConfigArray,
+//          RoseEngine (EditorDebug, AnimationClip, AnimationCurve, Keyframe,
+//          AnimationEvent, WrapMode), AssetPipeline/RoseMetadata
+// @exports
+//   class AnimationClipImporter
+//     Import(string, RoseMetadata?): AnimationClip?             — .anim 파일에서 로드
+//     static Export(AnimationClip, string): void                — AnimationClip을 TOML로 저장
+// @note    기존 로컬 ToFloat 메서드를 제거하고 TomlConfig.GetFloat()로 대체.
+//          Export 시 string_param이 null인 경우 SetValue를 호출하지 않는다.
+// ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.IO;
 using RoseEngine;
-using Tomlyn;
-using Tomlyn.Model;
+using IronRose.Engine;
 
 namespace IronRose.AssetPipeline
 {
@@ -40,72 +53,63 @@ namespace IronRose.AssetPipeline
                 return null;
             }
 
-            try
-            {
-                var text = File.ReadAllText(path);
-                var doc = Toml.ToModel(text);
-                return ParseClip(doc, path);
-            }
-            catch (Exception ex)
-            {
-                EditorDebug.LogError($"[AnimationClipImporter] Parse failed: {path} — {ex.Message}");
-                return null;
-            }
+            var config = TomlConfig.LoadFile(path, "[AnimationClipImporter]");
+            if (config == null) return null;
+
+            return ParseClip(config, path);
         }
 
-        private static AnimationClip ParseClip(TomlTable doc, string path)
+        private static AnimationClip ParseClip(TomlConfig config, string path)
         {
             var clip = new AnimationClip
             {
                 name = Path.GetFileNameWithoutExtension(path),
             };
 
-            if (doc.TryGetValue("frame_rate", out var frVal))
-                clip.frameRate = ToFloat(frVal);
-            if (doc.TryGetValue("wrap_mode", out var wmVal) && wmVal is string wmStr)
-            {
-                if (Enum.TryParse<WrapMode>(wmStr, true, out var wm))
-                    clip.wrapMode = wm;
-            }
-            if (doc.TryGetValue("length", out var lenVal))
-                clip.length = ToFloat(lenVal);
+            clip.frameRate = config.GetFloat("frame_rate", clip.frameRate);
+            var wmStr = config.GetString("wrap_mode", "");
+            if (!string.IsNullOrEmpty(wmStr) && Enum.TryParse<WrapMode>(wmStr, true, out var wm))
+                clip.wrapMode = wm;
+            clip.length = config.GetFloat("length", clip.length);
 
             // Curves
-            if (doc.TryGetValue("curves", out var curvesVal) && curvesVal is TomlTableArray curvesArr)
+            var curvesArr = config.GetArray("curves");
+            if (curvesArr != null)
             {
-                foreach (TomlTable curveTable in curvesArr)
+                foreach (var curveConfig in curvesArr)
                 {
-                    if (!curveTable.TryGetValue("path", out var pathVal) || pathVal is not string curvePath)
-                        continue;
+                    var curvePath = curveConfig.GetString("path", "");
+                    if (string.IsNullOrEmpty(curvePath)) continue;
 
                     var curve = new AnimationCurve();
-
-                    if (curveTable.TryGetValue("keys", out var keysVal) && keysVal is TomlTableArray keysArr)
+                    var keysArr = curveConfig.GetArray("keys");
+                    if (keysArr != null)
                     {
-                        foreach (TomlTable keyTable in keysArr)
+                        foreach (var keyConfig in keysArr)
                         {
-                            float time = keyTable.TryGetValue("time", out var t) ? ToFloat(t) : 0f;
-                            float value = keyTable.TryGetValue("value", out var v) ? ToFloat(v) : 0f;
-                            float inTan = keyTable.TryGetValue("in_tangent", out var it) ? ToFloat(it) : 0f;
-                            float outTan = keyTable.TryGetValue("out_tangent", out var ot) ? ToFloat(ot) : 0f;
+                            float time = keyConfig.GetFloat("time", 0f);
+                            float value = keyConfig.GetFloat("value", 0f);
+                            float inTan = keyConfig.GetFloat("in_tangent", 0f);
+                            float outTan = keyConfig.GetFloat("out_tangent", 0f);
                             curve.AddKey(new Keyframe(time, value, inTan, outTan));
                         }
                     }
-
                     clip.SetCurve(curvePath, curve);
                 }
             }
 
             // Events
-            if (doc.TryGetValue("events", out var eventsVal) && eventsVal is TomlTableArray eventsArr)
+            var eventsArr = config.GetArray("events");
+            if (eventsArr != null)
             {
-                foreach (TomlTable evtTable in eventsArr)
+                foreach (var evtConfig in eventsArr)
                 {
-                    float time = evtTable.TryGetValue("time", out var t) ? ToFloat(t) : 0f;
-                    string func = evtTable.TryGetValue("function", out var f) && f is string fs ? fs : "";
-                    float fp = evtTable.TryGetValue("float_param", out var fpv) ? ToFloat(fpv) : 0f;
-                    int ip = evtTable.TryGetValue("int_param", out var ipv) && ipv is long ipl ? (int)ipl : 0;
-                    string? sp = evtTable.TryGetValue("string_param", out var spv) && spv is string sps ? sps : null;
+                    float time = evtConfig.GetFloat("time", 0f);
+                    string func = evtConfig.GetString("function", "");
+                    float fp = evtConfig.GetFloat("float_param", 0f);
+                    int ip = evtConfig.GetInt("int_param", 0);
+                    string? sp = evtConfig.GetString("string_param", "");
+                    if (string.IsNullOrEmpty(sp)) sp = null;
 
                     clip.events.Add(new AnimationEvent(time, func)
                     {
@@ -116,7 +120,6 @@ namespace IronRose.AssetPipeline
                 }
             }
 
-            // length가 명시되지 않았으면 자동 계산
             if (clip.length <= 0f)
                 clip.RecalculateLength();
 
@@ -127,71 +130,54 @@ namespace IronRose.AssetPipeline
         /// <summary>AnimationClip을 .anim TOML 파일로 내보내기.</summary>
         public static void Export(AnimationClip clip, string path)
         {
-            var doc = new TomlTable
-            {
-                ["frame_rate"] = (double)clip.frameRate,
-                ["wrap_mode"] = clip.wrapMode.ToString(),
-                ["length"] = (double)clip.length,
-            };
+            var config = TomlConfig.CreateEmpty();
+            config.SetValue("frame_rate", (double)clip.frameRate);
+            config.SetValue("wrap_mode", clip.wrapMode.ToString());
+            config.SetValue("length", (double)clip.length);
 
             // Curves
-            var curvesArr = new TomlTableArray();
+            var curvesArr = new TomlConfigArray();
             foreach (var (curvePath, curve) in clip.curves)
             {
-                var curveTable = new TomlTable { ["path"] = curvePath };
-                var keysArr = new TomlTableArray();
+                var curveConfig = TomlConfig.CreateEmpty();
+                curveConfig.SetValue("path", curvePath);
 
+                var keysArr = new TomlConfigArray();
                 for (int i = 0; i < curve.length; i++)
                 {
                     var key = curve[i];
-                    keysArr.Add(new TomlTable
-                    {
-                        ["time"] = (double)key.time,
-                        ["value"] = (double)key.value,
-                        ["in_tangent"] = (double)key.inTangent,
-                        ["out_tangent"] = (double)key.outTangent,
-                    });
+                    var keyConfig = TomlConfig.CreateEmpty();
+                    keyConfig.SetValue("time", (double)key.time);
+                    keyConfig.SetValue("value", (double)key.value);
+                    keyConfig.SetValue("in_tangent", (double)key.inTangent);
+                    keyConfig.SetValue("out_tangent", (double)key.outTangent);
+                    keysArr.Add(keyConfig);
                 }
-
-                curveTable["keys"] = keysArr;
-                curvesArr.Add(curveTable);
+                curveConfig.SetArray("keys", keysArr);
+                curvesArr.Add(curveConfig);
             }
-            doc["curves"] = curvesArr;
+            config.SetArray("curves", curvesArr);
 
             // Events
             if (clip.events.Count > 0)
             {
-                var eventsArr = new TomlTableArray();
+                var eventsArr = new TomlConfigArray();
                 foreach (var evt in clip.events)
                 {
-                    var evtTable = new TomlTable
-                    {
-                        ["time"] = (double)evt.time,
-                        ["function"] = evt.functionName,
-                        ["float_param"] = (double)evt.floatParameter,
-                        ["int_param"] = (long)evt.intParameter,
-                    };
+                    var evtConfig = TomlConfig.CreateEmpty();
+                    evtConfig.SetValue("time", (double)evt.time);
+                    evtConfig.SetValue("function", evt.functionName);
+                    evtConfig.SetValue("float_param", (double)evt.floatParameter);
+                    evtConfig.SetValue("int_param", (long)evt.intParameter);
                     if (evt.stringParameter != null)
-                        evtTable["string_param"] = evt.stringParameter;
-                    eventsArr.Add(evtTable);
+                        evtConfig.SetValue("string_param", evt.stringParameter);
+                    eventsArr.Add(evtConfig);
                 }
-                doc["events"] = eventsArr;
+                config.SetArray("events", eventsArr);
             }
 
-            var toml = Toml.FromModel(doc);
-            File.WriteAllText(path, toml);
+            config.SaveToFile(path);
             EditorDebug.Log($"[AnimationClipImporter] Exported: {path}");
-        }
-
-        private static float ToFloat(object? val)
-        {
-            return val switch
-            {
-                double d => (float)d,
-                long l => (float)l,
-                float f => f,
-                _ => 0f,
-            };
         }
     }
 }

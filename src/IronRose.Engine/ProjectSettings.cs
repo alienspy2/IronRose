@@ -3,8 +3,8 @@
 // @brief   프로젝트 전역 설정 (rose_projectSettings.toml).
 //          활성 렌더러 프로파일, 빌드 시작 씬, 외부 스크립트 에디터 경로, 캐시 설정 등을 관리.
 //          [renderer], [build], [editor], [cache] 섹션을 읽고 쓴다.
-// @deps    IronRose.Engine/ProjectContext, IronRose.Engine.Editor/EditorState,
-//          RoseEngine/Debug, Tomlyn
+// @deps    IronRose.Engine/ProjectContext, IronRose.Engine/TomlConfig,
+//          IronRose.Engine.Editor/EditorState, RoseEngine/Debug
 // @exports
 //   static class ProjectSettings
 //     ActiveRendererProfileGuid: string?        — 활성 렌더러 프로파일 GUID
@@ -18,11 +18,10 @@
 // @note    FindOrCreatePath()는 ProjectContext.ProjectRoot를 기반으로 파일 경로를 결정한다.
 //          Load() 시 EditorState.ActiveRendererProfileGuid 레거시 값을 자동 마이그레이션한다.
 //          [cache] 섹션은 기존 rose_config.toml에서 통합되었다.
+//          TOML 읽기에 TomlConfig API를 사용한다. Save()는 문자열 직접 조합을 유지한다.
 // ------------------------------------------------------------
 using System;
 using System.IO;
-using Tomlyn;
-using Tomlyn.Model;
 using RoseEngine;
 
 namespace IronRose.Engine
@@ -66,41 +65,42 @@ namespace IronRose.Engine
             var path = FindOrCreatePath();
             if (File.Exists(path))
             {
-                try
+                var config = TomlConfig.LoadFile(path, "[ProjectSettings]");
+                if (config != null)
                 {
-                    var table = Toml.ToModel(File.ReadAllText(path));
-                    if (table.TryGetValue("renderer", out var rv) && rv is TomlTable renderer)
+                    var renderer = config.GetSection("renderer");
+                    if (renderer != null)
                     {
-                        if (renderer.TryGetValue("active_profile_guid", out var vg)
-                            && vg is string sg && !string.IsNullOrEmpty(sg))
+                        var sg = renderer.GetString("active_profile_guid", "");
+                        if (!string.IsNullOrEmpty(sg))
                             ActiveRendererProfileGuid = sg;
                     }
-                    if (table.TryGetValue("build", out var bv) && bv is TomlTable build)
+
+                    var build = config.GetSection("build");
+                    if (build != null)
                     {
-                        if (build.TryGetValue("start_scene", out var vs)
-                            && vs is string ss && !string.IsNullOrEmpty(ss))
+                        var ss = build.GetString("start_scene", "");
+                        if (!string.IsNullOrEmpty(ss))
                             StartScenePath = ss;
                     }
-                    if (table.TryGetValue("editor", out var ev) && ev is TomlTable editor)
+
+                    var editor = config.GetSection("editor");
+                    if (editor != null)
                     {
-                        if (editor.TryGetValue("external_script_editor", out var ve)
-                            && ve is string se && !string.IsNullOrEmpty(se))
+                        var se = editor.GetString("external_script_editor", "");
+                        if (!string.IsNullOrEmpty(se))
                             ExternalScriptEditor = se;
                     }
-                    if (table.TryGetValue("cache", out var cv) && cv is TomlTable cache)
+
+                    var cache = config.GetSection("cache");
+                    if (cache != null)
                     {
-                        if (cache.TryGetValue("dont_use_cache", out var vc1) && vc1 is bool bc1)
-                            DontUseCache = bc1;
-                        if (cache.TryGetValue("dont_use_compress_texture", out var vc2) && vc2 is bool bc2)
-                            DontUseCompressTexture = bc2;
-                        if (cache.TryGetValue("force_clear_cache", out var vc3) && vc3 is bool bc3)
-                            ForceClearCache = bc3;
+                        DontUseCache = cache.GetBool("dont_use_cache", DontUseCache);
+                        DontUseCompressTexture = cache.GetBool("dont_use_compress_texture", DontUseCompressTexture);
+                        ForceClearCache = cache.GetBool("force_clear_cache", ForceClearCache);
                     }
+
                     EditorDebug.Log($"[ProjectSettings] Loaded: {path}");
-                }
-                catch (Exception ex)
-                {
-                    EditorDebug.LogWarning($"[ProjectSettings] Failed to load {path}: {ex.Message}");
                 }
             }
 

@@ -4,7 +4,8 @@
 //          EnableEditor는 독립적으로 유지 (프로젝트 설정이 아닌 엔진 설정).
 //          Load()는 하위 호환을 위해 유지하되, rose_config.toml의 [cache] 값을
 //          ProjectSettings로 마이그레이션한 뒤 더 이상 읽지 않는다.
-// @deps    IronRose.Engine/ProjectSettings, IronRose.Engine/ProjectContext, RoseEngine/Debug
+// @deps    IronRose.Engine/ProjectSettings, IronRose.Engine/ProjectContext,
+//          IronRose.Engine/TomlConfig, RoseEngine/Debug
 // @exports
 //   static class RoseConfig
 //     DontUseCache: bool                  — ProjectSettings.DontUseCache 위임
@@ -16,11 +17,10 @@
 // @note    캐시 프로퍼티는 ProjectSettings에서 관리. RoseConfig는 기존 호출 코드와의
 //          호환성을 위한 래퍼로만 유지된다.
 //          Load()는 ProjectContext.ProjectRoot 기반으로 우선 탐색하고 CWD로 폴백한다.
+//          TOML 읽기에 TomlConfig API를 사용한다.
 // ------------------------------------------------------------
 using System;
 using System.IO;
-using Tomlyn;
-using Tomlyn.Model;
 using RoseEngine;
 
 namespace IronRose.Engine
@@ -85,23 +85,15 @@ namespace IronRose.Engine
                 var path = Path.GetFullPath(rel);
                 if (!File.Exists(path)) continue;
 
-                try
-                {
-                    var table = Toml.ToModel(File.ReadAllText(path));
+                var config = TomlConfig.LoadFile(path, "[RoseConfig]");
+                if (config == null) continue;
 
-                    if (table.TryGetValue("editor", out var editorVal) && editorVal is TomlTable editor)
-                    {
-                        if (editor.TryGetValue("enable_editor", out var v4) && v4 is bool b4)
-                            EnableEditor = b4;
-                    }
+                var editor = config.GetSection("editor");
+                if (editor != null)
+                    EnableEditor = editor.GetBool("enable_editor", EnableEditor);
 
-                    EditorDebug.Log($"[RoseConfig] Loaded: {path} (EnableEditor={EnableEditor})");
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    EditorDebug.LogWarning($"[RoseConfig] Failed to parse {path}: {ex.Message}");
-                }
+                EditorDebug.Log($"[RoseConfig] Loaded: {path} (EnableEditor={EnableEditor})");
+                return;
             }
 
             EditorDebug.Log("[RoseConfig] No config file found, using defaults");

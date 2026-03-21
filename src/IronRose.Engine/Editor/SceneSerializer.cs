@@ -1,10 +1,35 @@
+// ------------------------------------------------------------
+// @file    SceneSerializer.cs
+// @brief   씬(.scene)과 프리팹(.prefab)을 TOML 형식으로 직렬화/역직렬화한다.
+//          GUID 기반 에셋 참조, 범용 리플렉션 기반 컴포넌트 직렬화,
+//          Variant 프리팹 오버라이드 계산/적용을 지원한다.
+// @deps    TomlConfig, TomlConvert, SceneManager, PrefabUtility, PrefabInstance,
+//          ImGuiHierarchyPanel, EditorCamera, EditorModal, RenderSettings,
+//          AssetPipeline/Resources, EditorBridge
+// @exports
+//   static class SceneSerializer
+//     Save(string filePath): void                                   -- 현재 씬을 파일로 저장
+//     SaveToString(): string                                        -- 현재 씬을 TOML 문자열로 반환
+//     Load(string filePath): void                                   -- 씬 파일 로드 (TomlConfig.LoadFile 사용)
+//     LoadFromString(string tomlStr): void                          -- TOML 문자열에서 씬 로드
+//     SavePrefab(GameObject, string): void                          -- GO 계층을 .prefab 파일로 저장
+//     LoadPrefabGameObjects(string): List<GameObject>               -- .prefab 파일에서 GO 목록 로드
+//     LoadPrefabGameObjectsFromString(string): List<GameObject>     -- TOML 문자열에서 GO 목록 로드 (TomlConfig.LoadString 사용)
+//     GetBasePrefabGuid(string): string?                            -- TOML 문자열에서 basePrefabGuid 추출 (TomlConfig 사용)
+//     SaveVariantPrefab(GameObject, string, string): void           -- Variant 프리팹 저장
+//     ApplyOverrides(List<GameObject>, TomlTableArray): void        -- Variant 오버라이드 적용
+//     InvalidateComponentTypeCache(): void                          -- 핫 리로드 후 캐시 무효화
+// @note    벡터/쿼터니언/컬러 변환은 TomlConvert 정적 메서드로 위임한다.
+//          직렬화(Save) 시 Toml.FromModel(), 역직렬화(Load) 시 TomlConfig를 사용한다.
+//          SerializeComponent/DeserializeComponent 내부의 TomlTable 직접 사용은 Phase 5에서 전환 예정.
+// ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using IronRose.AssetPipeline;
+using IronRose.Engine;
 using IronRose.Engine.Editor.ImGuiEditor;
 using IronRose.Engine.Editor.ImGuiEditor.Panels;
 using IronRose.Engine.Editor.SceneView;
@@ -98,9 +123,9 @@ namespace IronRose.Engine.Editor
 
                 var transformTable = new TomlTable
                 {
-                    ["localPosition"] = Vec3ToArray(t.localPosition),
-                    ["localRotation"] = QuatToArray(t.localRotation),
-                    ["localScale"] = Vec3ToArray(t.localScale),
+                    ["localPosition"] = TomlConvert.Vec3ToArray(t.localPosition),
+                    ["localRotation"] = TomlConvert.QuatToArray(t.localRotation),
+                    ["localScale"] = TomlConvert.Vec3ToArray(t.localScale),
                     ["parentIndex"] = (long)parentIndex,
                 };
                 goTable["transform"] = transformTable;
@@ -111,11 +136,11 @@ namespace IronRose.Engine.Editor
                 {
                     goTable["rectTransform"] = new TomlTable
                     {
-                        ["anchorMin"] = Vec2ToArray(rectTransform.anchorMin),
-                        ["anchorMax"] = Vec2ToArray(rectTransform.anchorMax),
-                        ["anchoredPosition"] = Vec2ToArray(rectTransform.anchoredPosition),
-                        ["sizeDelta"] = Vec2ToArray(rectTransform.sizeDelta),
-                        ["pivot"] = Vec2ToArray(rectTransform.pivot),
+                        ["anchorMin"] = TomlConvert.Vec2ToArray(rectTransform.anchorMin),
+                        ["anchorMax"] = TomlConvert.Vec2ToArray(rectTransform.anchorMax),
+                        ["anchoredPosition"] = TomlConvert.Vec2ToArray(rectTransform.anchoredPosition),
+                        ["sizeDelta"] = TomlConvert.Vec2ToArray(rectTransform.sizeDelta),
+                        ["pivot"] = TomlConvert.Vec2ToArray(rectTransform.pivot),
                     };
                 }
 
@@ -158,12 +183,12 @@ namespace IronRose.Engine.Editor
             envTable["skyboxExposure"] = (double)RenderSettings.skyboxExposure;
             envTable["skyboxRotation"] = (double)RenderSettings.skyboxRotation;
             envTable["ambientIntensity"] = (double)RenderSettings.ambientIntensity;
-            envTable["ambientLight"] = ColorToArray(RenderSettings.ambientLight);
+            envTable["ambientLight"] = TomlConvert.ColorToArray(RenderSettings.ambientLight);
             envTable["skyZenithIntensity"] = (double)RenderSettings.skyZenithIntensity;
             envTable["skyHorizonIntensity"] = (double)RenderSettings.skyHorizonIntensity;
             envTable["sunIntensity"] = (double)RenderSettings.sunIntensity;
-            envTable["skyZenithColor"] = ColorToArray(RenderSettings.skyZenithColor);
-            envTable["skyHorizonColor"] = ColorToArray(RenderSettings.skyHorizonColor);
+            envTable["skyZenithColor"] = TomlConvert.ColorToArray(RenderSettings.skyZenithColor);
+            envTable["skyHorizonColor"] = TomlConvert.ColorToArray(RenderSettings.skyHorizonColor);
             root["sceneEnvironment"] = envTable;
 
             // EditorState — hierarchy expand/collapse + Scene View 카메라
@@ -186,9 +211,9 @@ namespace IronRose.Engine.Editor
             {
                 editorStateTable["sceneViewCamera"] = new TomlTable
                 {
-                    ["position"] = Vec3ToArray(edCam.Position),
-                    ["rotation"] = QuatToArray(edCam.Rotation),
-                    ["pivot"] = Vec3ToArray(edCam.Pivot),
+                    ["position"] = TomlConvert.Vec3ToArray(edCam.Position),
+                    ["rotation"] = TomlConvert.QuatToArray(edCam.Rotation),
+                    ["pivot"] = TomlConvert.Vec3ToArray(edCam.Pivot),
                 };
             }
 
@@ -214,7 +239,7 @@ namespace IronRose.Engine.Editor
                         ["nearClipPlane"] = (double)cam.nearClipPlane,
                         ["farClipPlane"] = (double)cam.farClipPlane,
                         ["clearFlags"] = cam.clearFlags.ToString(),
-                        ["backgroundColor"] = ColorToArray(cam.backgroundColor),
+                        ["backgroundColor"] = TomlConvert.ColorToArray(cam.backgroundColor),
                     },
                 };
             }
@@ -298,7 +323,7 @@ namespace IronRose.Engine.Editor
                 else if (mr.material != null)
                 {
                     // 인라인 머티리얼 (GUID 없음): 값 직접 저장
-                    fields["color"] = ColorToArray(mr.material.color);
+                    fields["color"] = TomlConvert.ColorToArray(mr.material.color);
                     fields["metallic"] = (double)mr.material.metallic;
                     fields["roughness"] = (double)mr.material.roughness;
                     if (mr.material.textureScale.x != 1f || mr.material.textureScale.y != 1f)
@@ -403,14 +428,10 @@ namespace IronRose.Engine.Editor
         /// <summary>TOML 문자열에서 프리팹 GO 계층을 로드.</summary>
         public static List<GameObject> LoadPrefabGameObjectsFromString(string tomlStr)
         {
-            TomlTable root;
-            try { root = Toml.ToModel(tomlStr); }
-            catch (Exception ex)
-            {
-                EditorDebug.LogError($"[Prefab] TOML parse error: {ex.Message}");
-                return new List<GameObject>();
-            }
+            var config = TomlConfig.LoadString(tomlStr, "[Prefab]");
+            if (config == null) return new List<GameObject>();
 
+            var root = config.GetRawTable();
             if (!root.TryGetValue("gameObjects", out var gosVal) || gosVal is not TomlTableArray goArray)
                 return new List<GameObject>();
 
@@ -437,17 +458,14 @@ namespace IronRose.Engine.Editor
         /// </summary>
         public static string? GetBasePrefabGuid(string tomlStr)
         {
-            try
-            {
-                var root = Toml.ToModel(tomlStr);
-                if (root.TryGetValue("prefab", out var pVal) && pVal is TomlTable prefabTable)
-                {
-                    if (prefabTable.TryGetValue("basePrefabGuid", out var bgVal) && bgVal is string bg && !string.IsNullOrEmpty(bg))
-                        return bg;
-                }
-            }
-            catch { }
-            return null;
+            var config = TomlConfig.LoadString(tomlStr);
+            if (config == null) return null;
+
+            var prefabSection = config.GetSection("prefab");
+            if (prefabSection == null) return null;
+
+            var bg = prefabSection.GetString("basePrefabGuid", "");
+            return string.IsNullOrEmpty(bg) ? null : bg;
         }
 
         /// <summary>
@@ -589,7 +607,7 @@ namespace IronRose.Engine.Editor
                         overrides.Add(new TomlTable
                         {
                             ["path"] = $"{i}/Transform/localPosition",
-                            ["value"] = Vec3ToArray(curGo.transform.localPosition),
+                            ["value"] = TomlConvert.Vec3ToArray(curGo.transform.localPosition),
                         });
                     }
                     if (!QuatApproxEqual(curGo.transform.localRotation, baseGo.transform.localRotation))
@@ -597,7 +615,7 @@ namespace IronRose.Engine.Editor
                         overrides.Add(new TomlTable
                         {
                             ["path"] = $"{i}/Transform/localRotation",
-                            ["value"] = QuatToArray(curGo.transform.localRotation),
+                            ["value"] = TomlConvert.QuatToArray(curGo.transform.localRotation),
                         });
                     }
                 }
@@ -606,7 +624,7 @@ namespace IronRose.Engine.Editor
                     overrides.Add(new TomlTable
                     {
                         ["path"] = $"{i}/Transform/localScale",
-                        ["value"] = Vec3ToArray(curGo.transform.localScale),
+                        ["value"] = TomlConvert.Vec3ToArray(curGo.transform.localScale),
                     });
                 }
 
@@ -789,13 +807,13 @@ namespace IronRose.Engine.Editor
             switch (fieldName)
             {
                 case "localPosition":
-                    t.localPosition = ArrayToVec3Direct(value);
+                    t.localPosition = TomlConvert.ArrayToVec3(value);
                     break;
                 case "localRotation":
-                    t.localRotation = ArrayToQuatDirect(value);
+                    t.localRotation = TomlConvert.ArrayToQuat(value);
                     break;
                 case "localScale":
-                    t.localScale = ArrayToVec3Direct(value);
+                    t.localScale = TomlConvert.ArrayToVec3(value);
                     break;
             }
         }
@@ -869,9 +887,9 @@ namespace IronRose.Engine.Editor
 
                 goTable["transform"] = new TomlTable
                 {
-                    ["localPosition"] = Vec3ToArray(localPos),
-                    ["localRotation"] = QuatToArray(t.localRotation),
-                    ["localScale"] = Vec3ToArray(t.localScale),
+                    ["localPosition"] = TomlConvert.Vec3ToArray(localPos),
+                    ["localRotation"] = TomlConvert.QuatToArray(t.localRotation),
+                    ["localScale"] = TomlConvert.Vec3ToArray(t.localScale),
                     ["parentIndex"] = (long)parentIndex,
                 };
 
@@ -944,9 +962,9 @@ namespace IronRose.Engine.Editor
 
                     if (goTable.TryGetValue("transform", out var tValP) && tValP is TomlTable tTableP)
                     {
-                        prefabGo.transform.localPosition = ArrayToVec3(tTableP, "localPosition");
-                        prefabGo.transform.localRotation = ArrayToQuat(tTableP, "localRotation");
-                        prefabGo.transform.localScale = ArrayToVec3(tTableP, "localScale", Vector3.one);
+                        prefabGo.transform.localPosition = TomlConvert.GetVec3(tTableP, "localPosition");
+                        prefabGo.transform.localRotation = TomlConvert.GetQuat(tTableP, "localRotation");
+                        prefabGo.transform.localScale = TomlConvert.GetVec3(tTableP, "localScale", Vector3.one);
 
                         int pIdx = -1;
                         if (tTableP.TryGetValue("parentIndex", out var piValP) && piValP is long piLongP)
@@ -975,9 +993,9 @@ namespace IronRose.Engine.Editor
 
                 if (goTable.TryGetValue("transform", out var tVal) && tVal is TomlTable tTable)
                 {
-                    go.transform.localPosition = ArrayToVec3(tTable, "localPosition");
-                    go.transform.localRotation = ArrayToQuat(tTable, "localRotation");
-                    go.transform.localScale = ArrayToVec3(tTable, "localScale", Vector3.one);
+                    go.transform.localPosition = TomlConvert.GetVec3(tTable, "localPosition");
+                    go.transform.localRotation = TomlConvert.GetQuat(tTable, "localRotation");
+                    go.transform.localScale = TomlConvert.GetVec3(tTable, "localScale", Vector3.one);
 
                     int pIdx = -1;
                     if (tTable.TryGetValue("parentIndex", out var piVal) && piVal is long piLong)
@@ -993,11 +1011,11 @@ namespace IronRose.Engine.Editor
                 if (goTable.TryGetValue("rectTransform", out var rtVal) && rtVal is TomlTable rtTable)
                 {
                     var rt = go.AddComponent<RectTransform>();
-                    if (rtTable.TryGetValue("anchorMin", out var v)) rt.anchorMin = ArrayToVec2(v);
-                    if (rtTable.TryGetValue("anchorMax", out v)) rt.anchorMax = ArrayToVec2(v);
-                    if (rtTable.TryGetValue("anchoredPosition", out v)) rt.anchoredPosition = ArrayToVec2(v);
-                    if (rtTable.TryGetValue("sizeDelta", out v)) rt.sizeDelta = ArrayToVec2(v);
-                    if (rtTable.TryGetValue("pivot", out v)) rt.pivot = ArrayToVec2(v);
+                    if (rtTable.TryGetValue("anchorMin", out var v)) rt.anchorMin = TomlConvert.ArrayToVec2(v);
+                    if (rtTable.TryGetValue("anchorMax", out v)) rt.anchorMax = TomlConvert.ArrayToVec2(v);
+                    if (rtTable.TryGetValue("anchoredPosition", out v)) rt.anchoredPosition = TomlConvert.ArrayToVec2(v);
+                    if (rtTable.TryGetValue("sizeDelta", out v)) rt.sizeDelta = TomlConvert.ArrayToVec2(v);
+                    if (rtTable.TryGetValue("pivot", out v)) rt.pivot = TomlConvert.ArrayToVec2(v);
                 }
 
                 if (goTable.TryGetValue("components", out var compsVal) && compsVal is TomlTableArray compsArray)
@@ -1065,37 +1083,20 @@ namespace IronRose.Engine.Editor
                 return;
             }
 
-            var tomlStr = File.ReadAllText(filePath);
-            TomlTable root;
-            try
-            {
-                root = Toml.ToModel(tomlStr);
-            }
-            catch (Exception ex)
-            {
-                EditorDebug.LogError($"[Scene] TOML parse error: {ex.Message}");
-                return;
-            }
+            var config = TomlConfig.LoadFile(filePath, "[Scene]");
+            if (config == null) return;
 
-            LoadFromTable(root, filePath);
+            LoadFromTable(config.GetRawTable(), filePath);
             EditorDebug.Log($"[Scene] Loaded: {filePath}");
         }
 
         /// <summary>TOML 문자열에서 씬을 역직렬화 (디스크 I/O 없음).</summary>
         public static void LoadFromString(string tomlStr)
         {
-            TomlTable root;
-            try
-            {
-                root = Toml.ToModel(tomlStr);
-            }
-            catch (Exception ex)
-            {
-                EditorDebug.LogError($"[Scene] TOML parse error: {ex.Message}");
-                return;
-            }
+            var config = TomlConfig.LoadString(tomlStr, "[Scene]");
+            if (config == null) return;
 
-            LoadFromTable(root, null);
+            LoadFromTable(config.GetRawTable(), null);
         }
 
         private static void LoadFromTable(TomlTable root, string? filePath)
@@ -1148,11 +1149,11 @@ namespace IronRose.Engine.Editor
                 // Scene View 카메라 복원
                 if (esTable.TryGetValue("sceneViewCamera", out var camVal) && camVal is TomlTable camTable)
                 {
-                    var pos = camTable.TryGetValue("position", out var pv) ? ArrayToVec3Direct(pv) : new Vector3(0, 5, -10);
-                    var rot = camTable.TryGetValue("rotation", out var rv) && rv is TomlArray ra && ra.Count >= 4
-                        ? new Quaternion(ToFloat(ra[0]), ToFloat(ra[1]), ToFloat(ra[2]), ToFloat(ra[3]))
+                    var pos = camTable.TryGetValue("position", out var pv) ? TomlConvert.ArrayToVec3(pv) : new Vector3(0, 5, -10);
+                    var rot = camTable.TryGetValue("rotation", out var rv)
+                        ? TomlConvert.ArrayToQuat(rv)
                         : Quaternion.identity;
-                    var pivot = camTable.TryGetValue("pivot", out var pvt) ? ArrayToVec3Direct(pvt) : Vector3.zero;
+                    var pivot = camTable.TryGetValue("pivot", out var pvt) ? TomlConvert.ArrayToVec3(pvt) : Vector3.zero;
                     EditorCamera.PendingState = (pos, rot, pivot);
                 }
             }
@@ -1175,16 +1176,16 @@ namespace IronRose.Engine.Editor
                 case "Camera":
                     var cam = go.AddComponent<Camera>();
                     if (fields.TryGetValue("fieldOfView", out var fovVal))
-                        cam.fieldOfView = ToFloat(fovVal);
+                        cam.fieldOfView = TomlConvert.ToFloat(fovVal);
                     if (fields.TryGetValue("nearClipPlane", out var nearVal))
-                        cam.nearClipPlane = ToFloat(nearVal);
+                        cam.nearClipPlane = TomlConvert.ToFloat(nearVal);
                     if (fields.TryGetValue("farClipPlane", out var farVal))
-                        cam.farClipPlane = ToFloat(farVal);
+                        cam.farClipPlane = TomlConvert.ToFloat(farVal);
                     if (fields.TryGetValue("clearFlags", out var cfVal) && cfVal is string cfStr)
                         if (Enum.TryParse<CameraClearFlags>(cfStr, out var cf))
                             cam.clearFlags = cf;
                     if (fields.TryGetValue("backgroundColor", out var bgVal))
-                        cam.backgroundColor = ArrayToColor(bgVal);
+                        cam.backgroundColor = TomlConvert.ArrayToColor(bgVal);
                     break;
 
                 case "Light":
@@ -1251,9 +1252,9 @@ namespace IronRose.Engine.Editor
                                 var mmf = go.AddComponent<MipMeshFilter>();
                                 mmf.mipMesh = mipMesh;
                                 if (fields.TryGetValue("mipBias", out var mbVal))
-                                    mmf.mipBias = ToFloat(mbVal);
+                                    mmf.mipBias = TomlConvert.ToFloat(mbVal);
                                 if (fields.TryGetValue("lodScale", out var lsVal))
-                                    mmf.lodScale = ToFloat(lsVal);
+                                    mmf.lodScale = TomlConvert.ToFloat(lsVal);
                                 EditorDebug.Log($"[Scene:Load] MipMeshFilter on '{go.name}': loaded MipMesh from '{mipPath}' ({mipMesh.LodCount} LODs)");
                             }
                             else
@@ -1290,16 +1291,16 @@ namespace IronRose.Engine.Editor
                         // 인라인 머티리얼 (GUID 없거나 로드 실패): 씬 파일 값 사용
                         mat = new Material();
                         if (fields.TryGetValue("color", out var mcVal))
-                            mat.color = ArrayToColor(mcVal);
+                            mat.color = TomlConvert.ArrayToColor(mcVal);
                         if (fields.TryGetValue("metallic", out var mmVal))
-                            mat.metallic = ToFloat(mmVal);
+                            mat.metallic = TomlConvert.ToFloat(mmVal);
                         if (fields.TryGetValue("roughness", out var mrVal2))
-                            mat.roughness = ToFloat(mrVal2);
-                        float sx = fields.TryGetValue("textureScaleX", out var sxv) ? ToFloat(sxv) : 1f;
-                        float sy = fields.TryGetValue("textureScaleY", out var syv) ? ToFloat(syv) : 1f;
+                            mat.roughness = TomlConvert.ToFloat(mrVal2);
+                        float sx = fields.TryGetValue("textureScaleX", out var sxv) ? TomlConvert.ToFloat(sxv) : 1f;
+                        float sy = fields.TryGetValue("textureScaleY", out var syv) ? TomlConvert.ToFloat(syv) : 1f;
                         mat.textureScale = new RoseEngine.Vector2(sx, sy);
-                        float ox = fields.TryGetValue("textureOffsetX", out var oxv) ? ToFloat(oxv) : 0f;
-                        float oy = fields.TryGetValue("textureOffsetY", out var oyv) ? ToFloat(oyv) : 0f;
+                        float ox = fields.TryGetValue("textureOffsetX", out var oxv) ? TomlConvert.ToFloat(oxv) : 0f;
+                        float oy = fields.TryGetValue("textureOffsetY", out var oyv) ? TomlConvert.ToFloat(oyv) : 0f;
                         mat.textureOffset = new RoseEngine.Vector2(ox, oy);
                     }
                     mr.material = mat;
@@ -1309,9 +1310,9 @@ namespace IronRose.Engine.Editor
                 {
                     var ppv = go.AddComponent<PostProcessVolume>();
                     if (fields.TryGetValue("blendDistance", out var bdVal))
-                        ppv.blendDistance = ToFloat(bdVal);
+                        ppv.blendDistance = TomlConvert.ToFloat(bdVal);
                     if (fields.TryGetValue("weight", out var wVal))
-                        ppv.weight = ToFloat(wVal);
+                        ppv.weight = TomlConvert.ToFloat(wVal);
                     if (fields.TryGetValue("profileGuid", out var pgVal) && pgVal is string pgStr && !string.IsNullOrEmpty(pgStr))
                     {
                         ppv.profileGuid = pgStr;
@@ -1603,11 +1604,11 @@ namespace IronRose.Engine.Editor
             if (type == typeof(int)) return (long)(int)value;
             if (type == typeof(bool)) return (bool)value;
             if (type == typeof(string)) return (string)value;
-            if (type == typeof(Vector2)) return Vec2ToArray((Vector2)value);
-            if (type == typeof(Vector3)) return Vec3ToArray((Vector3)value);
-            if (type == typeof(Quaternion)) return QuatToArray((Quaternion)value);
-            if (type == typeof(Color)) return ColorToArray((Color)value);
-            if (type == typeof(Vector4)) return Vec4ToArray((Vector4)value);
+            if (type == typeof(Vector2)) return TomlConvert.Vec2ToArray((Vector2)value);
+            if (type == typeof(Vector3)) return TomlConvert.Vec3ToArray((Vector3)value);
+            if (type == typeof(Quaternion)) return TomlConvert.QuatToArray((Quaternion)value);
+            if (type == typeof(Color)) return TomlConvert.ColorToArray((Color)value);
+            if (type == typeof(Vector4)) return TomlConvert.Vec4ToArray((Vector4)value);
             if (type == typeof(long)) return (long)value;
             if (type == typeof(double)) return (double)value;
             if (type == typeof(byte)) return (long)(byte)value;
@@ -1904,20 +1905,19 @@ namespace IronRose.Engine.Editor
         private static object? TomlToValue(object? tomlVal, Type targetType)
         {
             if (tomlVal == null) return null;
-            if (targetType == typeof(float)) return ToFloat(tomlVal);
+            if (targetType == typeof(float)) return TomlConvert.ToFloat(tomlVal);
             if (targetType == typeof(int))
-                return tomlVal is long l ? (int)l : (int)ToFloat(tomlVal);
+                return tomlVal is long l ? (int)l : (int)TomlConvert.ToFloat(tomlVal);
             if (targetType == typeof(bool) && tomlVal is bool b) return b;
             if (targetType == typeof(string)) return tomlVal?.ToString() ?? "";
-            if (targetType == typeof(Vector2)) return ArrayToVec2(tomlVal);
-            if (targetType == typeof(Vector3)) return ArrayToVec3Direct(tomlVal);
-            if (targetType == typeof(Quaternion) && tomlVal is TomlArray qa && qa.Count >= 4)
-                return new Quaternion(ToFloat(qa[0]), ToFloat(qa[1]), ToFloat(qa[2]), ToFloat(qa[3]));
-            if (targetType == typeof(Color)) return ArrayToColor(tomlVal);
-            if (targetType == typeof(Vector4)) return ArrayToVec4(tomlVal);
-            if (targetType == typeof(long)) return tomlVal is long l2 ? l2 : (long)ToFloat(tomlVal);
-            if (targetType == typeof(double)) return (double)ToFloat(tomlVal);
-            if (targetType == typeof(byte)) return (byte)Math.Clamp(tomlVal is long lb ? lb : (long)ToFloat(tomlVal), 0, 255);
+            if (targetType == typeof(Vector2)) return TomlConvert.ArrayToVec2(tomlVal);
+            if (targetType == typeof(Vector3)) return TomlConvert.ArrayToVec3(tomlVal);
+            if (targetType == typeof(Quaternion)) return TomlConvert.ArrayToQuat(tomlVal);
+            if (targetType == typeof(Color)) return TomlConvert.ArrayToColor(tomlVal);
+            if (targetType == typeof(Vector4)) return TomlConvert.ArrayToVec4(tomlVal);
+            if (targetType == typeof(long)) return tomlVal is long l2 ? l2 : (long)TomlConvert.ToFloat(tomlVal);
+            if (targetType == typeof(double)) return (double)TomlConvert.ToFloat(tomlVal);
+            if (targetType == typeof(byte)) return (byte)Math.Clamp(tomlVal is long lb ? lb : (long)TomlConvert.ToFloat(tomlVal), 0, 255);
             if (targetType.IsEnum && tomlVal is string s && Enum.TryParse(targetType, s, out var ev))
                 return ev;
             return null;
@@ -1948,12 +1948,12 @@ namespace IronRose.Engine.Editor
                 if (tex == null) return null;
                 float rx = 0, ry = 0, rw = tex.width, rh = tex.height;
                 float px = 0.5f, py = 0.5f;
-                if (assetTable.TryGetValue("rectX", out var rxv)) rx = ToFloat(rxv);
-                if (assetTable.TryGetValue("rectY", out var ryv)) ry = ToFloat(ryv);
-                if (assetTable.TryGetValue("rectW", out var rwv)) rw = ToFloat(rwv);
-                if (assetTable.TryGetValue("rectH", out var rhv)) rh = ToFloat(rhv);
-                if (assetTable.TryGetValue("pivotX", out var pxv)) px = ToFloat(pxv);
-                if (assetTable.TryGetValue("pivotY", out var pyv)) py = ToFloat(pyv);
+                if (assetTable.TryGetValue("rectX", out var rxv)) rx = TomlConvert.ToFloat(rxv);
+                if (assetTable.TryGetValue("rectY", out var ryv)) ry = TomlConvert.ToFloat(ryv);
+                if (assetTable.TryGetValue("rectW", out var rwv)) rw = TomlConvert.ToFloat(rwv);
+                if (assetTable.TryGetValue("rectH", out var rhv)) rh = TomlConvert.ToFloat(rhv);
+                if (assetTable.TryGetValue("pivotX", out var pxv)) px = TomlConvert.ToFloat(pxv);
+                if (assetTable.TryGetValue("pivotY", out var pyv)) py = TomlConvert.ToFloat(pyv);
                 return Sprite.Create(tex, new Rect(rx, ry, rw, rh), new Vector2(px, py));
             }
             return null;
@@ -2051,12 +2051,6 @@ namespace IronRose.Engine.Editor
         // Helpers
         // ================================================================
 
-        private static TomlArray Vec2ToArray(Vector2 v)
-        {
-            var arr = new TomlArray { (double)v.x, (double)v.y };
-            return arr;
-        }
-
         /// <summary>GO가 프리팹 인스턴스의 자식인지 확인 (부모 순회).</summary>
         private static bool IsChildOfPrefabInstance(GameObject go, HashSet<int> prefabInstanceIds)
         {
@@ -2070,88 +2064,21 @@ namespace IronRose.Engine.Editor
             return false;
         }
 
-        private static TomlArray Vec3ToArray(Vector3 v)
-        {
-            var arr = new TomlArray { (double)v.x, (double)v.y, (double)v.z };
-            return arr;
-        }
-
-        private static TomlArray QuatToArray(Quaternion q)
-        {
-            var arr = new TomlArray { (double)q.x, (double)q.y, (double)q.z, (double)q.w };
-            return arr;
-        }
-
-        private static TomlArray ColorToArray(Color c)
-        {
-            var arr = new TomlArray { (double)c.r, (double)c.g, (double)c.b, (double)c.a };
-            return arr;
-        }
-
-        private static TomlArray Vec4ToArray(Vector4 v)
-        {
-            var arr = new TomlArray { (double)v.x, (double)v.y, (double)v.z, (double)v.w };
-            return arr;
-        }
-
-        private static Vector4 ArrayToVec4(object? val)
-        {
-            if (val is not TomlArray arr || arr.Count < 4)
-                return Vector4.zero;
-            return new Vector4(ToFloat(arr[0]), ToFloat(arr[1]), ToFloat(arr[2]), ToFloat(arr[3]));
-        }
-
-        private static Vector3 ArrayToVec3(TomlTable table, string key, Vector3? defaultVal = null)
-        {
-            var def = defaultVal ?? Vector3.zero;
-            if (!table.TryGetValue(key, out var val) || val is not TomlArray arr || arr.Count < 3)
-                return def;
-            return new Vector3(ToFloat(arr[0]), ToFloat(arr[1]), ToFloat(arr[2]));
-        }
-
-        private static Vector3 ArrayToVec3Direct(object? val)
-        {
-            if (val is not TomlArray arr || arr.Count < 3)
-                return Vector3.zero;
-            return new Vector3(ToFloat(arr[0]), ToFloat(arr[1]), ToFloat(arr[2]));
-        }
-
-        private static Vector2 ArrayToVec2(object? val)
-        {
-            if (val is not TomlArray arr || arr.Count < 2)
-                return Vector2.zero;
-            return new Vector2(ToFloat(arr[0]), ToFloat(arr[1]));
-        }
-
-        private static Quaternion ArrayToQuat(TomlTable table, string key)
-        {
-            if (!table.TryGetValue(key, out var val) || val is not TomlArray arr || arr.Count < 4)
-                return Quaternion.identity;
-            return new Quaternion(ToFloat(arr[0]), ToFloat(arr[1]), ToFloat(arr[2]), ToFloat(arr[3]));
-        }
-
-        private static Quaternion ArrayToQuatDirect(object? val)
-        {
-            if (val is not TomlArray arr || arr.Count < 4)
-                return Quaternion.identity;
-            return new Quaternion(ToFloat(arr[0]), ToFloat(arr[1]), ToFloat(arr[2]), ToFloat(arr[3]));
-        }
-
         /// <summary>TOML 값을 지정된 C# 타입으로 역직렬화.</summary>
         private static object? DeserializeFieldValue(object? tomlVal, Type targetType)
         {
             if (tomlVal == null) return null;
-            if (targetType == typeof(float)) return ToFloat(tomlVal);
+            if (targetType == typeof(float)) return TomlConvert.ToFloat(tomlVal);
             if (targetType == typeof(int)) return tomlVal is long l ? (int)l : 0;
             if (targetType == typeof(bool)) return tomlVal is bool b && b;
             if (targetType == typeof(string)) return tomlVal.ToString();
-            if (targetType == typeof(Vector2)) return ArrayToVec2(tomlVal);
-            if (targetType == typeof(Vector3)) return ArrayToVec3Direct(tomlVal);
-            if (targetType == typeof(Quaternion)) return ArrayToQuatDirect(tomlVal);
-            if (targetType == typeof(Color)) return ArrayToColor(tomlVal);
-            if (targetType == typeof(Vector4)) return ArrayToVec4(tomlVal);
+            if (targetType == typeof(Vector2)) return TomlConvert.ArrayToVec2(tomlVal);
+            if (targetType == typeof(Vector3)) return TomlConvert.ArrayToVec3(tomlVal);
+            if (targetType == typeof(Quaternion)) return TomlConvert.ArrayToQuat(tomlVal);
+            if (targetType == typeof(Color)) return TomlConvert.ArrayToColor(tomlVal);
+            if (targetType == typeof(Vector4)) return TomlConvert.ArrayToVec4(tomlVal);
             if (targetType == typeof(long)) return tomlVal is long l2 ? l2 : 0L;
-            if (targetType == typeof(double)) return (double)ToFloat(tomlVal);
+            if (targetType == typeof(double)) return (double)TomlConvert.ToFloat(tomlVal);
             if (targetType == typeof(byte)) return (byte)Math.Clamp(tomlVal is long lb ? lb : 0L, 0, 255);
             if (targetType.IsEnum && tomlVal is string es)
             {
@@ -2159,26 +2086,6 @@ namespace IronRose.Engine.Editor
                 catch { return null; }
             }
             return null;
-        }
-
-        private static Color ArrayToColor(object? val)
-        {
-            if (val is not TomlArray arr || arr.Count < 4)
-                return Color.white;
-            return new Color(ToFloat(arr[0]), ToFloat(arr[1]), ToFloat(arr[2]), ToFloat(arr[3]));
-        }
-
-        private static float ToFloat(object? val)
-        {
-            return val switch
-            {
-                double d => (float)d,
-                long l => l,
-                float f => f,
-                int i => i,
-                string s => float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var r) ? r : 0f,
-                _ => 0f,
-            };
         }
 
         // ─── Scene Environment 직렬화 헬퍼 (Phase 38-B) ──────────
@@ -2207,29 +2114,29 @@ namespace IronRose.Engine.Editor
             {
                 RenderSettings.skyboxTextureGuid = skyGuid;
                 if (table.TryGetValue("skyboxExposure", out var seVal))
-                    RenderSettings.skyboxExposure = ToFloat(seVal);
+                    RenderSettings.skyboxExposure = TomlConvert.ToFloat(seVal);
                 if (table.TryGetValue("skyboxRotation", out var srVal))
-                    RenderSettings.skyboxRotation = ToFloat(srVal);
+                    RenderSettings.skyboxRotation = TomlConvert.ToFloat(srVal);
                 RenderSettings.ApplySkyboxFromGuid();
             }
 
             // Ambient
             if (table.TryGetValue("ambientIntensity", out var aiVal))
-                RenderSettings.ambientIntensity = ToFloat(aiVal);
+                RenderSettings.ambientIntensity = TomlConvert.ToFloat(aiVal);
             if (table.TryGetValue("ambientLight", out var alVal))
-                RenderSettings.ambientLight = ArrayToColor(alVal);
+                RenderSettings.ambientLight = TomlConvert.ArrayToColor(alVal);
 
             // Procedural Sky
             if (table.TryGetValue("skyZenithIntensity", out var sziVal))
-                RenderSettings.skyZenithIntensity = ToFloat(sziVal);
+                RenderSettings.skyZenithIntensity = TomlConvert.ToFloat(sziVal);
             if (table.TryGetValue("skyHorizonIntensity", out var shiVal))
-                RenderSettings.skyHorizonIntensity = ToFloat(shiVal);
+                RenderSettings.skyHorizonIntensity = TomlConvert.ToFloat(shiVal);
             if (table.TryGetValue("sunIntensity", out var siVal))
-                RenderSettings.sunIntensity = ToFloat(siVal);
+                RenderSettings.sunIntensity = TomlConvert.ToFloat(siVal);
             if (table.TryGetValue("skyZenithColor", out var szcVal))
-                RenderSettings.skyZenithColor = ArrayToColor(szcVal);
+                RenderSettings.skyZenithColor = TomlConvert.ArrayToColor(szcVal);
             if (table.TryGetValue("skyHorizonColor", out var shcVal))
-                RenderSettings.skyHorizonColor = ArrayToColor(shcVal);
+                RenderSettings.skyHorizonColor = TomlConvert.ArrayToColor(shcVal);
         }
     }
 }

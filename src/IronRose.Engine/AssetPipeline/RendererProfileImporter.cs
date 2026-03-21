@@ -1,8 +1,20 @@
+// ------------------------------------------------------------
+// @file    RendererProfileImporter.cs
+// @brief   .renderer (TOML) 파일을 RendererProfile로 임포트/익스포트한다.
+//          [fsr]과 [ssil] 두 섹션으로 구성되며 FSR 업스케일링과 SSIL AO 설정을 담당한다.
+// @deps    IronRose.Engine/TomlConfig, RoseEngine (EditorDebug, RendererProfile, FsrScaleMode),
+//          AssetPipeline/RoseMetadata
+// @exports
+//   class RendererProfileImporter
+//     Import(string, RoseMetadata?): RendererProfile?           — .renderer 파일에서 로드
+//     static Export(RendererProfile, string): void              — RendererProfile을 TOML로 저장
+//     static WriteDefault(string): void                         — 기본 프로파일 생성
+// @note    기존 로컬 ToFloat 메서드를 제거하고 TomlConfig.GetFloat()로 대체.
+// ------------------------------------------------------------
 using System;
 using System.IO;
 using RoseEngine;
-using Tomlyn;
-using Tomlyn.Model;
+using IronRose.Engine;
 
 namespace IronRose.AssetPipeline
 {
@@ -38,52 +50,43 @@ namespace IronRose.AssetPipeline
                 return null;
             }
 
-            try
-            {
-                var text = File.ReadAllText(path);
-                var doc = Toml.ToModel(text);
-                return ParseProfile(doc, path);
-            }
-            catch (Exception ex)
-            {
-                EditorDebug.LogError($"[RendererProfileImporter] Parse failed: {path} — {ex.Message}");
-                return null;
-            }
+            var config = TomlConfig.LoadFile(path, "[RendererProfileImporter]");
+            if (config == null) return null;
+
+            return ParseProfile(config, path);
         }
 
-        private static RendererProfile ParseProfile(TomlTable doc, string path)
+        private static RendererProfile ParseProfile(TomlConfig config, string path)
         {
             var profile = new RendererProfile
             {
                 name = Path.GetFileNameWithoutExtension(path),
             };
 
-            // [fsr]
-            if (doc.TryGetValue("fsr", out var fsrVal) && fsrVal is TomlTable fsr)
+            var fsr = config.GetSection("fsr");
+            if (fsr != null)
             {
-                if (fsr.TryGetValue("enabled", out var v) && v is bool b) profile.fsrEnabled = b;
-                if (fsr.TryGetValue("scale_mode", out var sm) && sm is string sms)
-                {
-                    if (Enum.TryParse<FsrScaleMode>(sms, true, out var mode))
-                        profile.fsrScaleMode = mode;
-                }
-                if (fsr.TryGetValue("custom_scale", out var cs)) profile.fsrCustomScale = ToFloat(cs);
-                if (fsr.TryGetValue("sharpness", out var sh)) profile.fsrSharpness = ToFloat(sh);
-                if (fsr.TryGetValue("jitter_scale", out var js)) profile.fsrJitterScale = ToFloat(js);
+                profile.fsrEnabled = fsr.GetBool("enabled", profile.fsrEnabled);
+                var scaleMode = fsr.GetString("scale_mode", "");
+                if (!string.IsNullOrEmpty(scaleMode) && Enum.TryParse<FsrScaleMode>(scaleMode, true, out var mode))
+                    profile.fsrScaleMode = mode;
+                profile.fsrCustomScale = fsr.GetFloat("custom_scale", profile.fsrCustomScale);
+                profile.fsrSharpness = fsr.GetFloat("sharpness", profile.fsrSharpness);
+                profile.fsrJitterScale = fsr.GetFloat("jitter_scale", profile.fsrJitterScale);
             }
 
-            // [ssil]
-            if (doc.TryGetValue("ssil", out var ssilVal) && ssilVal is TomlTable ssil)
+            var ssil = config.GetSection("ssil");
+            if (ssil != null)
             {
-                if (ssil.TryGetValue("enabled", out var v) && v is bool b) profile.ssilEnabled = b;
-                if (ssil.TryGetValue("radius", out var r)) profile.ssilRadius = ToFloat(r);
-                if (ssil.TryGetValue("falloff_scale", out var fs)) profile.ssilFalloffScale = ToFloat(fs);
-                if (ssil.TryGetValue("slice_count", out var sc) && sc is long lsc) profile.ssilSliceCount = (int)lsc;
-                if (ssil.TryGetValue("steps_per_slice", out var sps) && sps is long lsps) profile.ssilStepsPerSlice = (int)lsps;
-                if (ssil.TryGetValue("ao_intensity", out var ai)) profile.ssilAoIntensity = ToFloat(ai);
-                if (ssil.TryGetValue("indirect_enabled", out var ie) && ie is bool bie) profile.ssilIndirectEnabled = bie;
-                if (ssil.TryGetValue("indirect_boost", out var ib)) profile.ssilIndirectBoost = ToFloat(ib);
-                if (ssil.TryGetValue("saturation_boost", out var sb)) profile.ssilSaturationBoost = ToFloat(sb);
+                profile.ssilEnabled = ssil.GetBool("enabled", profile.ssilEnabled);
+                profile.ssilRadius = ssil.GetFloat("radius", profile.ssilRadius);
+                profile.ssilFalloffScale = ssil.GetFloat("falloff_scale", profile.ssilFalloffScale);
+                profile.ssilSliceCount = ssil.GetInt("slice_count", profile.ssilSliceCount);
+                profile.ssilStepsPerSlice = ssil.GetInt("steps_per_slice", profile.ssilStepsPerSlice);
+                profile.ssilAoIntensity = ssil.GetFloat("ao_intensity", profile.ssilAoIntensity);
+                profile.ssilIndirectEnabled = ssil.GetBool("indirect_enabled", profile.ssilIndirectEnabled);
+                profile.ssilIndirectBoost = ssil.GetFloat("indirect_boost", profile.ssilIndirectBoost);
+                profile.ssilSaturationBoost = ssil.GetFloat("saturation_boost", profile.ssilSaturationBoost);
             }
 
             return profile;
@@ -91,36 +94,29 @@ namespace IronRose.AssetPipeline
 
         public static void Export(RendererProfile profile, string path)
         {
-            var doc = new TomlTable();
+            var config = TomlConfig.CreateEmpty();
 
-            // [fsr]
-            var fsr = new TomlTable
-            {
-                ["enabled"] = profile.fsrEnabled,
-                ["scale_mode"] = profile.fsrScaleMode.ToString(),
-                ["custom_scale"] = (double)profile.fsrCustomScale,
-                ["sharpness"] = (double)profile.fsrSharpness,
-                ["jitter_scale"] = (double)profile.fsrJitterScale,
-            };
-            doc["fsr"] = fsr;
+            var fsr = TomlConfig.CreateEmpty();
+            fsr.SetValue("enabled", profile.fsrEnabled);
+            fsr.SetValue("scale_mode", profile.fsrScaleMode.ToString());
+            fsr.SetValue("custom_scale", (double)profile.fsrCustomScale);
+            fsr.SetValue("sharpness", (double)profile.fsrSharpness);
+            fsr.SetValue("jitter_scale", (double)profile.fsrJitterScale);
+            config.SetSection("fsr", fsr);
 
-            // [ssil]
-            var ssil = new TomlTable
-            {
-                ["enabled"] = profile.ssilEnabled,
-                ["radius"] = (double)profile.ssilRadius,
-                ["falloff_scale"] = (double)profile.ssilFalloffScale,
-                ["slice_count"] = (long)profile.ssilSliceCount,
-                ["steps_per_slice"] = (long)profile.ssilStepsPerSlice,
-                ["ao_intensity"] = (double)profile.ssilAoIntensity,
-                ["indirect_enabled"] = profile.ssilIndirectEnabled,
-                ["indirect_boost"] = (double)profile.ssilIndirectBoost,
-                ["saturation_boost"] = (double)profile.ssilSaturationBoost,
-            };
-            doc["ssil"] = ssil;
+            var ssil = TomlConfig.CreateEmpty();
+            ssil.SetValue("enabled", profile.ssilEnabled);
+            ssil.SetValue("radius", (double)profile.ssilRadius);
+            ssil.SetValue("falloff_scale", (double)profile.ssilFalloffScale);
+            ssil.SetValue("slice_count", (long)profile.ssilSliceCount);
+            ssil.SetValue("steps_per_slice", (long)profile.ssilStepsPerSlice);
+            ssil.SetValue("ao_intensity", (double)profile.ssilAoIntensity);
+            ssil.SetValue("indirect_enabled", profile.ssilIndirectEnabled);
+            ssil.SetValue("indirect_boost", (double)profile.ssilIndirectBoost);
+            ssil.SetValue("saturation_boost", (double)profile.ssilSaturationBoost);
+            config.SetSection("ssil", ssil);
 
-            var toml = Toml.FromModel(doc);
-            File.WriteAllText(path, toml);
+            config.SaveToFile(path);
             EditorDebug.Log($"[RendererProfileImporter] Exported: {path}");
         }
 
@@ -129,13 +125,5 @@ namespace IronRose.AssetPipeline
         {
             Export(new RendererProfile(), path);
         }
-
-        private static float ToFloat(object? val) => val switch
-        {
-            double d => (float)d,
-            long l => l,
-            float f => f,
-            _ => 0f,
-        };
     }
 }

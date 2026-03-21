@@ -21,16 +21,16 @@
 - `SaveLastProjectPath()`: settings.toml에 TOML 형식으로 저장 (파일 전체 덮어쓰기)
 
 ### 의존 관계
-- `Tomlyn` (NuGet) — TOML 파싱/직렬화
+- `IronRose.Engine.TomlConfig` — TOML 파일 읽기/쓰기 래퍼
 - `RoseEngine.Debug` — 로그 출력
 - `System.Xml.Linq` — Directory.Build.props 파싱 (ValidateBuildPropsAlignment)
 
 ## 주의사항
-- `SaveLastProjectPath()`는 settings.toml을 통째로 덮어쓴다. 향후 `[editor]` 외 섹션이 추가되면 기존 TOML 모델을 읽고 수정하는 방식으로 변경 필요.
+- `SaveLastProjectPath()`는 `TomlConfig` read-modify-write 패턴으로 기존 settings.toml의 다른 섹션을 보존한다.
 - `Initialize()`는 재귀 호출될 수 있다 (last_project 경로로 재시도). 무한 재귀 방지는 project.toml 존재 여부로 보장.
 - 레거시 `.rose_last_project` 마이그레이션: CWD에 파일이 있으면 settings.toml로 이전 후 삭제. 마이그레이션 실패 시 무시.
 - **로그 경로 전환**: EngineCore.Initialize()에서 ProjectContext 초기화 직후 `Debug.SetLogDirectory(ProjectRoot/Logs/)`를 호출하여 로그를 프로젝트 폴더로 전환. 프로젝트 .gitignore에 `Logs/` 포함 필요.
 - **프로세스 = 프로젝트 모델**: mid-session 프로젝트 전환은 지원하지 않음. 프로젝트 전환은 프로세스 재시작을 통해서만 가능.
 
 ## 사용하는 외부 라이브러리
-- Tomlyn: TOML 파싱 (`Toml.ToModel()`, `TomlTable`)
+- TomlConfig (내부): TOML 파일 로드/저장/섹션 접근 (`LoadFile`, `CreateEmpty`, `GetSection`, `SetSection`, `SetValue`, `SaveToFile`)

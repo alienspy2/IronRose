@@ -3,7 +3,7 @@
 // @brief   에디터 상태 영속화 (.rose_editor_state.toml).
 //          마지막 씬 경로, 창 위치/크기, UI 스케일, 스냅 설정,
 //          패널 가시성, ImGui 레이아웃, 프리팹 편집 모드 상태를 저장/복원한다.
-// @deps    IronRose.Engine/ProjectContext, RoseEngine/Debug, Tomlyn
+// @deps    IronRose.Engine/ProjectContext, IronRose.Engine/TomlConfig, RoseEngine/Debug
 // @exports
 //   static class EditorState
 //     LastScenePath: string?                     — 마지막으로 열었던 씬 절대 경로
@@ -21,12 +21,12 @@
 //   class PrefabEditContext (internal)           — 프리팹 편집 스택 한 레벨 컨텍스트
 // @note    경로 저장 시 ProjectRoot 기준 상대 경로로 변환하여 저장.
 //          FindOrCreatePath()는 ProjectContext.ProjectRoot를 기반으로 파일 경로를 결정한다.
+//          TOML 읽기에 TomlConfig API를 사용한다. Save()는 문자열 직접 조합을 유지한다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.IO;
-using Tomlyn;
-using Tomlyn.Model;
+using IronRose.Engine;
 using RoseEngine;
 
 namespace IronRose.Engine.Editor
@@ -131,69 +131,69 @@ namespace IronRose.Engine.Editor
             var path = FindOrCreatePath();
             if (!File.Exists(path)) return;
 
-            try
+            var config = TomlConfig.LoadFile(path, "[EditorState]");
+            if (config == null) return;
+
+            var editor = config.GetSection("editor");
+            if (editor != null)
             {
-                var table = Toml.ToModel(File.ReadAllText(path));
-                if (table.TryGetValue("editor", out var editorVal) && editorVal is TomlTable editor)
-                {
-                    if (editor.TryGetValue("last_scene", out var v) && v is string s && !string.IsNullOrEmpty(s))
-                        LastScenePath = ToAbsolute(s);
-                    if (editor.TryGetValue("ui_scale", out var vs) && vs is double ds)
-                        UiScale = Math.Clamp((float)ds, 0.5f, 3.0f);
-                    if (editor.TryGetValue("editor_font", out var vf) && vf is string sf)
-                        EditorFont = sf;
-                    if (editor.TryGetValue("scene_view_render_style", out var vr) && vr is string sr)
-                        SceneViewRenderStyle = sr;
-                    if (editor.TryGetValue("active_renderer_profile_guid", out var varp) && varp is string sarp && !string.IsNullOrEmpty(sarp))
-                        ActiveRendererProfileGuid = sarp;
-                }
-
-                if (table.TryGetValue("snap", out var snapVal) && snapVal is TomlTable snap)
-                {
-                    if (snap.TryGetValue("translate", out var vst) && vst is double dst)
-                        SnapTranslate = Math.Max((float)dst, 0.001f);
-                    if (snap.TryGetValue("rotate", out var vsr) && vsr is double dsr)
-                        SnapRotate = Math.Max((float)dsr, 0.001f);
-                    if (snap.TryGetValue("scale", out var vss) && vss is double dss)
-                        SnapScale = Math.Max((float)dss, 0.001f);
-                    if (snap.TryGetValue("grid_2d", out var vsg) && vsg is double dsg)
-                        SnapGrid2D = Math.Max((float)dsg, 0.001f);
-                }
-
-                if (table.TryGetValue("window", out var windowVal) && windowVal is TomlTable window)
-                {
-                    if (window.TryGetValue("x", out var vx) && vx is long lx) WindowX = (int)lx;
-                    if (window.TryGetValue("y", out var vy) && vy is long ly) WindowY = (int)ly;
-                    if (window.TryGetValue("w", out var vw) && vw is long lw) WindowW = (int)lw;
-                    if (window.TryGetValue("h", out var vh) && vh is long lh) WindowH = (int)lh;
-                }
-
-                if (table.TryGetValue("panels", out var panelsVal) && panelsVal is TomlTable panels)
-                {
-                    if (panels.TryGetValue("hierarchy", out var ph) && ph is bool bh) PanelHierarchy = bh;
-                    if (panels.TryGetValue("inspector", out var pi) && pi is bool bi) PanelInspector = bi;
-                    if (panels.TryGetValue("scene_environment", out var pse) && pse is bool bse) PanelSceneEnvironment = bse;
-                    if (panels.TryGetValue("console", out var pc) && pc is bool bc) PanelConsole = bc;
-                    if (panels.TryGetValue("game_view", out var pg) && pg is bool bg) PanelGameView = bg;
-                    if (panels.TryGetValue("scene_view", out var psv) && psv is bool bsv) PanelSceneView = bsv;
-                    if (panels.TryGetValue("project", out var pp) && pp is bool bp) PanelProject = bp;
-                    if (panels.TryGetValue("texture_tool", out var pt) && pt is bool bt) PanelTextureTool = bt;
-                    if (panels.TryGetValue("project_settings", out var pps) && pps is bool bps) PanelProjectSettings = bps;
-                }
-
-                if (table.TryGetValue("imgui_layout", out var layoutVal) && layoutVal is TomlTable layout)
-                {
-                    if (layout.TryGetValue("data", out var vd) && vd is string sd && !string.IsNullOrEmpty(sd))
-                        ImGuiLayoutData = sd;
-                }
-
-                var winInfo = WindowX.HasValue ? $"{WindowX},{WindowY} {WindowW}x{WindowH}" : "default";
-                Debug.Log($"[EditorState] Loaded: last_scene={LastScenePath ?? "(none)"}, window={winInfo}");
+                var s = editor.GetString("last_scene", "");
+                if (!string.IsNullOrEmpty(s))
+                    LastScenePath = ToAbsolute(s);
+                UiScale = Math.Clamp(editor.GetFloat("ui_scale", UiScale), 0.5f, 3.0f);
+                var sf = editor.GetString("editor_font", "");
+                if (!string.IsNullOrEmpty(sf))
+                    EditorFont = sf;
+                var sr = editor.GetString("scene_view_render_style", "");
+                if (!string.IsNullOrEmpty(sr))
+                    SceneViewRenderStyle = sr;
+                var sarp = editor.GetString("active_renderer_profile_guid", "");
+                if (!string.IsNullOrEmpty(sarp))
+                    ActiveRendererProfileGuid = sarp;
             }
-            catch (Exception ex)
+
+            var snap = config.GetSection("snap");
+            if (snap != null)
             {
-                Debug.LogWarning($"[EditorState] Failed to load {path}: {ex.Message}");
+                SnapTranslate = Math.Max(snap.GetFloat("translate", SnapTranslate), 0.001f);
+                SnapRotate = Math.Max(snap.GetFloat("rotate", SnapRotate), 0.001f);
+                SnapScale = Math.Max(snap.GetFloat("scale", SnapScale), 0.001f);
+                SnapGrid2D = Math.Max(snap.GetFloat("grid_2d", SnapGrid2D), 0.001f);
             }
+
+            var window = config.GetSection("window");
+            if (window != null)
+            {
+                if (window.HasKey("x")) WindowX = window.GetInt("x");
+                if (window.HasKey("y")) WindowY = window.GetInt("y");
+                if (window.HasKey("w")) WindowW = window.GetInt("w");
+                if (window.HasKey("h")) WindowH = window.GetInt("h");
+            }
+
+            var panels = config.GetSection("panels");
+            if (panels != null)
+            {
+                PanelHierarchy = panels.GetBool("hierarchy", PanelHierarchy);
+                PanelInspector = panels.GetBool("inspector", PanelInspector);
+                PanelSceneEnvironment = panels.GetBool("scene_environment", PanelSceneEnvironment);
+                PanelConsole = panels.GetBool("console", PanelConsole);
+                PanelGameView = panels.GetBool("game_view", PanelGameView);
+                PanelSceneView = panels.GetBool("scene_view", PanelSceneView);
+                PanelProject = panels.GetBool("project", PanelProject);
+                PanelTextureTool = panels.GetBool("texture_tool", PanelTextureTool);
+                PanelProjectSettings = panels.GetBool("project_settings", PanelProjectSettings);
+            }
+
+            var layout = config.GetSection("imgui_layout");
+            if (layout != null)
+            {
+                var sd = layout.GetString("data", "");
+                if (!string.IsNullOrEmpty(sd))
+                    ImGuiLayoutData = sd;
+            }
+
+            var winInfo = WindowX.HasValue ? $"{WindowX},{WindowY} {WindowW}x{WindowH}" : "default";
+            Debug.Log($"[EditorState] Loaded: last_scene={LastScenePath ?? "(none)"}, window={winInfo}");
         }
 
         public static void Save()
