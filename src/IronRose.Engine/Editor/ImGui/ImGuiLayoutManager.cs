@@ -21,7 +21,7 @@ using System.Numerics;
 using ImGuiNET;
 using IronRose.Engine.Editor.ImGuiEditor.Panels;
 using Silk.NET.Windowing;
-using Debug = RoseEngine.Debug;
+using Debug = RoseEngine.EditorDebug;
 
 namespace IronRose.Engine.Editor.ImGuiEditor
 {

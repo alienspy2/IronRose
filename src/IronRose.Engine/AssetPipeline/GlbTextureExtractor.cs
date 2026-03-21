@@ -64,7 +64,7 @@ namespace IronRose.AssetPipeline
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[GlbTextureExtractor] Failed to parse '{glbPath}': {ex.Message}");
+                EditorDebug.LogWarning($"[GlbTextureExtractor] Failed to parse '{glbPath}': {ex.Message}");
                 return null;
             }
         }

@@ -34,7 +34,7 @@ namespace IronRose.Engine.Editor
             File.WriteAllText(filePath, tomlStr);
 
             SceneManager.GetActiveScene().isDirty = false;
-            Debug.Log($"[Scene] Saved: {filePath}");
+            EditorDebug.Log($"[Scene] Saved: {filePath}");
         }
 
         /// <summary>현재 씬을 TOML 문자열로 직렬화 (디스크 I/O 없음).</summary>
@@ -230,7 +230,7 @@ namespace IronRose.Engine.Editor
                 if (primType != null)
                 {
                     fields["primitiveType"] = primType;
-                    Debug.Log($"[Scene:Save] MeshFilter on '{comp.gameObject.name}': primitive={primType}");
+                    EditorDebug.Log($"[Scene:Save] MeshFilter on '{comp.gameObject.name}': primitive={primType}");
                 }
                 else
                 {
@@ -240,13 +240,13 @@ namespace IronRose.Engine.Editor
                     if (meshGuid != null)
                     {
                         fields["assetGuid"] = meshGuid;
-                        Debug.Log($"[Scene:Save] MeshFilter on '{comp.gameObject.name}': meshGuid={meshGuid}, meshName={mf.mesh?.name}");
+                        EditorDebug.Log($"[Scene:Save] MeshFilter on '{comp.gameObject.name}': meshGuid={meshGuid}, meshName={mf.mesh?.name}");
                     }
                     else
                     {
                         // GUID 해석 실패 — 빈 필드로 직렬화 (복구 가능하도록)
                         fields["assetGuid"] = "";
-                        Debug.LogWarning($"[Scene:Save] MeshFilter on '{comp.gameObject.name}': invalid ref — mesh={mf.mesh?.name ?? "null"}, no GUID found");
+                        EditorDebug.LogWarning($"[Scene:Save] MeshFilter on '{comp.gameObject.name}': invalid ref — mesh={mf.mesh?.name ?? "null"}, no GUID found");
                     }
                 }
 
@@ -268,13 +268,13 @@ namespace IronRose.Engine.Editor
                 if (meshGuid != null)
                 {
                     fields["meshGuid"] = meshGuid;
-                    Debug.Log($"[Scene:Save] MipMeshFilter on '{comp.gameObject.name}': meshGuid={meshGuid}");
+                    EditorDebug.Log($"[Scene:Save] MipMeshFilter on '{comp.gameObject.name}': meshGuid={meshGuid}");
                 }
                 else
                 {
                     // GUID 해석 실패 — 빈 필드로 직렬화 (복구 가능하도록)
                     fields["meshGuid"] = "";
-                    Debug.LogWarning($"[Scene:Save] MipMeshFilter on '{comp.gameObject.name}': invalid ref — mfMesh={mfComp?.mesh?.name ?? "null"}, no GUID found");
+                    EditorDebug.LogWarning($"[Scene:Save] MipMeshFilter on '{comp.gameObject.name}': invalid ref — mfMesh={mfComp?.mesh?.name ?? "null"}, no GUID found");
                 }
 
                 return new TomlTable { ["type"] = "MipMeshFilter", ["fields"] = fields };
@@ -366,7 +366,7 @@ namespace IronRose.Engine.Editor
             if (!string.IsNullOrEmpty(dir))
                 Directory.CreateDirectory(dir);
             File.WriteAllText(path, tomlStr);
-            Debug.Log($"[Prefab] Saved: {path}");
+            EditorDebug.Log($"[Prefab] Saved: {path}");
         }
 
         /// <summary>Prefab TOML 문자열을 생성 (디스크 I/O 없음).</summary>
@@ -392,7 +392,7 @@ namespace IronRose.Engine.Editor
         {
             if (!File.Exists(filePath))
             {
-                Debug.LogError($"[Prefab] File not found: {filePath}");
+                EditorDebug.LogError($"[Prefab] File not found: {filePath}");
                 return new List<GameObject>();
             }
 
@@ -407,7 +407,7 @@ namespace IronRose.Engine.Editor
             try { root = Toml.ToModel(tomlStr); }
             catch (Exception ex)
             {
-                Debug.LogError($"[Prefab] TOML parse error: {ex.Message}");
+                EditorDebug.LogError($"[Prefab] TOML parse error: {ex.Message}");
                 return new List<GameObject>();
             }
 
@@ -460,7 +460,7 @@ namespace IronRose.Engine.Editor
             if (!string.IsNullOrEmpty(dir))
                 Directory.CreateDirectory(dir);
             File.WriteAllText(variantPath, tomlStr);
-            Debug.Log($"[Prefab] Saved variant: {variantPath}");
+            EditorDebug.Log($"[Prefab] Saved variant: {variantPath}");
         }
 
         /// <summary>
@@ -939,7 +939,7 @@ namespace IronRose.Engine.Editor
                     if (prefabGo == null)
                     {
                         prefabGo = new GameObject(goName);
-                        Debug.LogWarning($"[Prefab] Nested PrefabInstance '{goName}': fallback to empty GO (guid={goTable})");
+                        EditorDebug.LogWarning($"[Prefab] Nested PrefabInstance '{goName}': fallback to empty GO (guid={goTable})");
                     }
 
                     if (goTable.TryGetValue("transform", out var tValP) && tValP is TomlTable tTableP)
@@ -1061,7 +1061,7 @@ namespace IronRose.Engine.Editor
         {
             if (!File.Exists(filePath))
             {
-                Debug.LogError($"[Scene] File not found: {filePath}");
+                EditorDebug.LogError($"[Scene] File not found: {filePath}");
                 return;
             }
 
@@ -1073,12 +1073,12 @@ namespace IronRose.Engine.Editor
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[Scene] TOML parse error: {ex.Message}");
+                EditorDebug.LogError($"[Scene] TOML parse error: {ex.Message}");
                 return;
             }
 
             LoadFromTable(root, filePath);
-            Debug.Log($"[Scene] Loaded: {filePath}");
+            EditorDebug.Log($"[Scene] Loaded: {filePath}");
         }
 
         /// <summary>TOML 문자열에서 씬을 역직렬화 (디스크 I/O 없음).</summary>
@@ -1091,7 +1091,7 @@ namespace IronRose.Engine.Editor
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[Scene] TOML parse error: {ex.Message}");
+                EditorDebug.LogError($"[Scene] TOML parse error: {ex.Message}");
                 return;
             }
 
@@ -1210,29 +1210,29 @@ namespace IronRose.Engine.Editor
                                 PrimitiveType.Quad => PrimitiveGenerator.CreateQuad(),
                                 _ => PrimitiveGenerator.CreateCube(),
                             };
-                            Debug.Log($"[Scene:Load] MeshFilter on '{go.name}': primitive={ptStr}");
+                            EditorDebug.Log($"[Scene:Load] MeshFilter on '{go.name}': primitive={ptStr}");
                         }
                     }
                     else if (fields.TryGetValue("assetGuid", out var guidVal) && guidVal is string meshGuid)
                     {
                         var db = Resources.GetAssetDatabase();
                         var guidPath = db?.GetPathFromGuid(meshGuid);
-                        Debug.Log($"[Scene:Load] MeshFilter on '{go.name}': assetGuid={meshGuid}, resolvedPath={guidPath ?? "NULL"}");
+                        EditorDebug.Log($"[Scene:Load] MeshFilter on '{go.name}': assetGuid={meshGuid}, resolvedPath={guidPath ?? "NULL"}");
                         var mesh = db?.LoadByGuid<Mesh>(meshGuid);
                         if (mesh != null)
                         {
                             var mf = go.AddComponent<MeshFilter>();
                             mf.mesh = mesh;
-                            Debug.Log($"[Scene:Load] MeshFilter on '{go.name}': loaded mesh '{mesh.name}' ({mesh.vertices.Length} verts)");
+                            EditorDebug.Log($"[Scene:Load] MeshFilter on '{go.name}': loaded mesh '{mesh.name}' ({mesh.vertices.Length} verts)");
                         }
                         else
                         {
-                            Debug.LogWarning($"[Scene:Load] MeshFilter on '{go.name}': FAILED to load mesh for guid={meshGuid}, path={guidPath ?? "NULL"}");
+                            EditorDebug.LogWarning($"[Scene:Load] MeshFilter on '{go.name}': FAILED to load mesh for guid={meshGuid}, path={guidPath ?? "NULL"}");
                         }
                     }
                     else
                     {
-                        Debug.LogWarning($"[Scene:Load] MeshFilter on '{go.name}': no primitiveType or assetGuid in fields");
+                        EditorDebug.LogWarning($"[Scene:Load] MeshFilter on '{go.name}': no primitiveType or assetGuid in fields");
                     }
                     break;
 
@@ -1241,7 +1241,7 @@ namespace IronRose.Engine.Editor
                     {
                         var db = Resources.GetAssetDatabase();
                         var meshPath = db?.GetPathFromGuid(mmMeshGuid);
-                        Debug.Log($"[Scene:Load] MipMeshFilter on '{go.name}': meshGuid={mmMeshGuid}, resolvedPath={meshPath ?? "NULL"}");
+                        EditorDebug.Log($"[Scene:Load] MipMeshFilter on '{go.name}': meshGuid={mmMeshGuid}, resolvedPath={meshPath ?? "NULL"}");
                         if (meshPath != null && SubAssetPath.TryParse(meshPath, out var filePath, out _, out var idx) && idx >= 0)
                         {
                             var mipPath = SubAssetPath.Build(filePath, "MipMesh", idx);
@@ -1254,21 +1254,21 @@ namespace IronRose.Engine.Editor
                                     mmf.mipBias = ToFloat(mbVal);
                                 if (fields.TryGetValue("lodScale", out var lsVal))
                                     mmf.lodScale = ToFloat(lsVal);
-                                Debug.Log($"[Scene:Load] MipMeshFilter on '{go.name}': loaded MipMesh from '{mipPath}' ({mipMesh.LodCount} LODs)");
+                                EditorDebug.Log($"[Scene:Load] MipMeshFilter on '{go.name}': loaded MipMesh from '{mipPath}' ({mipMesh.LodCount} LODs)");
                             }
                             else
                             {
-                                Debug.LogWarning($"[Scene:Load] MipMeshFilter on '{go.name}': FAILED to load MipMesh from '{mipPath}'");
+                                EditorDebug.LogWarning($"[Scene:Load] MipMeshFilter on '{go.name}': FAILED to load MipMesh from '{mipPath}'");
                             }
                         }
                         else
                         {
-                            Debug.LogWarning($"[Scene:Load] MipMeshFilter on '{go.name}': FAILED to resolve meshGuid '{mmMeshGuid}', meshPath={meshPath ?? "NULL"}");
+                            EditorDebug.LogWarning($"[Scene:Load] MipMeshFilter on '{go.name}': FAILED to resolve meshGuid '{mmMeshGuid}', meshPath={meshPath ?? "NULL"}");
                         }
                     }
                     else
                     {
-                        Debug.LogWarning($"[Scene:Load] MipMeshFilter on '{go.name}': no meshGuid field");
+                        EditorDebug.LogWarning($"[Scene:Load] MipMeshFilter on '{go.name}': no meshGuid field");
                     }
                     break;
 
@@ -1320,7 +1320,7 @@ namespace IronRose.Engine.Editor
                         if (profile != null)
                             ppv.profile = profile;
                         else
-                            Debug.LogWarning($"[Scene:Load] PostProcessVolume on '{go.name}': profile GUID '{pgStr}' not found");
+                            EditorDebug.LogWarning($"[Scene:Load] PostProcessVolume on '{go.name}': profile GUID '{pgStr}' not found");
                     }
                     break;
                 }
@@ -1694,7 +1694,7 @@ namespace IronRose.Engine.Editor
                 }
                 else
                 {
-                    Debug.LogWarning($"[Scene] Unknown component type: {typeName}");
+                    EditorDebug.LogWarning($"[Scene] Unknown component type: {typeName}");
                     return;
                 }
             }
@@ -1703,7 +1703,7 @@ namespace IronRose.Engine.Editor
             try { comp = go.AddComponent(compType); }
             catch (Exception ex)
             {
-                Debug.LogError($"[Scene] Failed to add component {typeName}: {ex.Message}");
+                EditorDebug.LogError($"[Scene] Failed to add component {typeName}: {ex.Message}");
                 return;
             }
 
@@ -2031,7 +2031,7 @@ namespace IronRose.Engine.Editor
                         if (shortNameMap.TryGetValue(t.Name, out var existingShort))
                         {
                             if (existingShort != fullName)
-                                Debug.LogError($"[Scripting] Duplicate component class name '{t.Name}' found: '{existingShort}' and '{fullName}'. Use different class names to avoid conflicts.");
+                                EditorDebug.LogError($"[Scripting] Duplicate component class name '{t.Name}' found: '{existingShort}' and '{fullName}'. Use different class names to avoid conflicts.");
                         }
                         else
                         {

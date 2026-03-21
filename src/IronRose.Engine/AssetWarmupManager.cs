@@ -42,12 +42,12 @@ namespace IronRose.Engine
             var uncached = _assetDatabase.GetUncachedAssetPaths();
             if (uncached.Length == 0)
             {
-                RoseEngine.Debug.Log("[Engine] All assets already cached, skipping warm-up");
+                RoseEngine.EditorDebug.Log("[Engine] All assets already cached, skipping warm-up");
                 OnWarmUpComplete?.Invoke();
                 return;
             }
 
-            RoseEngine.Debug.Log($"[Engine] Warm-up: {uncached.Length} assets to cache");
+            RoseEngine.EditorDebug.Log($"[Engine] Warm-up: {uncached.Length} assets to cache");
             _warmUpQueue = uncached;
             _warmUpNext = 0;
             _isWarmingUp = true;
@@ -69,7 +69,7 @@ namespace IronRose.Engine
                 if (_backgroundTask.IsFaulted)
                 {
                     var ex = _backgroundTask.Exception?.InnerException;
-                    RoseEngine.Debug.LogError($"[Engine] Warm-up failed for {CurrentAssetName}: {ex?.Message}");
+                    RoseEngine.EditorDebug.LogError($"[Engine] Warm-up failed for {CurrentAssetName}: {ex?.Message}");
                 }
                 _backgroundTask = null;
                 _warmUpNext++;
@@ -98,7 +98,7 @@ namespace IronRose.Engine
                 }
                 catch (Exception ex)
                 {
-                    RoseEngine.Debug.LogError($"[Engine] Warm-up failed for {path}: {ex.Message}");
+                    RoseEngine.EditorDebug.LogError($"[Engine] Warm-up failed for {path}: {ex.Message}");
                 }
                 _warmUpNext++;
             }
@@ -113,7 +113,7 @@ namespace IronRose.Engine
         private void Finish()
         {
             _warmUpTimer?.Stop();
-            RoseEngine.Debug.Log($"[Engine] Warm-up complete: {_warmUpQueue?.Length ?? 0} assets cached ({_warmUpTimer?.Elapsed.TotalSeconds:F1}s)");
+            RoseEngine.EditorDebug.Log($"[Engine] Warm-up complete: {_warmUpQueue?.Length ?? 0} assets cached ({_warmUpTimer?.Elapsed.TotalSeconds:F1}s)");
             _isWarmingUp = false;
             CurrentAssetName = null;
             _warmUpQueue = null;

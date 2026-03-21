@@ -1,7 +1,7 @@
 // ------------------------------------------------------------
 // @file    BloomEffect.cs
 // @brief   HDR Bloom 포스트 프로세스. Threshold -> Gaussian Blur -> Composite 4-pass 파이프라인.
-// @deps    PostProcessEffect, ShaderCompiler
+// @deps    PostProcessEffect, ShaderCompiler, EditorDebug
 // @exports
 //   class BloomEffect : PostProcessEffect
 //     Threshold: float [EffectParam]   — 밝기 임계값 (0~10)
@@ -138,7 +138,7 @@ namespace IronRose.Rendering
 
             CreateSizeDependentResources(width, height);
 
-            Debug.Log($"[BloomEffect] Initialized ({width}x{height})");
+            EditorDebug.Log($"[BloomEffect] Initialized ({width}x{height})");
         }
 
         public override void Resize(uint width, uint height)
@@ -282,7 +282,7 @@ namespace IronRose.Rendering
             if (_compositeShaders != null)
                 foreach (var s in _compositeShaders) s.Dispose();
 
-            Debug.Log("[BloomEffect] Disposed");
+            EditorDebug.Log("[BloomEffect] Disposed");
         }
     }
 }

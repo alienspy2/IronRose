@@ -31,7 +31,7 @@ namespace IronRose.Scripting
 
         public ScriptCompiler()
         {
-            Debug.Log("[Scripting] Initializing ScriptCompiler...");
+            EditorDebug.Log("[Scripting] Initializing ScriptCompiler...");
 
             // 기본 참조 추가
             AddReference(typeof(object));           // System.Private.CoreLib
@@ -42,7 +42,7 @@ namespace IronRose.Scripting
             var runtimeAssembly = Assembly.Load("System.Runtime");
             AddReference(runtimeAssembly.Location);
 
-            Debug.Log("[Scripting] Added base references");
+            EditorDebug.Log("[Scripting] Added base references");
 
             // IronRose.Engine 참조 추가 (나중에)
             // AddReference(typeof(RoseEngine.GameObject));
@@ -58,17 +58,17 @@ namespace IronRose.Scripting
             if (File.Exists(assemblyPath))
             {
                 _references.Add(MetadataReference.CreateFromFile(assemblyPath));
-                Debug.Log($"[Scripting] Added reference: {Path.GetFileName(assemblyPath)}");
+                EditorDebug.Log($"[Scripting] Added reference: {Path.GetFileName(assemblyPath)}");
             }
             else
             {
-                Debug.LogWarning($"[Scripting] WARNING: Assembly not found: {assemblyPath}");
+                EditorDebug.LogWarning($"[Scripting] WARNING: Assembly not found: {assemblyPath}");
             }
         }
 
         public CompilationResult CompileFromFiles(string[] filePaths, string assemblyName = "DynamicScript")
         {
-            Debug.Log($"[Scripting] Compiling {filePaths.Length} files: {assemblyName}");
+            EditorDebug.Log($"[Scripting] Compiling {filePaths.Length} files: {assemblyName}");
 
             var syntaxTrees = new List<SyntaxTree>();
             foreach (var f in filePaths)
@@ -81,7 +81,7 @@ namespace IronRose.Scripting
                 }
                 catch (IOException ex)
                 {
-                    Debug.LogWarning($"[Scripting] Skipping file {f}: {ex.Message}");
+                    EditorDebug.LogWarning($"[Scripting] Skipping file {f}: {ex.Message}");
                 }
             }
 
@@ -90,7 +90,7 @@ namespace IronRose.Scripting
 
         public CompilationResult CompileFromSource(string sourceCode, string assemblyName = "DynamicScript")
         {
-            Debug.Log($"[Scripting] Compiling: {assemblyName}");
+            EditorDebug.Log($"[Scripting] Compiling: {assemblyName}");
 
             var syntaxTree = CSharpSyntaxTree.ParseText(sourceCode);
 
@@ -118,10 +118,10 @@ namespace IronRose.Scripting
                     .Select(d => $"{d.Id}: {d.GetMessage()}")
                     .ToList();
 
-                Debug.LogError($"[Scripting] Compilation FAILED with {errors.Count} errors");
+                EditorDebug.LogError($"[Scripting] Compilation FAILED with {errors.Count} errors");
                 foreach (var error in errors)
                 {
-                    Debug.LogError($"[Scripting]   - {error}");
+                    EditorDebug.LogError($"[Scripting]   - {error}");
                 }
 
                 return new CompilationResult
@@ -134,7 +134,7 @@ namespace IronRose.Scripting
             ms.Seek(0, SeekOrigin.Begin);
             byte[] assemblyBytes = ms.ToArray();
 
-            Debug.Log($"[Scripting] Compilation SUCCESS ({assemblyBytes.Length} bytes)");
+            EditorDebug.Log($"[Scripting] Compilation SUCCESS ({assemblyBytes.Length} bytes)");
 
             return new CompilationResult
             {
@@ -145,7 +145,7 @@ namespace IronRose.Scripting
 
         public CompilationResult CompileFromFile(string csFilePath)
         {
-            Debug.Log($"[Scripting] Reading file: {csFilePath}");
+            EditorDebug.Log($"[Scripting] Reading file: {csFilePath}");
 
             if (!File.Exists(csFilePath))
             {

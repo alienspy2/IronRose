@@ -1,7 +1,8 @@
-// ------------------------------------------------------------
+﻿// ------------------------------------------------------------
 // @file    Debug.cs
-// @brief   전역 로그 시스템. LOG/WARNING/ERROR 레벨로 콘솔 및 파일에 기록.
-//          초기에는 CWD/logs/에 기록하며, SetLogDirectory()로 프로젝트 폴더로 전환 가능.
+// @brief   게임 런타임/유저 스크립트 전용 로그 시스템. {ProjectRoot}/Logs/에 기록.
+//          SetLogDirectory()로 프로젝트 로드 후 로그 디렉토리를 설정한다.
+//          프로젝트 미로드 시 EditorDebug로 폴백.
 // @deps    (없음 — Contracts 레이어, 외부 의존 없음)
 // @exports
 //   static class Debug
@@ -10,9 +11,8 @@
 //     Log(object): void                                 — INFO 레벨 로그
 //     LogWarning(object): void                          — WARNING 레벨 로그
 //     LogError(object): void                            — ERROR 레벨 로그
-//     SetLogDirectory(string logDir): void              — 로그 디렉토리 변경 (기존 내용 복사)
-// @note    정적 생성자에서 CWD/Logs/ 생성 시도, 실패 시 임시 디렉토리로 폴백.
-//          SetLogDirectory() 호출 시 기존 로그 내용을 새 경로로 복사 후 원본 삭제.
+//     SetLogDirectory(string logDir): void              — 로그 디렉토리 변경
+// @note    SetLogDirectory() 호출 전까지 EditorDebug로 폴백.
 //          Write()에서 _lock으로 파일 접근 동기화. IOException 발생 시 무시 (콘솔 출력은 완료).
 // ------------------------------------------------------------
 using System;
@@ -25,6 +25,7 @@ namespace RoseEngine
         private static string _logPath;
         private static readonly object _lock = new();
         private static string _logFileName;
+        private static bool _projectActive;
 
         /// <summary>로그 출력 활성화 여부 (기본 true)</summary>
         public static bool Enabled { get; set; } = true;
@@ -35,42 +36,21 @@ namespace RoseEngine
         static Debug()
         {
             _logFileName = $"ironrose_{DateTime.Now:yyyyMMdd_HHmmss}.log";
-            try
-            {
-                Directory.CreateDirectory("Logs");
-                _logPath = Path.Combine("Logs", _logFileName);
-            }
-            catch
-            {
-                // CWD에 Logs/ 생성 실패 시 임시 디렉토리에 로그 작성
-                var tempDir = Path.Combine(Path.GetTempPath(), "IronRose", "Logs");
-                try { Directory.CreateDirectory(tempDir); } catch { }
-                _logPath = Path.Combine(tempDir, _logFileName);
-            }
+            // 초기에는 로그 파일을 생성하지 않음 -- SetLogDirectory() 전까지 EditorDebug로 폴백
+            _logPath = "";
+            _projectActive = false;
         }
 
         /// <summary>
-        /// 로그 디렉토리를 변경합니다. 기존 로그 파일의 내용은 새 경로로 복사됩니다.
+        /// 로그 디렉토리를 설정합니다. 프로젝트 로드 후 호출.
         /// </summary>
         public static void SetLogDirectory(string logDir)
         {
             lock (_lock)
             {
                 Directory.CreateDirectory(logDir);
-                var newPath = Path.Combine(logDir, _logFileName);
-
-                if (File.Exists(_logPath) && _logPath != newPath)
-                {
-                    try
-                    {
-                        var existingContent = File.ReadAllText(_logPath);
-                        File.WriteAllText(newPath, existingContent);
-                        try { File.Delete(_logPath); } catch { }
-                    }
-                    catch { }
-                }
-
-                _logPath = newPath;
+                _logPath = Path.Combine(logDir, _logFileName);
+                _projectActive = true;
             }
         }
 
@@ -82,6 +62,17 @@ namespace RoseEngine
         {
             if (!Enabled) return;
 
+            // 프로젝트 미로드 시 EditorDebug로 폴백
+            if (!_projectActive)
+            {
+                switch (level)
+                {
+                    case "WARNING": EditorDebug.LogWarning(message); return;
+                    case "ERROR": EditorDebug.LogError(message); return;
+                    default: EditorDebug.Log(message); return;
+                }
+            }
+
             var line = $"[{level}] {message}";
             Console.WriteLine(line);
 
@@ -89,7 +80,8 @@ namespace RoseEngine
             {
                 try
                 {
-                    File.AppendAllText(_logPath, $"[{DateTime.Now:HH:mm:ss.fff}] {line}{Environment.NewLine}");
+                    File.AppendAllText(_logPath,
+                        $"[{DateTime.Now:HH:mm:ss.fff}] {line}{Environment.NewLine}");
                 }
                 catch (IOException)
                 {
@@ -103,7 +95,7 @@ namespace RoseEngine
                 "ERROR" => LogLevel.Error,
                 _ => LogLevel.Info,
             };
-            LogSink?.Invoke(new LogEntry(logLevel, message?.ToString() ?? "null", DateTime.Now));
+            LogSink?.Invoke(new LogEntry(logLevel, LogSource.Project, message?.ToString() ?? "null", DateTime.Now));
         }
     }
 }

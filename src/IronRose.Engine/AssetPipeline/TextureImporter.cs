@@ -18,7 +18,7 @@ namespace IronRose.AssetPipeline
         {
             if (!File.Exists(texturePath))
             {
-                Debug.LogError($"Texture not found: {texturePath}");
+                EditorDebug.LogError($"Texture not found: {texturePath}");
                 return null!;
             }
 
@@ -37,7 +37,7 @@ namespace IronRose.AssetPipeline
                 if (isPanoramic)
                     EnforceEquirectangularAspect(ref hdrTex);
 
-                Debug.Log($"[TextureImporter] Loaded HDR{(isPanoramic ? " (Panoramic)" : "")}: {texturePath} ({hdrTex.width}x{hdrTex.height})");
+                EditorDebug.Log($"[TextureImporter] Loaded HDR{(isPanoramic ? " (Panoramic)" : "")}: {texturePath} ({hdrTex.width}x{hdrTex.height})");
                 return hdrTex;
             }
 
@@ -57,7 +57,7 @@ namespace IronRose.AssetPipeline
                 float scale = (float)maxSize / Math.Max(image.Width, image.Height);
                 int newW = Math.Max(1, (int)(image.Width * scale));
                 int newH = Math.Max(1, (int)(image.Height * scale));
-                Debug.Log($"[TextureImporter] Resize {image.Width}x{image.Height} → {newW}x{newH} (max_size={maxSize})");
+                EditorDebug.Log($"[TextureImporter] Resize {image.Width}x{image.Height} → {newW}x{newH} (max_size={maxSize})");
                 image.Mutate(ctx => ctx.Resize(newW, newH));
             }
 
@@ -81,7 +81,7 @@ namespace IronRose.AssetPipeline
                 }
             });
 
-            Debug.Log($"[TextureImporter] Loaded: {texturePath} ({w}x{h})");
+            EditorDebug.Log($"[TextureImporter] Loaded: {texturePath} ({w}x{h})");
             return new Texture2D(w, h) { _pixelData = data, name = Path.GetFileNameWithoutExtension(texturePath) };
         }
 
@@ -103,7 +103,7 @@ namespace IronRose.AssetPipeline
                 float scale = (float)maxSize / Math.Max(image.Width, image.Height);
                 int newW = Math.Max(1, (int)(image.Width * scale));
                 int newH = Math.Max(1, (int)(image.Height * scale));
-                Debug.Log($"[TextureImporter] Panoramic resize {image.Width}x{image.Height} → {newW}x{newH} (max_size={maxSize})");
+                EditorDebug.Log($"[TextureImporter] Panoramic resize {image.Width}x{image.Height} → {newW}x{newH} (max_size={maxSize})");
                 image.Mutate(ctx => ctx.Resize(newW, newH));
             }
 
@@ -111,7 +111,7 @@ namespace IronRose.AssetPipeline
             int targetH = image.Width / 2;
             if (image.Height != targetH)
             {
-                Debug.Log($"[TextureImporter] Panoramic aspect fix {image.Width}x{image.Height} → {image.Width}x{targetH}");
+                EditorDebug.Log($"[TextureImporter] Panoramic aspect fix {image.Width}x{image.Height} → {image.Width}x{targetH}");
                 image.Mutate(ctx => ctx.Resize(image.Width, targetH));
             }
 
@@ -136,7 +136,7 @@ namespace IronRose.AssetPipeline
                 }
             });
 
-            Debug.Log($"[TextureImporter] Loaded Panoramic (LDR→HDR): {texturePath} ({w}x{h})");
+            EditorDebug.Log($"[TextureImporter] Loaded Panoramic (LDR→HDR): {texturePath} ({w}x{h})");
             return new Texture2D(w, h, hdrData) { name = Path.GetFileNameWithoutExtension(texturePath) };
         }
 
@@ -149,7 +149,7 @@ namespace IronRose.AssetPipeline
             int targetH = hdrTex.width / 2;
             if (hdrTex.height == targetH) return;
 
-            Debug.Log($"[TextureImporter] Panoramic HDR aspect fix {hdrTex.width}x{hdrTex.height} → {hdrTex.width}x{targetH}");
+            EditorDebug.Log($"[TextureImporter] Panoramic HDR aspect fix {hdrTex.width}x{hdrTex.height} → {hdrTex.width}x{targetH}");
 
             var src = hdrTex._hdrPixelData;
             if (src == null) return;
@@ -257,7 +257,7 @@ namespace IronRose.AssetPipeline
                 Directory.CreateDirectory(dir);
 
             result.SaveAsPng(outputPath);
-            Debug.Log($"[TextureImporter] Converted displacement → normal map: {outputPath} ({w}x{h})");
+            EditorDebug.Log($"[TextureImporter] Converted displacement → normal map: {outputPath} ({w}x{h})");
         }
 
         private static float SrgbToLinear(float srgb)

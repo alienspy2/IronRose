@@ -640,11 +640,11 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                                 UndoSystem.Record(new AddComponentAction(
                                     $"Add {compType.Name}", targetGo.GetInstanceID(), compType));
                                 SceneManager.GetActiveScene().isDirty = true;
-                                Debug.Log($"[Scripts] Added component {compType.Name} to {targetGo.name}");
+                                EditorDebug.Log($"[Scripts] Added component {compType.Name} to {targetGo.name}");
                             }
                             else
                             {
-                                Debug.LogWarning($"[Scripts] No Component type found for: {Path.GetFileNameWithoutExtension(scriptPath)}");
+                                EditorDebug.LogWarning($"[Scripts] No Component type found for: {Path.GetFileNameWithoutExtension(scriptPath)}");
                             }
                         }
                     }

@@ -1,3 +1,21 @@
+// ------------------------------------------------------------
+// @file    GBuffer.cs
+// @brief   디퍼드 렌더링용 G-Buffer 관리. Albedo, Normal, Material, WorldPos, Depth, DepthCopy, Velocity
+//          텍스처와 뷰, 프레임버퍼를 생성/리사이즈/해제한다.
+// @deps    (프로젝트 내부 없음 — IronRose.Contracts의 EditorDebug만 사용)
+// @exports
+//   class GBuffer : IDisposable
+//     AlbedoTexture, NormalTexture, MaterialTexture, DepthTexture,
+//     WorldPosTexture, DepthCopyTexture, VelocityTexture: Texture       — G-Buffer 텍스처들
+//     AlbedoView, NormalView, MaterialView, WorldPosView,
+//     DepthView, DepthCopyView, VelocityView: TextureView               — 샘플링용 뷰
+//     Framebuffer: Framebuffer                                          — 5 color + 1 depth
+//     Width, Height: uint                                               — 현재 해상도
+//     PendingDisposal: List<IDisposable>                                — 지연 해제 대기열
+//     Initialize(GraphicsDevice, uint, uint): void                      — 생성 또는 리사이즈
+//     Dispose(): void                                                   — 모든 리소스 해제
+// @note    리사이즈 시 이전 리소스는 PendingDisposal에 추가되어 RenderSystem에서 지연 해제.
+// ------------------------------------------------------------
 using System;
 using Veldrid;
 using RoseEngine;
@@ -124,7 +142,7 @@ namespace IronRose.Rendering
                 WorldPosTexture,
                 VelocityTexture));
 
-            Debug.Log($"[GBuffer] Initialized ({width}x{height})");
+            EditorDebug.Log($"[GBuffer] Initialized ({width}x{height})");
         }
 
         public void Dispose()

@@ -1,3 +1,29 @@
+// ------------------------------------------------------------
+// @file    Texture2D.cs
+// @brief   2D 텍스처 로드(LDR/HDR/EXR/메모리/BC압축), GPU 업로드, 디버그 저장 등 통합 관리.
+//          LoadFromFile/LoadFromMemory로 이미지를 디코딩하고, UploadToGPU로 Veldrid 텍스처로 변환.
+// @deps    RoseEngine/EditorDebug, RoseEngine/HdrReader, RoseEngine/ExrReader, RoseEngine/Color
+// @exports
+//   class Texture2D : IDisposable
+//     name: string                                              — 텍스처 이름
+//     width: int, height: int                                   — 텍스처 크기 (읽기 전용)
+//     isHDR: bool                                               — HDR 텍스처 여부
+//     static LoadFromFile(string): Texture2D                    — 파일에서 LDR/HDR/EXR 로드
+//     static LoadHdrFromFile(string): Texture2D                 — HDR 파일 로드
+//     static LoadExrFromFile(string): Texture2D                 — EXR 파일 로드
+//     static LoadFromMemory(byte[]): Texture2D                  — 메모리에서 LDR 이미지 로드
+//     static CreateWhitePixel(): Texture2D                      — 1x1 흰색 텍스처
+//     static CreateDefaultNormal(): Texture2D                   — 1x1 기본 노말맵
+//     static CreateDefaultMRO(): Texture2D                      — 1x1 기본 MRO맵
+//     static DefaultNormal: Texture2D                           — 공유 기본 노말맵 (lazy)
+//     static DefaultMRO: Texture2D                              — 공유 기본 MRO맵 (lazy)
+//     SetPixels(byte[]): void                                   — 픽셀 데이터 설정
+//     UploadToGPU(GraphicsDevice, bool): void                   — GPU에 텍스처 업로드
+//     GetAverageColor(): Color                                  — 평균 색상 계산
+//     DebugSaveToPng(string): void                              — 디버그용 PNG 저장
+// @note    BC 압축 텍스처는 CreateFromCompressed(internal)로 생성.
+//          HDR 텍스처는 float32 → Half(float16)로 변환하여 GPU 업로드.
+// ------------------------------------------------------------
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -78,7 +104,7 @@ namespace RoseEngine
                 }
             });
 
-            Debug.Log($"[Texture2D] Loaded: {path} ({w}x{h})");
+            EditorDebug.Log($"[Texture2D] Loaded: {path} ({w}x{h})");
             return new Texture2D(w, h, data) { name = Path.GetFileNameWithoutExtension(path) };
         }
 
@@ -88,7 +114,7 @@ namespace RoseEngine
                 throw new FileNotFoundException($"Texture file not found: {path}");
 
             var (w, h, data) = HdrReader.Read(path);
-            Debug.Log($"[Texture2D] Loaded HDR: {path} ({w}x{h})");
+            EditorDebug.Log($"[Texture2D] Loaded HDR: {path} ({w}x{h})");
             return new Texture2D(w, h, data) { name = Path.GetFileNameWithoutExtension(path) };
         }
 
@@ -98,7 +124,7 @@ namespace RoseEngine
                 throw new FileNotFoundException($"Texture file not found: {path}");
 
             var (w, h, data) = ExrReader.Read(path);
-            Debug.Log($"[Texture2D] Loaded EXR: {path} ({w}x{h})");
+            EditorDebug.Log($"[Texture2D] Loaded EXR: {path} ({w}x{h})");
             return new Texture2D(w, h, data) { name = Path.GetFileNameWithoutExtension(path) };
         }
 
@@ -125,7 +151,7 @@ namespace RoseEngine
                 }
             });
 
-            Debug.Log($"[Texture2D] Loaded from memory ({w}x{h})");
+            EditorDebug.Log($"[Texture2D] Loaded from memory ({w}x{h})");
             return new Texture2D(w, h, data);
         }
 
@@ -248,7 +274,7 @@ namespace RoseEngine
                     cl.End();
                     device.SubmitCommands(cl);
                     device.WaitForIdle();
-                    Debug.Log($"[Texture2D] GenerateMipmaps (HDR): {width}x{height}, {mipLevels} mips");
+                    EditorDebug.Log($"[Texture2D] GenerateMipmaps (HDR): {width}x{height}, {mipLevels} mips");
                 }
 
                 TextureView = factory.CreateTextureView(VeldridTexture);
@@ -294,7 +320,7 @@ namespace RoseEngine
                     cl.End();
                     device.SubmitCommands(cl);
                     device.WaitForIdle();
-                    Debug.Log($"[Texture2D] GenerateMipmaps: {width}x{height}, {mipLevels} mips");
+                    EditorDebug.Log($"[Texture2D] GenerateMipmaps: {width}x{height}, {mipLevels} mips");
                 }
 
                 TextureView = factory.CreateTextureView(VeldridTexture);
@@ -407,7 +433,7 @@ namespace RoseEngine
                 }
             });
             image.SaveAsPng(path);
-            Debug.Log($"[Texture2D] Debug saved: {path} ({width}x{height}, {_gpuFormat})");
+            EditorDebug.Log($"[Texture2D] Debug saved: {path} ({width}x{height}, {_gpuFormat})");
         }
 
         public void Dispose()

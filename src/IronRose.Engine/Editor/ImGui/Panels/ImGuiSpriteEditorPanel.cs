@@ -571,7 +571,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             _metadata.Save(_texturePath + ".rose");
             _isDirty = false;
 
-            RoseEngine.Debug.Log($"[SpriteEditor] Applied: {_slices.Count} slices saved");
+            RoseEngine.EditorDebug.Log($"[SpriteEditor] Applied: {_slices.Count} slices saved");
         }
 
         // ── InputFloat wrapper (single-click edit) ──

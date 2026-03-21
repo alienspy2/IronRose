@@ -1,3 +1,24 @@
+// ------------------------------------------------------------
+// @file    GraphicsManager.cs
+// @brief   Veldrid 기반 그래픽스 디바이스 초기화, 프레임 시작/종료, 스크린샷 캡처를 관리한다.
+//          Silk.NET 윈도우에서 네이티브 핸들을 추출하여 Vulkan 스왑체인을 생성한다.
+// @deps    (프로젝트 내부 없음 — IronRose.Contracts의 EditorDebug만 사용)
+// @exports
+//   class GraphicsManager
+//     Device: GraphicsDevice?                              — Veldrid 그래픽스 디바이스
+//     CommandList: CommandList?                            — 프레임별 커맨드 리스트
+//     Window: IWindow?                                    — Silk.NET 윈도우 참조
+//     AspectRatio: float                                  — 현재 윈도우 종횡비
+//     Resized: event Action<uint, uint>                   — 윈도우 리사이즈 이벤트
+//     SetClearColor(float, float, float): void            — 클리어 색상 설정
+//     Initialize(IWindow): void                           — 디바이스 및 커맨드 리스트 생성
+//     BeginFrame(): void                                  — 프레임 시작 (커맨드 리스트 Begin)
+//     EndFrame(): void                                    — 프레임 종료 (Submit + SwapBuffers)
+//     Render(): void                                      — BeginFrame + EndFrame 단축 호출
+//     RequestScreenshot(string): void                     — 다음 EndFrame에서 스크린샷 캡처 요청
+//     Dispose(): void                                     — GPU 리소스 정리
+// @note    Vulkan 백엔드 전용. BeginFrame에서 VeldridException 발생 시 커맨드 리스트 재생성으로 복구.
+// ------------------------------------------------------------
 using Veldrid;
 using Silk.NET.Windowing;
 using Veldrid.ImageSharp;
@@ -37,10 +58,10 @@ namespace IronRose.Rendering
 
         public void Initialize(IWindow window)
         {
-            Debug.Log("[Renderer] Initializing graphics device...");
+            EditorDebug.Log("[Renderer] Initializing graphics device...");
 
             _window = window;
-            Debug.Log($"[Renderer] Using window: {_window.Size.X}x{_window.Size.Y}");
+            EditorDebug.Log($"[Renderer] Using window: {_window.Size.X}x{_window.Size.Y}");
 
             // Silk.NET 네이티브 핸들 → Veldrid SwapchainSource
             var swapchainSource = GetSwapchainSource(_window);
@@ -62,10 +83,10 @@ namespace IronRose.Rendering
             );
 
             _graphicsDevice = GraphicsDevice.CreateVulkan(options, scDesc);
-            Debug.Log($"[Renderer] Graphics Device Created: {_graphicsDevice.BackendType}");
+            EditorDebug.Log($"[Renderer] Graphics Device Created: {_graphicsDevice.BackendType}");
 
             _commandList = _graphicsDevice.ResourceFactory.CreateCommandList();
-            Debug.Log("[Renderer] Command list created");
+            EditorDebug.Log("[Renderer] Command list created");
 
             // 윈도우 리사이즈 처리
             _window.Resize += size =>
@@ -115,7 +136,7 @@ namespace IronRose.Rendering
             catch (VeldridException)
             {
                 // Previous frame crashed before End() — recreate command list to recover
-                Debug.LogWarning("[Renderer] CommandList in invalid state — recreating to recover");
+                EditorDebug.LogWarning("[Renderer] CommandList in invalid state — recreating to recover");
                 _commandList.Dispose();
                 _commandList = _graphicsDevice.ResourceFactory.CreateCommandList();
                 _commandList.Begin();
@@ -158,7 +179,7 @@ namespace IronRose.Rendering
         {
             if (_graphicsDevice == null)
             {
-                Debug.LogError("[Renderer] ERROR: Cannot capture screenshot, GraphicsDevice is null");
+                EditorDebug.LogError("[Renderer] ERROR: Cannot capture screenshot, GraphicsDevice is null");
                 return;
             }
 
@@ -219,7 +240,7 @@ namespace IronRose.Rendering
                 {
                     image.Save(fileStream, new SixLabors.ImageSharp.Formats.Png.PngEncoder());
                 }
-                Debug.Log($"[Renderer] Screenshot saved: {filename}");
+                EditorDebug.Log($"[Renderer] Screenshot saved: {filename}");
 
                 // 정리
                 stagingTexture.Dispose();
@@ -227,35 +248,35 @@ namespace IronRose.Rendering
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[Renderer] ERROR capturing screenshot: {ex.Message}");
-                Debug.LogError(ex.StackTrace ?? "(no stack trace)");
+                EditorDebug.LogError($"[Renderer] ERROR capturing screenshot: {ex.Message}");
+                EditorDebug.LogError(ex.StackTrace ?? "(no stack trace)");
             }
         }
 
         public void Dispose()
         {
-            Debug.Log("[Renderer] Disposing graphics resources...");
+            EditorDebug.Log("[Renderer] Disposing graphics resources...");
 
             try
             {
                 if (_graphicsDevice != null)
                 {
                     _graphicsDevice.WaitForIdle();
-                    Debug.Log("[Renderer] GPU idle");
+                    EditorDebug.Log("[Renderer] GPU idle");
                 }
 
                 _commandList?.Dispose();
-                Debug.Log("[Renderer] CommandList disposed");
+                EditorDebug.Log("[Renderer] CommandList disposed");
 
                 _graphicsDevice?.Dispose();
-                Debug.Log("[Renderer] GraphicsDevice disposed");
+                EditorDebug.Log("[Renderer] GraphicsDevice disposed");
 
                 _window = null;
-                Debug.Log("[Renderer] Window reference cleared");
+                EditorDebug.Log("[Renderer] Window reference cleared");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[Renderer] ERROR during Dispose: {ex.Message}");
+                EditorDebug.LogError($"[Renderer] ERROR during Dispose: {ex.Message}");
             }
         }
     }

@@ -22,7 +22,7 @@ using System.Numerics;
 using System.Threading.Tasks;
 using ImGuiNET;
 using IronRose.Engine.Editor.ImGuiEditor;
-using Debug = RoseEngine.Debug;
+using Debug = RoseEngine.EditorDebug;
 
 namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 {

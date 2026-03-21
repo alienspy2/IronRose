@@ -8,7 +8,7 @@ using IronRose.Engine;
 using RoseEngine;
 using Veldrid;
 using BcPixelFormat = BCnEncoder.Encoder.PixelFormat;
-using Debug = RoseEngine.Debug;
+using Debug = RoseEngine.EditorDebug;
 
 namespace IronRose.AssetPipeline
 {

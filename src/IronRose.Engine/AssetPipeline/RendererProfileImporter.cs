@@ -34,7 +34,7 @@ namespace IronRose.AssetPipeline
         {
             if (!File.Exists(path))
             {
-                Debug.LogError($"[RendererProfileImporter] File not found: {path}");
+                EditorDebug.LogError($"[RendererProfileImporter] File not found: {path}");
                 return null;
             }
 
@@ -46,7 +46,7 @@ namespace IronRose.AssetPipeline
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[RendererProfileImporter] Parse failed: {path} — {ex.Message}");
+                EditorDebug.LogError($"[RendererProfileImporter] Parse failed: {path} — {ex.Message}");
                 return null;
             }
         }
@@ -121,7 +121,7 @@ namespace IronRose.AssetPipeline
 
             var toml = Toml.FromModel(doc);
             File.WriteAllText(path, toml);
-            Debug.Log($"[RendererProfileImporter] Exported: {path}");
+            EditorDebug.Log($"[RendererProfileImporter] Exported: {path}");
         }
 
         /// <summary>기본값 프로파일 생성.</summary>

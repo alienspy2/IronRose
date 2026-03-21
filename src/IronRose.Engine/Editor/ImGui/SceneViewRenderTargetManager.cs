@@ -2,7 +2,7 @@ using System;
 using IronRose.Engine.Editor.ImGuiEditor.Panels;
 using IronRose.Rendering;
 using Veldrid;
-using Debug = RoseEngine.Debug;
+using Debug = RoseEngine.EditorDebug;
 
 namespace IronRose.Engine.Editor.ImGuiEditor
 {

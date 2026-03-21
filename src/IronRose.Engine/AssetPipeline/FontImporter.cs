@@ -10,7 +10,7 @@ namespace IronRose.AssetPipeline
         {
             if (!File.Exists(fontPath))
             {
-                Debug.LogError($"Font not found: {fontPath}");
+                EditorDebug.LogError($"Font not found: {fontPath}");
                 return null;
             }
 
@@ -22,7 +22,7 @@ namespace IronRose.AssetPipeline
             Font.InvalidateCache(fontPath);
             var font = Font.CreateFromFile(fontPath, fontSize);
 
-            Debug.Log($"[FontImporter] Loaded: {fontPath} (size={fontSize})");
+            EditorDebug.Log($"[FontImporter] Loaded: {fontPath} (size={fontSize})");
             return font;
         }
     }

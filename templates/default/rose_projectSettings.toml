@@ -1,5 +1,5 @@
 [renderer]
-active_profile_guid = "2ec4f1fe-2007-4cf0-80ee-d157511f0bdb"
+active_profile_guid = ""
 
 [build]
 start_scene = "Assets/Scenes/Sample.scene"

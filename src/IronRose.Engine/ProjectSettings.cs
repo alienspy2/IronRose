@@ -96,11 +96,11 @@ namespace IronRose.Engine
                         if (cache.TryGetValue("force_clear_cache", out var vc3) && vc3 is bool bc3)
                             ForceClearCache = bc3;
                     }
-                    Debug.Log($"[ProjectSettings] Loaded: {path}");
+                    EditorDebug.Log($"[ProjectSettings] Loaded: {path}");
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[ProjectSettings] Failed to load {path}: {ex.Message}");
+                    EditorDebug.LogWarning($"[ProjectSettings] Failed to load {path}: {ex.Message}");
                 }
             }
 
@@ -116,7 +116,7 @@ namespace IronRose.Engine
                 {
                     ActiveRendererProfileGuid = legacyGuid;
                     Save();
-                    Debug.Log("[ProjectSettings] Migrated active_renderer_profile_guid from EditorState");
+                    EditorDebug.Log("[ProjectSettings] Migrated active_renderer_profile_guid from EditorState");
                 }
             }
         }
@@ -146,7 +146,7 @@ namespace IronRose.Engine
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[ProjectSettings] Failed to save {path}: {ex.Message}");
+                EditorDebug.LogWarning($"[ProjectSettings] Failed to save {path}: {ex.Message}");
             }
         }
     }

@@ -95,16 +95,16 @@ namespace IronRose.Engine
                             EnableEditor = b4;
                     }
 
-                    Debug.Log($"[RoseConfig] Loaded: {path} (EnableEditor={EnableEditor})");
+                    EditorDebug.Log($"[RoseConfig] Loaded: {path} (EnableEditor={EnableEditor})");
                     return;
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[RoseConfig] Failed to parse {path}: {ex.Message}");
+                    EditorDebug.LogWarning($"[RoseConfig] Failed to parse {path}: {ex.Message}");
                 }
             }
 
-            Debug.Log("[RoseConfig] No config file found, using defaults");
+            EditorDebug.Log("[RoseConfig] No config file found, using defaults");
         }
     }
 }

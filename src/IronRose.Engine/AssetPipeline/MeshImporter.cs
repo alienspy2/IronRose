@@ -31,7 +31,7 @@ namespace IronRose.AssetPipeline
         {
             if (!File.Exists(meshPath))
             {
-                Debug.LogError($"Mesh file not found: {meshPath}");
+                EditorDebug.LogError($"Mesh file not found: {meshPath}");
                 return null!;
             }
 
@@ -47,7 +47,7 @@ namespace IronRose.AssetPipeline
             {
                 var trimmed = msg?.TrimEnd('\n', '\r');
                 if (!string.IsNullOrEmpty(trimmed))
-                    Debug.Log($"[Assimp] {trimmed}");
+                    EditorDebug.Log($"[Assimp] {trimmed}");
             });
             logStream.Attach();
 
@@ -61,7 +61,7 @@ namespace IronRose.AssetPipeline
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[MeshImporter] Assimp exception for '{meshPath}': {ex.Message}");
+                EditorDebug.LogError($"[MeshImporter] Assimp exception for '{meshPath}': {ex.Message}");
                 return null!;
             }
             finally
@@ -71,7 +71,7 @@ namespace IronRose.AssetPipeline
 
             if (scene == null || scene.MeshCount == 0)
             {
-                Debug.LogError($"[MeshImporter] Failed to load mesh (null or 0 meshes): {meshPath}");
+                EditorDebug.LogError($"[MeshImporter] Failed to load mesh (null or 0 meshes): {meshPath}");
                 return null!;
             }
 
@@ -144,7 +144,7 @@ namespace IronRose.AssetPipeline
             // Material 추출
             var materials = ExtractMaterials(scene, meshPath);
 
-            Debug.Log($"Imported mesh: {meshPath} ({namedMeshes.Count} meshes, {totalVerts} vertices, {totalTris} triangles, {materials.Length} materials)");
+            EditorDebug.Log($"Imported mesh: {meshPath} ({namedMeshes.Count} meshes, {totalVerts} vertices, {totalTris} triangles, {materials.Length} materials)");
 
             return new MeshImportResult
             {
@@ -241,7 +241,7 @@ namespace IronRose.AssetPipeline
             if (imageData.Length == 0)
                 return null;
 
-            Debug.Log($"[MeshImporter] Loading GLB embedded texture (image[{imageIndex}], {imageData.Length} bytes) for material[{materialIndex}]");
+            EditorDebug.Log($"[MeshImporter] Loading GLB embedded texture (image[{imageIndex}], {imageData.Length} bytes) for material[{materialIndex}]");
             return Texture2D.LoadFromMemory(imageData);
         }
 
@@ -274,11 +274,11 @@ namespace IronRose.AssetPipeline
                         return result;
                 }
 
-                Debug.LogWarning($"Texture not found: {fullPath}");
+                EditorDebug.LogWarning($"Texture not found: {fullPath}");
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"Failed to load texture '{filePath}': {ex.Message}");
+                EditorDebug.LogWarning($"Failed to load texture '{filePath}': {ex.Message}");
             }
 
             return null;
@@ -304,14 +304,14 @@ namespace IronRose.AssetPipeline
 
             if (index >= 0)
             {
-                Debug.Log($"Loading embedded texture [{index}] for '{filePath}'");
+                EditorDebug.Log($"Loading embedded texture [{index}] for '{filePath}'");
                 return LoadEmbeddedTexture(scene.Textures[index]);
             }
 
             // 인덱스 추출 실패 시: 첫 번째 임베디드 텍스처를 폴백으로 사용
             if (scene.TextureCount > 0)
             {
-                Debug.LogWarning($"Cannot resolve embedded index for '{filePath}', falling back to texture[0]");
+                EditorDebug.LogWarning($"Cannot resolve embedded index for '{filePath}', falling back to texture[0]");
                 return LoadEmbeddedTexture(scene.Textures[0]);
             }
 
@@ -345,7 +345,7 @@ namespace IronRose.AssetPipeline
             try
             {
                 var formats = context.GetSupportedImportFormats();
-                Debug.Log($"[Assimp] Supported import formats ({formats.Length}): {string.Join(", ", formats)}");
+                EditorDebug.Log($"[Assimp] Supported import formats ({formats.Length}): {string.Join(", ", formats)}");
             }
             catch { /* ignore */ }
         }

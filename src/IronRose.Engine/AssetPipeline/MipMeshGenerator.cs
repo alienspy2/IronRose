@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Meshoptimizer;
 using RoseEngine;
-using Debug = RoseEngine.Debug;
+using Debug = RoseEngine.EditorDebug;
 
 namespace IronRose.AssetPipeline
 {

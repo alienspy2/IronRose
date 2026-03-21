@@ -2,7 +2,7 @@
 // @file    PostProcessStack.cs
 // @brief   포스트 프로세스 이펙트 체인 관리. Ping-pong HDR 버퍼를 사용하여 이펙트를 순차 실행하고,
 //          최종 결과를 스왑체인에 블릿한다.
-// @deps    PostProcessEffect, ShaderCompiler
+// @deps    PostProcessEffect, ShaderCompiler, EditorDebug
 // @exports
 //   class PostProcessStack : IDisposable
 //     Initialize(GraphicsDevice, uint, uint, Func<string,string>): void — 초기화 (셰이더 리졸버 델리게이트 전달)
@@ -276,7 +276,7 @@ namespace IronRose.Rendering
 
             _linearSampler?.Dispose();
 
-            Debug.Log("[PostProcessStack] Disposed");
+            EditorDebug.Log("[PostProcessStack] Disposed");
         }
     }
 }

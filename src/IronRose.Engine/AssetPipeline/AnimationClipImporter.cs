@@ -36,7 +36,7 @@ namespace IronRose.AssetPipeline
         {
             if (!File.Exists(path))
             {
-                Debug.LogError($"[AnimationClipImporter] File not found: {path}");
+                EditorDebug.LogError($"[AnimationClipImporter] File not found: {path}");
                 return null;
             }
 
@@ -48,7 +48,7 @@ namespace IronRose.AssetPipeline
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[AnimationClipImporter] Parse failed: {path} — {ex.Message}");
+                EditorDebug.LogError($"[AnimationClipImporter] Parse failed: {path} — {ex.Message}");
                 return null;
             }
         }
@@ -120,7 +120,7 @@ namespace IronRose.AssetPipeline
             if (clip.length <= 0f)
                 clip.RecalculateLength();
 
-            Debug.Log($"[AnimationClipImporter] Loaded: {path} ({clip.curves.Count} curves, {clip.events.Count} events, {clip.length:F2}s)");
+            EditorDebug.Log($"[AnimationClipImporter] Loaded: {path} ({clip.curves.Count} curves, {clip.events.Count} events, {clip.length:F2}s)");
             return clip;
         }
 
@@ -180,7 +180,7 @@ namespace IronRose.AssetPipeline
 
             var toml = Toml.FromModel(doc);
             File.WriteAllText(path, toml);
-            Debug.Log($"[AnimationClipImporter] Exported: {path}");
+            EditorDebug.Log($"[AnimationClipImporter] Exported: {path}");
         }
 
         private static float ToFloat(object? val)

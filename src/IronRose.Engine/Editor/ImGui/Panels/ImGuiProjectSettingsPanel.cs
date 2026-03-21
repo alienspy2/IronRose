@@ -105,7 +105,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                         {
                             ProjectSettings.StartScenePath = droppedPath;
                             ProjectSettings.Save();
-                            Debug.Log($"[ProjectSettings] Start scene set: {droppedPath}");
+                            EditorDebug.Log($"[ProjectSettings] Start scene set: {droppedPath}");
                         }
                     }
                 }
@@ -164,7 +164,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 {
                     ProjectSettings.StartScenePath = path;
                     ProjectSettings.Save();
-                    Debug.Log($"[ProjectSettings] Start scene set: {path}");
+                    EditorDebug.Log($"[ProjectSettings] Start scene set: {path}");
                     ImGui.CloseCurrentPopup();
                 }
                 if (ImGui.IsItemHovered())
@@ -241,7 +241,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                         {
                             ProjectSettings.ExternalScriptEditor = command;
                             ProjectSettings.Save();
-                            Debug.Log($"[ProjectSettings] External script editor set: {command}");
+                            EditorDebug.Log($"[ProjectSettings] External script editor set: {command}");
                         }
                     }
                 }
@@ -255,7 +255,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             {
                 ProjectSettings.ExternalScriptEditor = _customEditorBuffer.Trim();
                 ProjectSettings.Save();
-                Debug.Log($"[ProjectSettings] External script editor set: {_customEditorBuffer.Trim()}");
+                EditorDebug.Log($"[ProjectSettings] External script editor set: {_customEditorBuffer.Trim()}");
             }
         }
 
@@ -417,7 +417,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             var profile = db.Load<RendererProfile>(path);
             if (profile == null)
             {
-                Debug.LogWarning($"[ProjectSettings] Failed to load profile: {path}");
+                EditorDebug.LogWarning($"[ProjectSettings] Failed to load profile: {path}");
                 return;
             }
 
@@ -431,11 +431,11 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 RenderSettings.activeRendererProfile = profile;
                 RenderSettings.activeRendererProfileGuid = guid;
                 profile.ApplyToRenderSettings();
-                Debug.Log($"[ProjectSettings] Activated renderer profile: {profile.name} ({guid})");
+                EditorDebug.Log($"[ProjectSettings] Activated renderer profile: {profile.name} ({guid})");
             }
             else
             {
-                Debug.Log($"[ProjectSettings] Renderer profile saved (will apply after play mode): {profile.name}");
+                EditorDebug.Log($"[ProjectSettings] Renderer profile saved (will apply after play mode): {profile.name}");
             }
         }
     }

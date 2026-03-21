@@ -62,12 +62,12 @@ namespace IronRose.Engine.Automation
                     }
                 }
 
-                Debug.Log($"[Automation] Loaded {commands.Count} commands from {path}");
+                EditorDebug.Log($"[Automation] Loaded {commands.Count} commands from {path}");
                 return new TestCommandRunner(commands);
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[Automation] Failed to load command file '{path}': {ex.Message}");
+                EditorDebug.LogError($"[Automation] Failed to load command file '{path}': {ex.Message}");
                 return null;
             }
         }
@@ -109,7 +109,7 @@ namespace IronRose.Engine.Automation
 
                         case "wait":
                             _waitRemaining = cmd.Duration;
-                            Debug.Log($"[Automation] [{_currentIndex + 1}/{_commands.Count}] wait {cmd.Duration:F2}s");
+                            EditorDebug.Log($"[Automation] [{_currentIndex + 1}/{_commands.Count}] wait {cmd.Duration:F2}s");
                             return; // 다음 프레임에서 계속
 
                         case "screenshot":
@@ -121,19 +121,19 @@ namespace IronRose.Engine.Automation
                             break;
 
                         case "quit":
-                            Debug.Log($"[Automation] [{_currentIndex + 1}/{_commands.Count}] quit");
+                            EditorDebug.Log($"[Automation] [{_currentIndex + 1}/{_commands.Count}] quit");
                             _finished = true;
                             Application.Quit();
                             return;
 
                         default:
-                            Debug.LogWarning($"[Automation] [{_currentIndex + 1}/{_commands.Count}] Unknown command type: {cmd.Type}");
+                            EditorDebug.LogWarning($"[Automation] [{_currentIndex + 1}/{_commands.Count}] Unknown command type: {cmd.Type}");
                             break;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"[Automation] [{_currentIndex + 1}/{_commands.Count}] Command '{cmd.Type}' failed: {ex.Message}");
+                    EditorDebug.LogError($"[Automation] [{_currentIndex + 1}/{_commands.Count}] Command '{cmd.Type}' failed: {ex.Message}");
                 }
 
                 _currentIndex++;
@@ -143,7 +143,7 @@ namespace IronRose.Engine.Automation
             if (!_finished)
             {
                 _finished = true;
-                Debug.Log("[Automation] All commands completed.");
+                EditorDebug.Log("[Automation] All commands completed.");
             }
         }
 
@@ -151,11 +151,11 @@ namespace IronRose.Engine.Automation
         {
             if (string.IsNullOrEmpty(cmd.Scene))
             {
-                Debug.LogError($"[Automation] [{_currentIndex + 1}/{_commands.Count}] scene.load: 'scene' field is required");
+                EditorDebug.LogError($"[Automation] [{_currentIndex + 1}/{_commands.Count}] scene.load: 'scene' field is required");
                 return;
             }
 
-            Debug.Log($"[Automation] [{_currentIndex + 1}/{_commands.Count}] scene.load \"{cmd.Scene}\"");
+            EditorDebug.Log($"[Automation] [{_currentIndex + 1}/{_commands.Count}] scene.load \"{cmd.Scene}\"");
             SceneSerializer.Load(cmd.Scene);
         }
 
@@ -163,18 +163,18 @@ namespace IronRose.Engine.Automation
         {
             if (string.IsNullOrEmpty(cmd.Key))
             {
-                Debug.LogError($"[Automation] [{_currentIndex + 1}/{_commands.Count}] input.key_press: 'key' field is required");
+                EditorDebug.LogError($"[Automation] [{_currentIndex + 1}/{_commands.Count}] input.key_press: 'key' field is required");
                 return;
             }
 
             if (Enum.TryParse<KeyCode>(cmd.Key, ignoreCase: true, out var keyCode))
             {
-                Debug.Log($"[Automation] [{_currentIndex + 1}/{_commands.Count}] input.key_press {cmd.Key} → {keyCode}");
+                EditorDebug.Log($"[Automation] [{_currentIndex + 1}/{_commands.Count}] input.key_press {cmd.Key} → {keyCode}");
                 Input.SimulateKeyPress(keyCode);
             }
             else
             {
-                Debug.LogError($"[Automation] [{_currentIndex + 1}/{_commands.Count}] input.key_press: Unknown key '{cmd.Key}'");
+                EditorDebug.LogError($"[Automation] [{_currentIndex + 1}/{_commands.Count}] input.key_press: Unknown key '{cmd.Key}'");
             }
         }
 
@@ -182,7 +182,7 @@ namespace IronRose.Engine.Automation
         {
             if (graphicsManager == null)
             {
-                Debug.LogError($"[Automation] [{_currentIndex + 1}/{_commands.Count}] screenshot: GraphicsManager is null");
+                EditorDebug.LogError($"[Automation] [{_currentIndex + 1}/{_commands.Count}] screenshot: GraphicsManager is null");
                 return;
             }
 
@@ -197,14 +197,14 @@ namespace IronRose.Engine.Automation
             if (!string.IsNullOrEmpty(dir))
                 Directory.CreateDirectory(dir);
 
-            Debug.Log($"[Automation] [{_currentIndex + 1}/{_commands.Count}] screenshot → {path}");
+            EditorDebug.Log($"[Automation] [{_currentIndex + 1}/{_commands.Count}] screenshot → {path}");
             graphicsManager.RequestScreenshot(path);
         }
 
         private void ExecutePlayMode(TestCommand cmd)
         {
             var action = cmd.Action ?? "enter";
-            Debug.Log($"[Automation] [{_currentIndex + 1}/{_commands.Count}] play_mode {action}");
+            EditorDebug.Log($"[Automation] [{_currentIndex + 1}/{_commands.Count}] play_mode {action}");
 
             switch (action.ToLowerInvariant())
             {
@@ -221,7 +221,7 @@ namespace IronRose.Engine.Automation
                     EditorPlayMode.ResumePlayMode();
                     break;
                 default:
-                    Debug.LogWarning($"[Automation] Unknown play_mode action: {action}");
+                    EditorDebug.LogWarning($"[Automation] Unknown play_mode action: {action}");
                     break;
             }
         }

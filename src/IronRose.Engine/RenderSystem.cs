@@ -824,7 +824,7 @@ namespace IronRose.Rendering
             _gameViewContext.PostProcessStack.AddEffect(new BloomEffect());
             _gameViewContext.PostProcessStack.AddEffect(new TonemapEffect());
 
-            Debug.Log("[RenderSystem] Light volume PBR pipeline initialized");
+            EditorDebug.Log("[RenderSystem] Light volume PBR pipeline initialized");
         }
 
         private void CreatePipelines(ResourceFactory factory)
@@ -1900,7 +1900,7 @@ namespace IronRose.Rendering
             if (_skyboxShaders != null)
                 foreach (var s in _skyboxShaders) s.Dispose();
 
-            Debug.Log("[RenderSystem] Disposed");
+            EditorDebug.Log("[RenderSystem] Disposed");
         }
 
         // === FSR Upscaler helpers ===

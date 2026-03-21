@@ -27,7 +27,7 @@ namespace IronRose.Scripting
 
         public void LoadScripts(byte[] assemblyBytes)
         {
-            Debug.Log("[ScriptDomain] Loading scripts...");
+            EditorDebug.Log("[ScriptDomain] Loading scripts...");
 
             // 새로운 ALC 생성
             _currentALC = new AssemblyLoadContext($"ScriptContext_{DateTime.Now.Ticks}", isCollectible: true);
@@ -48,7 +48,7 @@ namespace IronRose.Scripting
             using var ms = new System.IO.MemoryStream(assemblyBytes);
             _currentAssembly = _currentALC.LoadFromStream(ms);
 
-            Debug.Log($"[ScriptDomain] Loaded assembly: {_currentAssembly.FullName}");
+            EditorDebug.Log($"[ScriptDomain] Loaded assembly: {_currentAssembly.FullName}");
 
             // 스크립트 클래스 인스턴스화
             InstantiateScripts();
@@ -56,23 +56,23 @@ namespace IronRose.Scripting
 
         public void Reload(byte[] newAssemblyBytes)
         {
-            Debug.Log("[ScriptDomain] Hot reloading scripts...");
+            EditorDebug.Log("[ScriptDomain] Hot reloading scripts...");
 
             UnloadPreviousContext();
             LoadScripts(newAssemblyBytes);
 
-            Debug.Log("[ScriptDomain] Hot reload completed!");
+            EditorDebug.Log("[ScriptDomain] Hot reload completed!");
         }
 
         private void UnloadPreviousContext()
         {
             if (_currentALC == null)
             {
-                Debug.Log("[ScriptDomain] No previous context to unload");
+                EditorDebug.Log("[ScriptDomain] No previous context to unload");
                 return;
             }
 
-            Debug.Log("[ScriptDomain] Unloading previous context...");
+            EditorDebug.Log("[ScriptDomain] Unloading previous context...");
 
             _scriptInstances.Clear();
             _currentAssembly = null;
@@ -90,11 +90,11 @@ namespace IronRose.Scripting
 
             if (weakRef.IsAlive)
             {
-                Debug.LogWarning("[ScriptDomain] WARNING: ALC not fully unloaded!");
+                EditorDebug.LogWarning("[ScriptDomain] WARNING: ALC not fully unloaded!");
             }
             else
             {
-                Debug.Log("[ScriptDomain] Previous context unloaded successfully");
+                EditorDebug.Log("[ScriptDomain] Previous context unloaded successfully");
             }
         }
 
@@ -102,11 +102,11 @@ namespace IronRose.Scripting
         {
             if (_currentAssembly == null)
             {
-                Debug.LogError("[ScriptDomain] ERROR: No assembly loaded");
+                EditorDebug.LogError("[ScriptDomain] ERROR: No assembly loaded");
                 return;
             }
 
-            Debug.Log("[ScriptDomain] Instantiating script classes...");
+            EditorDebug.Log("[ScriptDomain] Instantiating script classes...");
 
             foreach (var type in _currentAssembly.GetTypes())
             {
@@ -123,17 +123,17 @@ namespace IronRose.Scripting
                         if (instance != null)
                         {
                             _scriptInstances.Add(instance);
-                            Debug.Log($"[ScriptDomain] Instantiated: {type.Name}");
+                            EditorDebug.Log($"[ScriptDomain] Instantiated: {type.Name}");
                         }
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"[ScriptDomain] ERROR instantiating {type.Name}: {ex.Message}");
+                        EditorDebug.LogError($"[ScriptDomain] ERROR instantiating {type.Name}: {ex.Message}");
                     }
                 }
             }
 
-            Debug.Log($"[ScriptDomain] Total instances: {_scriptInstances.Count}");
+            EditorDebug.Log($"[ScriptDomain] Total instances: {_scriptInstances.Count}");
         }
 
         public void Update()

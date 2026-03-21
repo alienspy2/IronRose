@@ -5,7 +5,7 @@ using IronRose.Rendering;
 using RoseEngine;
 using Veldrid;
 using Veldrid.SPIRV;
-using Debug = RoseEngine.Debug;
+using Debug = RoseEngine.EditorDebug;
 
 namespace IronRose.AssetPipeline
 {

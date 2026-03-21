@@ -1,3 +1,19 @@
+// ------------------------------------------------------------
+// @file    Cubemap.cs
+// @brief   6면 큐브맵 텍스처. Equirectangular HDR/LDR 이미지에서 큐브맵을 생성하고 GPU 업로드.
+//          스카이박스, IBL 등에 사용.
+// @deps    RoseEngine/Texture2D, RoseEngine/EditorDebug, RoseEngine/Color
+// @exports
+//   class Cubemap : IDisposable
+//     faceSize: int                                                   — 큐브맵 면 크기
+//     isHDR: bool                                                     — HDR 큐브맵 여부
+//     static CreateFromEquirectangular(Texture2D, int): Cubemap       — Equirect에서 HDR 큐브맵 생성
+//     static CreateWhiteCubemap(): Cubemap                            — 1x1 흰색 큐브맵
+//     UploadToGPU(GraphicsDevice, bool): void                         — GPU 업로드
+//     GetAverageColor(): Color                                        — 전체 면 평균 색상
+// @note    Veldrid 큐브맵은 Texture2D + 6 array layers로 구현.
+//          HDR 업로드 시 Texture2D.ConvertFloatToHalfBytes 사용.
+// ------------------------------------------------------------
 using System;
 using Veldrid;
 
@@ -104,7 +120,7 @@ namespace RoseEngine
             }
 
             string srcType = equirect.isHDR ? "HDR" : "LDR→HDR";
-            Debug.Log($"[Cubemap] Created from equirectangular ({srcType} {equirect.width}x{equirect.height}) → {faceSize}x{faceSize} HDR cubemap");
+            EditorDebug.Log($"[Cubemap] Created from equirectangular ({srcType} {equirect.width}x{equirect.height}) → {faceSize}x{faceSize} HDR cubemap");
             return new Cubemap(faceSize, faceData);
         }
 

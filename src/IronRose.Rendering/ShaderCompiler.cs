@@ -1,3 +1,17 @@
+// ------------------------------------------------------------
+// @file    ShaderCompiler.cs
+// @brief   GLSL 셰이더를 SPIR-V로 컴파일하고 SHA256 기반 디스크 캐시를 관리한다.
+//          Veldrid.SPIRV를 사용하여 vertex/fragment/compute 셰이더를 컴파일한다.
+// @deps    (프로젝트 내부 없음 — IronRose.Contracts의 EditorDebug만 사용)
+// @exports
+//   static class ShaderCompiler
+//     SetCacheDirectory(string): void                                   — 캐시 디렉토리 설정
+//     ClearCache(): void                                                — 캐시 디렉토리 초기화
+//     CompileComputeGLSL(GraphicsDevice, string): Shader                — 컴퓨트 셰이더 컴파일
+//     CompileGLSL(GraphicsDevice, string, string): Shader[]             — 버텍스+프래그먼트 셰이더 컴파일
+// @note    캐시 파일 형식: [32B SHA256 hash][4B data length][NB SPIR-V bytes].
+//          SPIR-V 사전 컴파일 실패 시 원본 GLSL 텍스트 바이트로 폴백.
+// ------------------------------------------------------------
 using System;
 using System.IO;
 using System.Security.Cryptography;
@@ -24,7 +38,7 @@ namespace IronRose.Rendering
             {
                 Directory.Delete(_cacheDir, recursive: true);
                 Directory.CreateDirectory(_cacheDir);
-                Debug.Log("[ShaderCompiler] Shader cache cleared");
+                EditorDebug.Log("[ShaderCompiler] Shader cache cleared");
             }
         }
 
@@ -39,7 +53,7 @@ namespace IronRose.Rendering
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[ShaderCompiler] ERROR compiling compute: {ex.Message}");
+                EditorDebug.LogError($"[ShaderCompiler] ERROR compiling compute: {ex.Message}");
                 throw;
             }
         }
@@ -58,7 +72,7 @@ namespace IronRose.Rendering
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[ShaderCompiler] ERROR: {ex.Message}");
+                EditorDebug.LogError($"[ShaderCompiler] ERROR: {ex.Message}");
                 throw;
             }
         }
@@ -82,7 +96,7 @@ namespace IronRose.Rendering
             {
                 if (TryLoadCachedSpirv(cachePath, sourceHash, out var spirvBytes))
                 {
-                    Debug.Log($"[ShaderCompiler] Cache hit: {Path.GetFileName(glslPath)}");
+                    EditorDebug.Log($"[ShaderCompiler] Cache hit: {Path.GetFileName(glslPath)}");
                     return spirvBytes;
                 }
             }
@@ -99,13 +113,13 @@ namespace IronRose.Rendering
                     new GlslCompileOptions(false));
 
                 SaveSpirvCache(cachePath, sourceHash, result.SpirvBytes);
-                Debug.Log($"[ShaderCompiler] Compiled & cached: {Path.GetFileName(glslPath)}");
+                EditorDebug.Log($"[ShaderCompiler] Compiled & cached: {Path.GetFileName(glslPath)}");
                 return result.SpirvBytes;
             }
             catch (Exception ex)
             {
                 // Fallback: return GLSL text bytes (original behavior)
-                Debug.LogWarning($"[ShaderCompiler] SPIR-V pre-compile failed, using GLSL fallback: {ex.Message}");
+                EditorDebug.LogWarning($"[ShaderCompiler] SPIR-V pre-compile failed, using GLSL fallback: {ex.Message}");
                 return sourceBytes;
             }
         }
@@ -158,7 +172,7 @@ namespace IronRose.Rendering
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[ShaderCompiler] Failed to save cache: {ex.Message}");
+                EditorDebug.LogWarning($"[ShaderCompiler] Failed to save cache: {ex.Message}");
                 TryDeleteFile(cachePath);
             }
         }

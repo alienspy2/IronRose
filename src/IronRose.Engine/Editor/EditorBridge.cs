@@ -54,7 +54,7 @@ namespace IronRose.Engine.Editor
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"[EditorBridge] Command failed: {ex.Message}");
+                    EditorDebug.LogError($"[EditorBridge] Command failed: {ex.Message}");
                 }
             }
         }

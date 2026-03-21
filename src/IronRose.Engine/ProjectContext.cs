@@ -103,15 +103,15 @@ namespace IronRose.Engine
                     EngineRoot = Path.GetFullPath(Path.Combine(ProjectRoot, engineRelPath));
                     IsProjectLoaded = true;
 
-                    Debug.Log($"[ProjectContext] Project loaded: {ProjectRoot}");
-                    Debug.Log($"[ProjectContext] Engine root: {EngineRoot}");
+                    EditorDebug.Log($"[ProjectContext] Project loaded: {ProjectRoot}");
+                    EditorDebug.Log($"[ProjectContext] Engine root: {EngineRoot}");
 
                     // Directory.Build.props와 engine.path 불일치 검증
                     ValidateBuildPropsAlignment();
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[ProjectContext] Failed to parse {tomlPath}: {ex.Message}");
+                    EditorDebug.LogWarning($"[ProjectContext] Failed to parse {tomlPath}: {ex.Message}");
                     EngineRoot = ProjectRoot;
                     IsProjectLoaded = false;
                 }
@@ -122,7 +122,7 @@ namespace IronRose.Engine
                 var lastProjectPath = ReadLastProjectPath();
                 if (lastProjectPath != null)
                 {
-                    Debug.Log($"[ProjectContext] Trying last project: {lastProjectPath}");
+                    EditorDebug.Log($"[ProjectContext] Trying last project: {lastProjectPath}");
                     Initialize(lastProjectPath);
                     if (IsProjectLoaded) return;
                 }
@@ -130,7 +130,7 @@ namespace IronRose.Engine
                 // 엔진 레포 직접 실행 케이스. EngineRoot를 ProjectRoot 자신으로 폴백.
                 EngineRoot = ProjectRoot;
                 IsProjectLoaded = false;
-                Debug.Log($"[ProjectContext] No project.toml found. Fallback: ProjectRoot = EngineRoot = {ProjectRoot}");
+                EditorDebug.Log($"[ProjectContext] No project.toml found. Fallback: ProjectRoot = EngineRoot = {ProjectRoot}");
             }
         }
 
@@ -169,7 +169,7 @@ namespace IronRose.Engine
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning($"[ProjectContext] Failed to parse {settingsPath}: {ex.Message}");
+                    EditorDebug.LogWarning($"[ProjectContext] Failed to parse {settingsPath}: {ex.Message}");
                 }
             }
 
@@ -184,7 +184,7 @@ namespace IronRose.Engine
                     {
                         SaveLastProjectPath(path);
                         try { File.Delete(legacyPath); } catch { }
-                        Debug.Log($"[ProjectContext] Migrated legacy .rose_last_project to settings.toml");
+                        EditorDebug.Log($"[ProjectContext] Migrated legacy .rose_last_project to settings.toml");
                         return path;
                     }
                 }
@@ -230,11 +230,11 @@ namespace IronRose.Engine
                 editorTable["last_project"] = normalizedPath;
 
                 File.WriteAllText(GlobalSettingsPath, Toml.FromModel(table));
-                Debug.Log($"[ProjectContext] Saved last project to settings: {projectPath}");
+                EditorDebug.Log($"[ProjectContext] Saved last project to settings: {projectPath}");
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[ProjectContext] Failed to save settings: {ex.Message}");
+                EditorDebug.LogWarning($"[ProjectContext] Failed to save settings: {ex.Message}");
             }
         }
 
@@ -285,7 +285,7 @@ namespace IronRose.Engine
 
                 if (!string.Equals(normalizedProps, normalizedEngine, StringComparison.OrdinalIgnoreCase))
                 {
-                    Debug.LogError(
+                    EditorDebug.LogError(
                         $"[ProjectContext] engine.path ({EngineRoot}) and " +
                         $"Directory.Build.props IronRoseRoot ({propsAbsolute}) mismatch! " +
                         $"빌드/런타임 경로 불일치로 에셋 탐색 실패 가능.");
@@ -293,7 +293,7 @@ namespace IronRose.Engine
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[ProjectContext] Failed to validate Directory.Build.props: {ex.Message}");
+                EditorDebug.LogWarning($"[ProjectContext] Failed to validate Directory.Build.props: {ex.Message}");
             }
         }
 

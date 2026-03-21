@@ -25,7 +25,7 @@ using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using ImGuiNET;
 using RoseEngine;
-using Debug = RoseEngine.Debug;
+using Debug = RoseEngine.EditorDebug;
 using Vector2 = System.Numerics.Vector2;
 
 namespace IronRose.Engine.Editor.ImGuiEditor.Panels

@@ -1325,7 +1325,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             var mat = db.Load<Material>(subAssetPath);
             if (mat == null)
             {
-                RoseEngine.Debug.LogWarning($"[ProjectPanel] Failed to load sub-asset material: {subAssetPath}");
+                RoseEngine.EditorDebug.LogWarning($"[ProjectPanel] Failed to load sub-asset material: {subAssetPath}");
                 return;
             }
 
@@ -1380,7 +1380,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             var tex = db.Load<Texture2D>(subAssetPath);
             if (tex == null)
             {
-                RoseEngine.Debug.LogWarning($"[ProjectPanel] Failed to load sub-asset texture: {subAssetPath}");
+                RoseEngine.EditorDebug.LogWarning($"[ProjectPanel] Failed to load sub-asset texture: {subAssetPath}");
                 return;
             }
 
@@ -1416,7 +1416,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             var absInput = Path.GetFullPath(texturePath);
             if (!File.Exists(absInput))
             {
-                RoseEngine.Debug.LogWarning($"[ProjectPanel] Texture not found: {texturePath}");
+                RoseEngine.EditorDebug.LogWarning($"[ProjectPanel] Texture not found: {texturePath}");
                 return;
             }
 

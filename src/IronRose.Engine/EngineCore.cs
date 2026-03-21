@@ -21,7 +21,7 @@
 // @note    ProcessEngineKeys()에서 ESC 키로 커서 잠금 임시 해제 (에디터만).
 //          UpdateImGuiInputState()에서 Game View 클릭으로 커서 잠금 재진입.
 //          InitInput()에서 Cursor.Initialize() 호출.
-//          Initialize()에서 ProjectContext 로드 후 Debug.SetLogDirectory()로 로그를 프로젝트 Logs/로 전환.
+//          Initialize()에서 EditorDebug.Initialize()로 엔진 로그 경로 설정, Debug.SetLogDirectory()로 프로젝트 로그 경로 설정.
 //          Initialize()에서 .reimport_all sentinel 파일을 ProjectRoot 기준으로 확인/삭제하여 ForceClearCache 설정.
 //          InitShaderCache()는 IsProjectLoaded=true일 때만 호출 (Startup Panel 크래시 방지).
 //          EditorState.Load()는 InitEditor() 이전에 호출되어야 ImGui 레이아웃/폰트/UI스케일이 올바르게 복원됨.
@@ -121,24 +121,30 @@ namespace IronRose.Engine
 
         public void Initialize(IWindow window)
         {
+            // EditorDebug + Debug 양쪽의 LogSink를 EditorBridge에 연결
+            RoseEngine.EditorDebug.LogSink = entry => EditorBridge.PushLog(entry);
             RoseEngine.Debug.LogSink = entry => EditorBridge.PushLog(entry);
-            RoseEngine.Debug.Log("[Engine] EngineCore initializing...");
 
+            // 프로젝트 컨텍스트 초기화 (EngineRoot 확정)
             ProjectContext.Initialize();
 
-            // 프로젝트 로드 성공 시 로그 경로를 프로젝트 폴더로 전환
+            // EditorDebug 초기화 -- EngineRoot 확정 후 즉시 호출
+            RoseEngine.EditorDebug.Initialize(ProjectContext.EngineRoot);
+            RoseEngine.EditorDebug.Log("[Engine] EngineCore initializing...");
+
+            // 프로젝트 로드 성공 시 Debug 로그 경로 설정
             if (ProjectContext.IsProjectLoaded)
             {
                 var projectLogDir = Path.Combine(ProjectContext.ProjectRoot, "Logs");
                 RoseEngine.Debug.SetLogDirectory(projectLogDir);
-                RoseEngine.Debug.Log($"[Engine] Log directory switched to: {projectLogDir}");
+                RoseEngine.EditorDebug.Log($"[Engine] Project log directory: {projectLogDir}");
 
                 // Reimport All sentinel 확인 (ProjectContext 초기화 이후, 경로 통일)
                 var sentinelPath = Path.Combine(ProjectContext.ProjectRoot, ".reimport_all");
                 if (File.Exists(sentinelPath))
                 {
                     File.Delete(sentinelPath);
-                    RoseEngine.Debug.Log("[Engine] Reimport All requested — will clear cache on startup");
+                    RoseEngine.EditorDebug.Log("[Engine] Reimport All requested — will clear cache on startup");
                     ProjectSettings.ForceClearCache = true;
                 }
             }
@@ -313,7 +319,8 @@ namespace IronRose.Engine
             if (ScreenCaptureEnabled && (_frameCount == 1 || _frameCount == 60 || _frameCount % 300 == 0))
             {
                 var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                var filename = Path.Combine("Logs", $"screenshot_frame{_frameCount}_{timestamp}.png");
+                var filename = Path.Combine(RoseEngine.EditorDebug.LogDirectory,
+                    $"screenshot_frame{_frameCount}_{timestamp}.png");
                 _graphicsManager.RequestScreenshot(filename);
             }
 
@@ -433,7 +440,7 @@ namespace IronRose.Engine
                             }
                             catch (System.Exception ex)
                             {
-                                RoseEngine.Debug.LogError($"[Rendered] EXCEPTION: {ex}");
+                                RoseEngine.EditorDebug.LogError($"[Rendered] EXCEPTION: {ex}");
                                 _renderSystem.OverrideOutputFramebuffer = null;
                             }
                         }
@@ -465,7 +472,7 @@ namespace IronRose.Engine
 
         public void Shutdown()
         {
-            RoseEngine.Debug.Log("[Engine] EngineCore shutting down...");
+            RoseEngine.EditorDebug.Log("[Engine] EngineCore shutting down...");
             Application.isPlaying = false;
             Application.QuitAction = null;
             SceneManager.Clear();
@@ -529,9 +536,9 @@ namespace IronRose.Engine
         private void InitGraphics()
         {
             _graphicsManager = new GraphicsManager();
-            RoseEngine.Debug.Log($"[Engine] Passing window to GraphicsManager: {_window!.GetType().Name}");
+            RoseEngine.EditorDebug.Log($"[Engine] Passing window to GraphicsManager: {_window!.GetType().Name}");
             _graphicsManager.Initialize(_window);
-            RoseEngine.Debug.Log("[Engine] GraphicsManager initialized");
+            RoseEngine.EditorDebug.Log("[Engine] GraphicsManager initialized");
         }
 
         private void InitShaderCache()
@@ -554,7 +561,7 @@ namespace IronRose.Engine
             {
                 _renderSystem = new RenderSystem();
                 _renderSystem.Initialize(_graphicsManager.Device);
-                RoseEngine.Debug.Log("[Engine] RenderSystem initialized");
+                RoseEngine.EditorDebug.Log("[Engine] RenderSystem initialized");
                 RoseEngine.RenderSettings.postProcessing = _renderSystem.PostProcessing;
 
                 _graphicsManager.Resized += (w, h) =>
@@ -567,8 +574,8 @@ namespace IronRose.Engine
             }
             catch (Exception ex)
             {
-                RoseEngine.Debug.LogWarning($"[Engine] RenderSystem init failed: {ex.Message}");
-                RoseEngine.Debug.Log("[Engine] Falling back to clear-only rendering");
+                RoseEngine.EditorDebug.LogWarning($"[Engine] RenderSystem init failed: {ex.Message}");
+                RoseEngine.EditorDebug.Log("[Engine] Falling back to clear-only rendering");
                 _renderSystem = null;
             }
         }
@@ -626,7 +633,7 @@ namespace IronRose.Engine
                 Directory.CreateDirectory(settingsDir);
                 RendererProfileImporter.WriteDefault(defaultPath);
                 RoseMetadata.LoadOrCreate(defaultPath);
-                Debug.Log("[Engine] Created default renderer profile: Assets/Settings/Default.renderer");
+                EditorDebug.Log("[Engine] Created default renderer profile: Assets/Settings/Default.renderer");
                 // 새로 생성한 파일을 AssetDatabase에 등록
                 _assetDatabase?.ScanAssets(ProjectContext.AssetsPath);
             }
@@ -634,23 +641,38 @@ namespace IronRose.Engine
             // ProjectSettings에 저장된 활성 프로파일 GUID 로드, 없으면 Default
             RendererProfile? profile = null;
             var savedGuid = ProjectSettings.ActiveRendererProfileGuid;
+            bool usedFallback = false;
             if (!string.IsNullOrEmpty(savedGuid))
                 profile = _assetDatabase?.LoadByGuid<RendererProfile>(savedGuid);
 
             if (profile == null)
+            {
+                usedFallback = true;
                 profile = _assetDatabase?.Load<RendererProfile>(
                     Path.Combine(ProjectContext.AssetsPath, "Settings", "Default.renderer"));
+            }
 
             if (profile != null)
             {
-                // 실제 로드된 프로파일의 GUID를 사용 (savedGuid 또는 Default 경로에서 조회)
+                // fallback 사용 시 Default.renderer의 실제 GUID를 조회
                 var activeGuid = savedGuid;
-                if (string.IsNullOrEmpty(activeGuid))
-                    activeGuid = _assetDatabase?.GetGuidFromPath(Path.Combine(ProjectContext.AssetsPath, "Settings", "Default.renderer"));
+                if (usedFallback)
+                    activeGuid = _assetDatabase?.GetGuidFromPath(
+                        Path.Combine(ProjectContext.AssetsPath, "Settings", "Default.renderer"));
+
                 RenderSettings.activeRendererProfile = profile;
                 RenderSettings.activeRendererProfileGuid = activeGuid;
                 profile.ApplyToRenderSettings();
-                Debug.Log($"[Engine] Loaded renderer profile: {profile.name}");
+
+                // fallback으로 Default 프로파일을 사용한 경우 ProjectSettings에 올바른 GUID 저장
+                if (usedFallback && !string.IsNullOrEmpty(activeGuid))
+                {
+                    ProjectSettings.ActiveRendererProfileGuid = activeGuid;
+                    ProjectSettings.Save();
+                    EditorDebug.Log($"[Engine] Updated ProjectSettings with default renderer GUID: {activeGuid}");
+                }
+
+                EditorDebug.Log($"[Engine] Loaded renderer profile: {profile.name}");
             }
         }
 
@@ -678,7 +700,7 @@ namespace IronRose.Engine
             }
             catch (Exception ex)
             {
-                RoseEngine.Debug.LogError($"[Engine] GPU compressor init failed, using CPU fallback: {ex.Message}");
+                RoseEngine.EditorDebug.LogError($"[Engine] GPU compressor init failed, using CPU fallback: {ex.Message}");
                 _gpuCompressor = null;
             }
         }
@@ -696,11 +718,11 @@ namespace IronRose.Engine
                     _inputContext,
                     ShaderRegistry.ShaderRoot);
                 _graphicsManager.Resized += (w, h) => _imguiOverlay?.Resize(w, h);
-                RoseEngine.Debug.Log("[Engine] ImGui overlay initialized");
+                RoseEngine.EditorDebug.Log("[Engine] ImGui overlay initialized");
             }
             catch (Exception ex)
             {
-                RoseEngine.Debug.LogError($"[Engine] ImGui overlay init failed: {ex.Message}");
+                RoseEngine.EditorDebug.LogError($"[Engine] ImGui overlay init failed: {ex.Message}");
                 _imguiOverlay = null;
             }
         }
@@ -726,7 +748,7 @@ namespace IronRose.Engine
 
             if (Input.GetKeyDownRaw(KeyCode.F12) && _graphicsManager != null)
             {
-                var dir = Path.Combine("Screenshots");
+                var dir = Path.Combine(ProjectContext.ProjectRoot, "Screenshots");
                 Directory.CreateDirectory(dir);
                 var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
                 var filename = Path.Combine(dir, $"screenshot_{timestamp}.png");
@@ -815,11 +837,11 @@ namespace IronRose.Engine
 
                 var rawImage = new Silk.NET.Core.RawImage(image.Width, image.Height, pixels);
                 window.SetWindowIcon(ref rawImage);
-                RoseEngine.Debug.Log($"[Engine] Window icon set: {iconPath}");
+                RoseEngine.EditorDebug.Log($"[Engine] Window icon set: {iconPath}");
             }
             catch (Exception ex)
             {
-                RoseEngine.Debug.LogError($"[Engine] Window icon failed: {ex.Message}");
+                RoseEngine.EditorDebug.LogError($"[Engine] Window icon failed: {ex.Message}");
             }
         }
 

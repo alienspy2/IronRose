@@ -289,12 +289,12 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
                 output.SaveAsPng(savePath);
                 _statusMessage = $"Saved: {savePath} ({w}x{h})";
-                RoseEngine.Debug.Log($"[TextureTool] Channel remix saved: {savePath} ({w}x{h})");
+                RoseEngine.EditorDebug.Log($"[TextureTool] Channel remix saved: {savePath} ({w}x{h})");
             }
             catch (Exception ex)
             {
                 _statusMessage = $"Error: {ex.Message}";
-                RoseEngine.Debug.LogError($"[TextureTool] Compose failed: {ex}");
+                RoseEngine.EditorDebug.LogError($"[TextureTool] Compose failed: {ex}");
             }
         }
 
@@ -425,12 +425,12 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
                 output.SaveAsPng(savePath);
                 _statusMessage = $"Saved: {savePath} ({w}x{h})";
-                RoseEngine.Debug.Log($"[TextureTool] Generated {_proceduralType}: {savePath} ({w}x{h})");
+                RoseEngine.EditorDebug.Log($"[TextureTool] Generated {_proceduralType}: {savePath} ({w}x{h})");
             }
             catch (Exception ex)
             {
                 _statusMessage = $"Error: {ex.Message}";
-                RoseEngine.Debug.LogError($"[TextureTool] Generate failed: {ex}");
+                RoseEngine.EditorDebug.LogError($"[TextureTool] Generate failed: {ex}");
             }
         }
 

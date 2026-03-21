@@ -239,7 +239,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             var tex = db.Load<Texture2D>(assetPath);
             if (tex == null)
             {
-                Debug.LogWarning($"[SceneEnvironment] Could not load texture: {assetPath}");
+                EditorDebug.LogWarning($"[SceneEnvironment] Could not load texture: {assetPath}");
                 return;
             }
 

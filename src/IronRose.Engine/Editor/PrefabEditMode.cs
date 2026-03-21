@@ -48,7 +48,7 @@ namespace IronRose.Engine.Editor
             var guid = db.GetGuidFromPath(prefabPath);
             if (string.IsNullOrEmpty(guid))
             {
-                Debug.LogWarning($"[PrefabEditMode] No GUID for path: {prefabPath}");
+                EditorDebug.LogWarning($"[PrefabEditMode] No GUID for path: {prefabPath}");
                 return;
             }
 
@@ -101,7 +101,7 @@ namespace IronRose.Engine.Editor
             SceneManager.GetActiveScene().isDirty = false;
 
             EditorSelection.Clear();
-            Debug.Log($"[PrefabEditMode] Entered: {prefabPath}");
+            EditorDebug.Log($"[PrefabEditMode] Entered: {prefabPath}");
         }
 
         /// <summary>
@@ -127,7 +127,7 @@ namespace IronRose.Engine.Editor
 
             if (root == null)
             {
-                Debug.LogWarning("[PrefabEditMode] No root GameObject found to save");
+                EditorDebug.LogWarning("[PrefabEditMode] No root GameObject found to save");
                 return;
             }
 
@@ -156,7 +156,7 @@ namespace IronRose.Engine.Editor
             PrefabVariantTree.Instance.Rebuild();
 
             SceneManager.GetActiveScene().isDirty = false;
-            Debug.Log($"[PrefabEditMode] Saved: {prefabPath}");
+            EditorDebug.Log($"[PrefabEditMode] Saved: {prefabPath}");
         }
 
         /// <summary>
@@ -184,7 +184,7 @@ namespace IronRose.Engine.Editor
                 var remap = UndoUtility.BuildRemap(ctx.GoIdMap);
                 UndoUtility.SetIdRemap(remap.Count > 0 ? remap : null);
 
-                Debug.Log($"[PrefabEditMode] Returned to: {ctx.PrefabPath}");
+                EditorDebug.Log($"[PrefabEditMode] Returned to: {ctx.PrefabPath}");
             }
             else
             {
@@ -219,7 +219,7 @@ namespace IronRose.Engine.Editor
                 EditorState.SavedRedoStack = null;
                 EditorState.SavedGoIdMap = null;
 
-                Debug.Log("[PrefabEditMode] Exited to scene");
+                EditorDebug.Log("[PrefabEditMode] Exited to scene");
             }
 
             EditorSelection.Clear();

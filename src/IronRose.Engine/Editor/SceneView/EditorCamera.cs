@@ -189,23 +189,23 @@ namespace IronRose.Engine.Editor.SceneView
 
         public void FocusOnSelection()
         {
-            Debug.Log($"[EditorCamera:Focus] called. SelectedId={EditorSelection.SelectedGameObjectId}");
+            EditorDebug.Log($"[EditorCamera:Focus] called. SelectedId={EditorSelection.SelectedGameObjectId}");
             var go = EditorSelection.SelectedGameObject;
             if (go == null)
             {
-                Debug.Log("[EditorCamera:Focus] SelectedGameObject is null, returning");
+                EditorDebug.Log("[EditorCamera:Focus] SelectedGameObject is null, returning");
                 return;
             }
 
             int goId = go.GetInstanceID();
             bool isDoubleTap = _lastFocusWasClean && _lastFocusTargetId == goId;
 
-            Debug.Log($"[EditorCamera:Focus] go={go.name} goId={goId} isDoubleTap={isDoubleTap} lastClean={_lastFocusWasClean} lastTargetId={_lastFocusTargetId}");
+            EditorDebug.Log($"[EditorCamera:Focus] go={go.name} goId={goId} isDoubleTap={isDoubleTap} lastClean={_lastFocusWasClean} lastTargetId={_lastFocusTargetId}");
 
             if (isDoubleTap)
             {
                 // Double-tap: zoom to fit object bounds
-                Debug.Log("[EditorCamera:Focus] Double-tap → FocusFitBounds");
+                EditorDebug.Log("[EditorCamera:Focus] Double-tap → FocusFitBounds");
                 FocusFitBounds(go);
                 _lastFocusWasClean = false;
                 _lastFocusTargetId = null;
@@ -217,7 +217,7 @@ namespace IronRose.Engine.Editor.SceneView
                 float dist = (Position - targetPivot).magnitude;
                 if (dist < 1f) dist = 5f;
                 var targetPos = targetPivot - Forward * dist;
-                Debug.Log($"[EditorCamera:Focus] First-tap → objPos={go.transform.position} → targetPivot={targetPivot} targetPos={targetPos} dist={dist} Forward={Forward}");
+                EditorDebug.Log($"[EditorCamera:Focus] First-tap → objPos={go.transform.position} → targetPivot={targetPivot} targetPos={targetPos} dist={dist} Forward={Forward}");
                 StartAnimation(targetPos, targetPivot);
 
                 _lastFocusWasClean = true;

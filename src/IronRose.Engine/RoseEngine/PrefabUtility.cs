@@ -1,3 +1,32 @@
+// ------------------------------------------------------------
+// @file    PrefabUtility.cs
+// @brief   프리팹 에셋 생성, 인스턴스화, Variant 생성, 관계 조회, Unpack 등 유틸리티.
+//          에디터 전용 프리팹 워크플로우를 제공한다.
+// @deps    RoseEngine/EditorDebug, RoseEngine/SceneSerializer, RoseEngine/PrefabInstance,
+//          RoseEngine/PrefabImporter, RoseEngine/Resources, RoseEngine/Object,
+//          IronRose.AssetPipeline/RoseMetadata, IronRose.Engine.Editor
+// @exports
+//   static class PrefabUtility
+//     SaveAsPrefab(GameObject, string): string                         — GO를 .prefab로 저장, GUID 반환
+//     InstantiatePrefab(string): GameObject?                           — GUID로 인스턴스화
+//     InstantiatePrefab(string, Vector3, Quaternion): GameObject?      — 위치/회전 지정 인스턴스화
+//     InstantiatePrefab(string, Transform): GameObject?                — 부모 지정 인스턴스화
+//     InstantiatePrefabByPath(string, Vector3, Quaternion): GameObject? — 경로로 인스턴스화
+//     CreateVariant(string, string): string?                           — Variant 프리팹 생성
+//     IsVariant(string): bool                                          — Variant 여부 확인
+//     GetBasePrefabGuid(string): string?                               — Base 프리팹 GUID 반환
+//     IsPrefabInstance(GameObject): bool                                — 프리팹 인스턴스 여부
+//     IsInPrefabHierarchy(GameObject): bool                             — 프리팹 계층 포함 여부
+//     HasPrefabInstanceAncestor(GameObject): bool                       — 조상에 PrefabInstance 존재 여부
+//     IsChildOfPrefabInstance(GameObject): bool                         — 프리팹 인스턴스 자식 여부
+//     CollectHierarchy(GameObject, List<GameObject>): void              — 전체 자식 수집
+//     GetPrefabGuid(GameObject): string?                                — 원본 프리팹 GUID
+//     GetPrefabAssetPath(GameObject): string?                           — 원본 프리팹 경로
+//     RefreshPrefabInstances(string): void                              — 씬 내 인스턴스 갱신
+//     UnpackPrefabInstance(GameObject): void                            — 프리팹 연결 해제
+// @note    Variant는 basePrefabGuid만 있는 빈 TOML 파일로 저장.
+//          프리팹 인스턴스의 값 override는 미지원 — Variant로 대체.
+// ------------------------------------------------------------
 using System.Collections.Generic;
 using System.IO;
 using IronRose.AssetPipeline;
@@ -58,7 +87,7 @@ namespace RoseEngine
             var template = db.LoadByGuid<GameObject>(prefabGuid);
             if (template == null)
             {
-                Debug.LogWarning($"[PrefabUtility] Failed to load prefab: guid={prefabGuid}");
+                EditorDebug.LogWarning($"[PrefabUtility] Failed to load prefab: guid={prefabGuid}");
                 return null;
             }
 
@@ -95,7 +124,7 @@ namespace RoseEngine
             var guid = db?.GetGuidFromPath(prefabPath);
             if (string.IsNullOrEmpty(guid))
             {
-                Debug.LogWarning($"[PrefabUtility] No GUID found for path: {prefabPath}");
+                EditorDebug.LogWarning($"[PrefabUtility] No GUID found for path: {prefabPath}");
                 return null;
             }
             return InstantiatePrefab(guid!, position, rotation);
@@ -116,7 +145,7 @@ namespace RoseEngine
             var basePath = db.GetPathFromGuid(basePrefabGuid);
             if (string.IsNullOrEmpty(basePath))
             {
-                Debug.LogWarning($"[PrefabUtility] Base prefab not found: guid={basePrefabGuid}");
+                EditorDebug.LogWarning($"[PrefabUtility] Base prefab not found: guid={basePrefabGuid}");
                 return null;
             }
 
@@ -151,7 +180,7 @@ namespace RoseEngine
             // AssetDatabase에 등록
             db.RegisterPrefabAsset(variantPath);
 
-            Debug.Log($"[PrefabUtility] Created variant: {variantPath} (base: {basePath})");
+            EditorDebug.Log($"[PrefabUtility] Created variant: {variantPath} (base: {basePath})");
             return meta.guid;
         }
 
@@ -296,7 +325,7 @@ namespace RoseEngine
             }
 
             if (toRefresh.Count > 0)
-                Debug.Log($"[PrefabUtility] Refreshed {toRefresh.Count} instances of prefab {prefabGuid}");
+                EditorDebug.Log($"[PrefabUtility] Refreshed {toRefresh.Count} instances of prefab {prefabGuid}");
         }
 
         // ── Unpack ──
@@ -308,7 +337,7 @@ namespace RoseEngine
             if (inst == null) return;
 
             instanceRoot.RemoveComponent(inst);
-            Debug.Log($"[PrefabUtility] Unpacked prefab instance: {instanceRoot.name}");
+            EditorDebug.Log($"[PrefabUtility] Unpacked prefab instance: {instanceRoot.name}");
         }
     }
 }

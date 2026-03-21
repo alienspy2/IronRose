@@ -28,7 +28,7 @@ namespace IronRose.Engine.Editor.SceneView
                         try { comp.OnDrawGizmos(); }
                         catch (Exception ex)
                         {
-                            Debug.LogError($"Exception in {comp.GetType().Name}.OnDrawGizmos(): {ex.Message}");
+                            EditorDebug.LogError($"Exception in {comp.GetType().Name}.OnDrawGizmos(): {ex.Message}");
                         }
 
                         if (isSelected)
@@ -39,7 +39,7 @@ namespace IronRose.Engine.Editor.SceneView
                             try { comp.OnDrawGizmosSelected(); }
                             catch (Exception ex)
                             {
-                                Debug.LogError($"Exception in {comp.GetType().Name}.OnDrawGizmosSelected(): {ex.Message}");
+                                EditorDebug.LogError($"Exception in {comp.GetType().Name}.OnDrawGizmosSelected(): {ex.Message}");
                             }
                         }
                     }

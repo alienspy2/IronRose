@@ -50,13 +50,13 @@ namespace IronRose.AssetPipeline
         {
             if (depth > MaxVariantDepth)
             {
-                Debug.LogError($"[PrefabImporter] Variant depth exceeded max ({MaxVariantDepth}): {prefabPath}");
+                EditorDebug.LogError($"[PrefabImporter] Variant depth exceeded max ({MaxVariantDepth}): {prefabPath}");
                 return null;
             }
 
             if (!File.Exists(prefabPath))
             {
-                Debug.LogError($"[PrefabImporter] File not found: {prefabPath}");
+                EditorDebug.LogError($"[PrefabImporter] File not found: {prefabPath}");
                 return null;
             }
 
@@ -65,7 +65,7 @@ namespace IronRose.AssetPipeline
             try { root = Toml.ToModel(tomlStr); }
             catch (Exception ex)
             {
-                Debug.LogError($"[PrefabImporter] TOML parse error in {prefabPath}: {ex.Message}");
+                EditorDebug.LogError($"[PrefabImporter] TOML parse error in {prefabPath}: {ex.Message}");
                 return null;
             }
 
@@ -88,12 +88,12 @@ namespace IronRose.AssetPipeline
             var gameObjects = SceneSerializer.LoadPrefabGameObjectsFromString(Toml.FromModel(root));
             if (gameObjects.Count == 0)
             {
-                Debug.LogWarning($"[PrefabImporter] No GameObjects in prefab: {prefabPath}");
+                EditorDebug.LogWarning($"[PrefabImporter] No GameObjects in prefab: {prefabPath}");
                 return null;
             }
 
             var rootGo = gameObjects[0];
-            Debug.Log($"[PrefabImporter] Loaded prefab: {prefabPath} → '{rootGo.name}' ({gameObjects.Count} GOs)");
+            EditorDebug.Log($"[PrefabImporter] Loaded prefab: {prefabPath} → '{rootGo.name}' ({gameObjects.Count} GOs)");
             return rootGo;
         }
 
@@ -103,7 +103,7 @@ namespace IronRose.AssetPipeline
             var basePath = _assetDatabase.GetPathFromGuid(basePrefabGuid);
             if (string.IsNullOrEmpty(basePath))
             {
-                Debug.LogWarning($"[PrefabImporter] Base prefab not found for guid: {basePrefabGuid}");
+                EditorDebug.LogWarning($"[PrefabImporter] Base prefab not found for guid: {basePrefabGuid}");
                 // 폴백: gameObjects가 있으면 직접 로드
                 return LoadBase(root, variantPath);
             }
@@ -111,7 +111,7 @@ namespace IronRose.AssetPipeline
             var baseRoot = LoadPrefabInternal(basePath!, depth + 1);
             if (baseRoot == null)
             {
-                Debug.LogWarning($"[PrefabImporter] Failed to load base prefab: {basePath}");
+                EditorDebug.LogWarning($"[PrefabImporter] Failed to load base prefab: {basePath}");
                 return LoadBase(root, variantPath);
             }
 
@@ -132,7 +132,7 @@ namespace IronRose.AssetPipeline
                     baseRoot.name = rn;
             }
 
-            Debug.Log($"[PrefabImporter] Loaded variant: {variantPath} (base: {basePath})");
+            EditorDebug.Log($"[PrefabImporter] Loaded variant: {variantPath} (base: {basePath})");
             return baseRoot;
         }
 

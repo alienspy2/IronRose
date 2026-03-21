@@ -1,7 +1,7 @@
 // ------------------------------------------------------------
 // @file    TonemapEffect.cs
 // @brief   HDR Tonemapping 포스트 프로세스. ACES 기반 톤맵 + Exposure/Saturation/Contrast/Gamma 조절.
-// @deps    PostProcessEffect, ShaderCompiler
+// @deps    PostProcessEffect, ShaderCompiler, EditorDebug
 // @exports
 //   class TonemapEffect : PostProcessEffect
 //     Exposure: float [EffectParam]     — 노출 (0.01~10)
@@ -88,7 +88,7 @@ namespace IronRose.Rendering
 
             CreateSizeDependentResources(width, height);
 
-            Debug.Log($"[TonemapEffect] Initialized ({width}x{height})");
+            EditorDebug.Log($"[TonemapEffect] Initialized ({width}x{height})");
         }
 
         public override void Resize(uint width, uint height)
@@ -138,7 +138,7 @@ namespace IronRose.Rendering
             if (_shaders != null)
                 foreach (var s in _shaders) s.Dispose();
 
-            Debug.Log("[TonemapEffect] Disposed");
+            EditorDebug.Log("[TonemapEffect] Disposed");
         }
     }
 }

@@ -23,7 +23,7 @@ namespace IronRose.Engine.Editor
             var dir = Path.Combine(ProjectContext.EditorAssetsPath, "Matcaps");
             if (!Directory.Exists(dir))
             {
-                Debug.LogWarning($"[EditorAssets] Matcap directory not found: {dir}");
+                EditorDebug.LogWarning($"[EditorAssets] Matcap directory not found: {dir}");
                 return;
             }
 
@@ -41,7 +41,7 @@ namespace IronRose.Engine.Editor
 
                     if (tex.TextureView == null)
                     {
-                        Debug.LogWarning($"[EditorAssets] Failed to create TextureView: {file}");
+                        EditorDebug.LogWarning($"[EditorAssets] Failed to create TextureView: {file}");
                         tex.Dispose();
                         continue;
                     }
@@ -54,11 +54,11 @@ namespace IronRose.Engine.Editor
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"[EditorAssets] Failed to load matcap: {file} — {ex.Message}");
+                    EditorDebug.LogError($"[EditorAssets] Failed to load matcap: {file} — {ex.Message}");
                 }
             }
 
-            Debug.Log($"[EditorAssets] Loaded {_matCapTextures.Count} matcap textures from {dir}");
+            EditorDebug.Log($"[EditorAssets] Loaded {_matCapTextures.Count} matcap textures from {dir}");
         }
 
         public static string GetMatCapName(int index)

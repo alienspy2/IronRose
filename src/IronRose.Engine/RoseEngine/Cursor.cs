@@ -2,7 +2,7 @@
 // @file    Cursor.cs
 // @brief   커서 잠금/표시 상태를 관리하는 정적 클래스. Unity Cursor API 호환.
 //          Silk.NET ICursor.CursorMode를 래핑하여 구현.
-// @deps    RoseEngine/CursorLockMode, RoseEngine/Debug,
+// @deps    RoseEngine/CursorLockMode, RoseEngine/EditorDebug,
 //          IronRose.Engine.Editor/EditorPlayMode
 // @exports
 //   static class Cursor
@@ -79,7 +79,7 @@ namespace RoseEngine
             {
                 _escapeOverride = true;
                 ApplyState();
-                Debug.Log("[Cursor] Escape override: cursor unlocked temporarily");
+                EditorDebug.Log("[Cursor] Escape override: cursor unlocked temporarily");
             }
         }
 
@@ -90,7 +90,7 @@ namespace RoseEngine
             {
                 _escapeOverride = false;
                 ApplyState();
-                Debug.Log("[Cursor] Lock reacquired");
+                EditorDebug.Log("[Cursor] Lock reacquired");
             }
         }
 

@@ -60,7 +60,7 @@ namespace IronRose.Engine.Editor
             var absFolder = Path.GetFullPath(folderPath);
             if (!Directory.Exists(absFolder))
             {
-                Debug.LogWarning($"[Thumbnail] Folder not found: {absFolder}");
+                EditorDebug.LogWarning($"[Thumbnail] Folder not found: {absFolder}");
                 return;
             }
 
@@ -77,7 +77,7 @@ namespace IronRose.Engine.Editor
 
             if (files.Count == 0)
             {
-                Debug.Log($"[Thumbnail] No eligible assets in {folderPath}");
+                EditorDebug.Log($"[Thumbnail] No eligible assets in {folderPath}");
                 return;
             }
 
@@ -91,7 +91,7 @@ namespace IronRose.Engine.Editor
             var db = Resources.GetAssetDatabase();
             (db as IronRose.AssetPipeline.AssetDatabase)?.PushImportGuard();
 
-            Debug.Log($"[Thumbnail] Starting: {_queue.Length} assets");
+            EditorDebug.Log($"[Thumbnail] Starting: {_queue.Length} assets");
         }
 
         /// <summary>프레임당 1개 에셋 처리. EngineCore.Update()에서 호출.</summary>
@@ -111,7 +111,7 @@ namespace IronRose.Engine.Editor
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[Thumbnail] Failed: {filePath} — {ex.Message}");
+                EditorDebug.LogWarning($"[Thumbnail] Failed: {filePath} — {ex.Message}");
             }
 
             _nextIndex++;
@@ -140,7 +140,7 @@ namespace IronRose.Engine.Editor
             (db as IronRose.AssetPipeline.AssetDatabase)?.PopImportGuard();
 
             _timer?.Stop();
-            Debug.Log($"[Thumbnail] Complete: {_queue?.Length ?? 0} assets, {_cells.Count} thumbnails ({_timer?.Elapsed.TotalSeconds:F1}s)");
+            EditorDebug.Log($"[Thumbnail] Complete: {_queue?.Length ?? 0} assets, {_cells.Count} thumbnails ({_timer?.Elapsed.TotalSeconds:F1}s)");
 
             IsGenerating = false;
             CurrentAssetName = null;
@@ -181,7 +181,7 @@ namespace IronRose.Engine.Editor
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[Thumbnail] Failed to open file: {ex.Message}");
+                EditorDebug.LogWarning($"[Thumbnail] Failed to open file: {ex.Message}");
             }
         }
 
@@ -289,7 +289,7 @@ namespace IronRose.Engine.Editor
 
             var outputPath = Path.Combine(folderPath, ".thumbnails.png");
             sheet.SaveAsPng(outputPath);
-            Debug.Log($"[Thumbnail] Sheet: {outputPath} ({cells.Count} assets, {cols}x{rows})");
+            EditorDebug.Log($"[Thumbnail] Sheet: {outputPath} ({cells.Count} assets, {cols}x{rows})");
         }
 
         // ── Texture (CPU only) ──────────────────────────────────────

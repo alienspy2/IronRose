@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 using ImGuiNET;
 using Silk.NET.Windowing;
 using Veldrid;
-using Debug = RoseEngine.Debug;
+using Debug = RoseEngine.EditorDebug;
 
 namespace IronRose.Engine.Editor.ImGuiEditor
 {

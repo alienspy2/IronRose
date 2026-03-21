@@ -159,7 +159,7 @@ namespace IronRose.Rendering
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"[Skybox] Cubemap 생성 실패 — skybox를 제거합니다: {ex.Message}");
+                        EditorDebug.LogError($"[Skybox] Cubemap 생성 실패 — skybox를 제거합니다: {ex.Message}");
                         skyboxMat._cachedCubemap?.Dispose();
                         skyboxMat._cachedCubemap = null;
                         skyboxMat._cachedCubemapSource = null;
@@ -287,7 +287,7 @@ namespace IronRose.Rendering
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"[Skybox] Cubemap 생성 실패 — skybox를 제거합니다: {ex.Message}");
+                        EditorDebug.LogError($"[Skybox] Cubemap 생성 실패 — skybox를 제거합니다: {ex.Message}");
                         skyboxMat._cachedCubemap?.Dispose();
                         skyboxMat._cachedCubemap = null;
                         skyboxMat._cachedCubemapSource = null;

@@ -1,3 +1,28 @@
+// ------------------------------------------------------------
+// @file    SceneManager.cs
+// @brief   씬 내 GameObject/MonoBehaviour 등록, 게임 루프(Update/FixedUpdate/LateUpdate),
+//          Destroy 큐 처리, 코루틴/Invoke 위임, 씬 초기화(Clear) 등 핵심 관리자.
+// @deps    RoseEngine/EditorDebug, RoseEngine/Debug, RoseEngine/Scene, RoseEngine/GameObject,
+//          RoseEngine/MonoBehaviour, RoseEngine/Time, RoseEngine/CoroutineScheduler,
+//          RoseEngine/InvokeScheduler, RoseEngine/MeshRenderer, RoseEngine/SpriteRenderer,
+//          RoseEngine/TextRenderer, RoseEngine/UIText, RoseEngine/UIInputField,
+//          RoseEngine/Light, RoseEngine/Camera, RoseEngine/Canvas, RoseEngine/CanvasRenderer,
+//          RoseEngine/Collider, RoseEngine/Collider2D, RoseEngine/Rigidbody, RoseEngine/Rigidbody2D,
+//          IronRose.Engine/PhysicsManager
+// @exports
+//   static class SceneManager
+//     AllGameObjects: IReadOnlyList<GameObject>                — 전체 GO 목록
+//     GetActiveScene(): Scene                                  — 활성 씬 반환
+//     SetActiveScene(Scene): void                              — 활성 씬 설정
+//     RegisterGameObject(GameObject): void                     — GO 등록
+//     RegisterBehaviour(MonoBehaviour): void                   — MB 등록 (Awake/OnEnable/Start 큐)
+//     MoveGameObjectIndex(GameObject, int): void               — 루트 GO 순서 변경
+//     Update(float): void                                      — 메인 업데이트 루프
+//     FixedUpdate(float): void                                 — 물리 업데이트 루프
+//     Clear(): void                                            — 씬 전체 초기화
+// @note    [Diag] 태그 로그는 EditorDebug로, MonoBehaviour 콜백 에러는 Debug로 출력.
+//          Update 루프에서 300프레임마다 [Diag] 진단 로그 출력.
+// ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 
@@ -62,7 +87,7 @@ namespace RoseEngine
         {
             if (_behaviours.Contains(behaviour)) return;
 
-            Debug.Log($"[Diag] RegisterBehaviour: {behaviour.GetType().Name} (enabled={behaviour.enabled}, go={behaviour.gameObject?.name}, active={behaviour.gameObject?.activeInHierarchy})");
+            EditorDebug.Log($"[Diag] RegisterBehaviour: {behaviour.GetType().Name} (enabled={behaviour.enabled}, go={behaviour.gameObject?.name}, active={behaviour.gameObject?.activeInHierarchy})");
             _behaviours.Add(behaviour);
 
             try
@@ -148,14 +173,14 @@ namespace RoseEngine
 
             // 3. Update all behaviours
             if (Time.frameCount % 300 == 0)
-                Debug.Log($"[Diag] Update loop: {_behaviours.Count} behaviours registered");
+                EditorDebug.Log($"[Diag] Update loop: {_behaviours.Count} behaviours registered");
             for (int i = 0; i < _behaviours.Count; i++)
             {
                 var b = _behaviours[i];
                 if (!IsActive(b))
                 {
                     if (Time.frameCount % 300 == 0)
-                        Debug.Log($"[Diag] SKIPPED {b.GetType().Name}: enabled={b.enabled}, destroyed={b._isDestroyed}, activeInHierarchy={b.gameObject.activeInHierarchy}");
+                        EditorDebug.Log($"[Diag] SKIPPED {b.GetType().Name}: enabled={b.enabled}, destroyed={b._isDestroyed}, activeInHierarchy={b.gameObject.activeInHierarchy}");
                     continue;
                 }
                 try { b.Update(); }

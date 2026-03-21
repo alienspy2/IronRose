@@ -59,7 +59,7 @@ namespace IronRose.Engine
 
         public void Initialize()
         {
-            RoseEngine.Debug.Log("[Engine] Initializing LiveCode hot-reload...");
+            RoseEngine.EditorDebug.Log("[Engine] Initializing LiveCode hot-reload...");
 
             // 빌드 타임 LiveCode.dll이 Default ALC에 로드되었는지 확인
             var buildTimeLiveCode = AppDomain.CurrentDomain.GetAssemblies()
@@ -67,7 +67,7 @@ namespace IronRose.Engine
                     && !string.IsNullOrEmpty(a.Location));
             if (buildTimeLiveCode != null)
             {
-                RoseEngine.Debug.LogWarning(
+                RoseEngine.EditorDebug.LogWarning(
                     "[Engine] Build-time LiveCode.dll detected in Default ALC! " +
                     "This may cause duplicate types. " +
                     "Ensure LiveCode.csproj is excluded from build output. " +
@@ -100,7 +100,7 @@ namespace IronRose.Engine
                 watcher.Renamed += (s, e) => OnLiveCodeChanged(s, e);
                 watcher.EnableRaisingEvents = true;
                 _liveCodeWatchers.Add(watcher);
-                RoseEngine.Debug.Log($"[Engine] FileSystemWatcher active on {path}");
+                RoseEngine.EditorDebug.Log($"[Engine] FileSystemWatcher active on {path}");
             }
 
             CompileAllLiveCode();
@@ -116,7 +116,7 @@ namespace IronRose.Engine
 
             bool isPlaying = EditorPlayMode.State == PlayModeState.Playing;
 
-            RoseEngine.Debug.Log("[Engine] Hot reloading LiveCode...");
+            RoseEngine.EditorDebug.Log("[Engine] Hot reloading LiveCode...");
 
             if (isPlaying)
                 SaveHotReloadableState();
@@ -149,7 +149,7 @@ namespace IronRose.Engine
             if (Directory.Exists(rootLiveCode) && !_liveCodePaths.Contains(rootLiveCode))
             {
                 _liveCodePaths.Add(rootLiveCode);
-                RoseEngine.Debug.Log($"[Engine] Found LiveCode directory: {rootLiveCode}");
+                RoseEngine.EditorDebug.Log($"[Engine] Found LiveCode directory: {rootLiveCode}");
             }
 
             // 2) src/*/LiveCode/ 하위 디렉토리도 추가 탐색 (확장성)
@@ -166,7 +166,7 @@ namespace IronRose.Engine
                     if (!_liveCodePaths.Contains(fullPath))
                     {
                         _liveCodePaths.Add(fullPath);
-                        RoseEngine.Debug.Log($"[Engine] Found LiveCode directory: {fullPath}");
+                        RoseEngine.EditorDebug.Log($"[Engine] Found LiveCode directory: {fullPath}");
                     }
                 }
             }
@@ -177,7 +177,7 @@ namespace IronRose.Engine
                 string fallback = ProjectContext.LiveCodePath;
                 Directory.CreateDirectory(fallback);
                 _liveCodePaths.Add(fallback);
-                RoseEngine.Debug.Log($"[Engine] Created LiveCode directory: {fallback}");
+                RoseEngine.EditorDebug.Log($"[Engine] Created LiveCode directory: {fallback}");
             }
         }
 
@@ -191,7 +191,7 @@ namespace IronRose.Engine
             if (csFiles.Length == 0)
                 return;
 
-            RoseEngine.Debug.Log($"[Engine] Compiling {csFiles.Length} LiveCode files from {_liveCodePaths.Count} directories...");
+            RoseEngine.EditorDebug.Log($"[Engine] Compiling {csFiles.Length} LiveCode files from {_liveCodePaths.Count} directories...");
 
             var result = _compiler!.CompileFromFiles(csFiles, "LiveCode");
             if (result.Success && result.AssemblyBytes != null)
@@ -202,11 +202,11 @@ namespace IronRose.Engine
                     _scriptDomain.LoadScripts(result.AssemblyBytes);
 
                 RegisterLiveCodeBehaviours();
-                RoseEngine.Debug.Log("[Engine] LiveCode loaded!");
+                RoseEngine.EditorDebug.Log("[Engine] LiveCode loaded!");
             }
             else
             {
-                RoseEngine.Debug.LogError("[Engine] LiveCode compilation failed");
+                RoseEngine.EditorDebug.LogError("[Engine] LiveCode compilation failed");
             }
         }
 
@@ -222,11 +222,11 @@ namespace IronRose.Engine
                 if (!monoBehaviourType.IsAssignableFrom(type)) continue;
 
                 demoTypes.Add(type);
-                RoseEngine.Debug.Log($"[Engine] LiveCode demo detected: {type.Name}");
+                RoseEngine.EditorDebug.Log($"[Engine] LiveCode demo detected: {type.Name}");
             }
 
             LiveCodeDemoTypes = demoTypes.ToArray();
-            RoseEngine.Debug.Log($"[Engine] LiveCode demos available: {LiveCodeDemoTypes.Length}");
+            RoseEngine.EditorDebug.Log($"[Engine] LiveCode demos available: {LiveCodeDemoTypes.Length}");
 
             // 에디터 캐시 무효화: 새 타입이 Add Component 메뉴 및 씬 역직렬화에 반영
             ImGuiInspectorPanel.InvalidateComponentTypeCache();
@@ -247,11 +247,11 @@ namespace IronRose.Engine
                         {
                             var state = reloadable.SerializeState();
                             _savedHotReloadStates[comp.GetType().Name] = state;
-                            RoseEngine.Debug.Log($"[Engine] State saved: {comp.GetType().Name}");
+                            RoseEngine.EditorDebug.Log($"[Engine] State saved: {comp.GetType().Name}");
                         }
                         catch (Exception ex)
                         {
-                            RoseEngine.Debug.LogError($"[Engine] State save failed for {comp.GetType().Name}: {ex.Message}");
+                            RoseEngine.EditorDebug.LogError($"[Engine] State save failed for {comp.GetType().Name}: {ex.Message}");
                         }
                     }
                 }
@@ -274,11 +274,11 @@ namespace IronRose.Engine
                             try
                             {
                                 reloadable.DeserializeState(state);
-                                RoseEngine.Debug.Log($"[Engine] State restored: {typeName}");
+                                RoseEngine.EditorDebug.Log($"[Engine] State restored: {typeName}");
                             }
                             catch (Exception ex)
                             {
-                                RoseEngine.Debug.LogError($"[Engine] State restore failed for {typeName}: {ex.Message}");
+                                RoseEngine.EditorDebug.LogError($"[Engine] State restore failed for {typeName}: {ex.Message}");
                             }
                         }
                     }
@@ -335,7 +335,7 @@ namespace IronRose.Engine
                     if (newComp is MonoBehaviour newMb)
                         SceneManager.RegisterBehaviour(newMb);
 
-                    RoseEngine.Debug.Log($"[Engine] Migrated component: {oldType.Name} on {go.name}");
+                    RoseEngine.EditorDebug.Log($"[Engine] Migrated component: {oldType.Name} on {go.name}");
                 }
             }
         }
@@ -372,7 +372,7 @@ namespace IronRose.Engine
 
             _lastReloadTime = now;
             _reloadRequested = true;
-            RoseEngine.Debug.Log($"[Engine] LiveCode changed: {e.Name} -> reload scheduled");
+            RoseEngine.EditorDebug.Log($"[Engine] LiveCode changed: {e.Name} -> reload scheduled");
         }
     }
 }

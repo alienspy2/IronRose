@@ -34,7 +34,7 @@ namespace IronRose.Engine.Editor
             var targetDir = Path.Combine(parentDir, projectName);
             if (Directory.Exists(targetDir))
             {
-                Debug.LogError($"[ProjectCreator] Directory already exists: {targetDir}");
+                EditorDebug.LogError($"[ProjectCreator] Directory already exists: {targetDir}");
                 return false;
             }
 
@@ -66,12 +66,12 @@ namespace IronRose.Engine.Editor
                 // 실제 엔진 경로로 project.toml, Directory.Build.props 갱신
                 PatchEnginePath(targetDir);
 
-                Debug.Log($"[ProjectCreator] Project created from template: {targetDir}");
+                EditorDebug.Log($"[ProjectCreator] Project created from template: {targetDir}");
                 return true;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[ProjectCreator] Failed to create project: {ex.Message}");
+                EditorDebug.LogError($"[ProjectCreator] Failed to create project: {ex.Message}");
                 return false;
             }
         }
@@ -95,7 +95,7 @@ namespace IronRose.Engine.Editor
                 var content = File.ReadAllText(tomlPath);
                 content = content.Replace("path = \"../IronRose\"", $"path = \"{relPath}\"");
                 File.WriteAllText(tomlPath, content);
-                Debug.Log($"[ProjectCreator] project.toml engine.path = {relPath}");
+                EditorDebug.Log($"[ProjectCreator] project.toml engine.path = {relPath}");
             }
 
             // Directory.Build.props: IronRoseRoot 기본값 갱신
@@ -153,12 +153,12 @@ start_scene = """"
 ";
                 File.WriteAllText(Path.Combine(targetDir, "project.toml"), tomlContent);
 
-                Debug.Log($"[ProjectCreator] Minimal project created: {targetDir}");
+                EditorDebug.Log($"[ProjectCreator] Minimal project created: {targetDir}");
                 return true;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[ProjectCreator] Failed to create minimal project: {ex.Message}");
+                EditorDebug.LogError($"[ProjectCreator] Failed to create minimal project: {ex.Message}");
                 return false;
             }
         }

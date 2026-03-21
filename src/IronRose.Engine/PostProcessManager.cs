@@ -20,7 +20,7 @@ namespace IronRose.Engine
         public void Initialize()
         {
             Instance = this;
-            Debug.Log("[PostProcessManager] Initialized");
+            EditorDebug.Log("[PostProcessManager] Initialized");
         }
 
         /// <summary>매 프레임 호출. 카메라 위치 기반으로 Volume 블렌딩 수행.</summary>

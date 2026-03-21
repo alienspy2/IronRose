@@ -10,7 +10,7 @@ namespace IronRose.Scripting
 
         public void SaveStates(List<object> instances)
         {
-            Debug.Log("[StateManager] Saving states...");
+            EditorDebug.Log("[StateManager] Saving states...");
             _savedStates.Clear();
 
             int savedCount = 0;
@@ -25,12 +25,12 @@ namespace IronRose.Scripting
                 }
             }
 
-            Debug.Log($"[StateManager] Saved {savedCount} states");
+            EditorDebug.Log($"[StateManager] Saved {savedCount} states");
         }
 
         public void RestoreStates(List<object> instances)
         {
-            Debug.Log("[StateManager] Restoring states...");
+            EditorDebug.Log("[StateManager] Restoring states...");
 
             int restoredCount = 0;
             foreach (var instance in instances)
@@ -46,7 +46,7 @@ namespace IronRose.Scripting
                 }
             }
 
-            Debug.Log($"[StateManager] Restored {restoredCount} states");
+            EditorDebug.Log($"[StateManager] Restored {restoredCount} states");
         }
     }
 }

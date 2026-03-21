@@ -1144,11 +1144,11 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                                     UndoSystem.Record(new AddComponentAction(
                                         $"Add {compType.Name}", target.GetInstanceID(), compType));
                                     SceneManager.GetActiveScene().isDirty = true;
-                                    RoseEngine.Debug.Log($"[Scripts] Added component {compType.Name} to {target.name} via Inspector");
+                                    RoseEngine.EditorDebug.Log($"[Scripts] Added component {compType.Name} to {target.name} via Inspector");
                                 }
                                 else
                                 {
-                                    RoseEngine.Debug.LogWarning(
+                                    RoseEngine.EditorDebug.LogWarning(
                                         $"[Scripts] No Component type found for: {System.IO.Path.GetFileNameWithoutExtension(scriptPath)}");
                                 }
                             }
@@ -1909,7 +1909,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             catch (Exception ex)
             {
                 if (readOnly) ImGui.EndDisabled();
-                RoseEngine.Debug.LogError($"[MultiValue] EXCEPTION in {label}: {ex}");
+                RoseEngine.EditorDebug.LogError($"[MultiValue] EXCEPTION in {label}: {ex}");
                 ImGui.TextDisabled($"{label}: (error)");
             }
 

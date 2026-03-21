@@ -39,7 +39,7 @@ namespace IronRose.Engine
             if (Directory.Exists(candidate))
             {
                 ShaderRoot = Path.GetFullPath(candidate);
-                Debug.Log($"[ShaderRegistry] Shader root: {ShaderRoot}");
+                EditorDebug.Log($"[ShaderRegistry] Shader root: {ShaderRoot}");
                 return;
             }
 
@@ -48,7 +48,7 @@ namespace IronRose.Engine
             if (Directory.Exists(candidate))
             {
                 ShaderRoot = Path.GetFullPath(candidate);
-                Debug.Log($"[ShaderRegistry] Shader root (project): {ShaderRoot}");
+                EditorDebug.Log($"[ShaderRegistry] Shader root (project): {ShaderRoot}");
                 return;
             }
 
@@ -60,7 +60,7 @@ namespace IronRose.Engine
                 if (Directory.Exists(fullPath))
                 {
                     ShaderRoot = fullPath;
-                    Debug.LogWarning($"[ShaderRegistry] Shader root (fallback): {ShaderRoot}");
+                    EditorDebug.LogWarning($"[ShaderRegistry] Shader root (fallback): {ShaderRoot}");
                     return;
                 }
             }
@@ -68,7 +68,7 @@ namespace IronRose.Engine
             // IsProjectLoaded = false인 경우(Startup Panel 모드) 크래시 방지
             if (!ProjectContext.IsProjectLoaded)
             {
-                Debug.LogWarning(
+                EditorDebug.LogWarning(
                     "[ShaderRegistry] Shaders directory not found, but no project loaded. " +
                     "Shader features will be unavailable until a project is opened.");
                 return;

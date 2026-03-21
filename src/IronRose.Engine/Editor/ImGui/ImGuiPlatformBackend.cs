@@ -7,7 +7,7 @@ using Silk.NET.Input;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
 using Veldrid;
-using Debug = RoseEngine.Debug;
+using Debug = RoseEngine.EditorDebug;
 using SilkGlfw = Silk.NET.GLFW;
 
 namespace IronRose.Engine.Editor.ImGuiEditor

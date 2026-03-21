@@ -7,7 +7,7 @@ using ImGuiNET;
 using IronRose.AssetPipeline;
 using IronRose.Engine.Editor;
 using RoseEngine;
-using Debug = RoseEngine.Debug;
+using Debug = RoseEngine.EditorDebug;
 using Vector2 = System.Numerics.Vector2;
 using Vector4 = System.Numerics.Vector4;
 

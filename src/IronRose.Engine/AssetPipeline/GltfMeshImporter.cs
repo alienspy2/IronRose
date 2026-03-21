@@ -18,7 +18,7 @@ namespace IronRose.AssetPipeline
         {
             if (!File.Exists(meshPath))
             {
-                Debug.LogError($"[GltfImporter] File not found: {meshPath}");
+                EditorDebug.LogError($"[GltfImporter] File not found: {meshPath}");
                 return null!;
             }
 
@@ -29,13 +29,13 @@ namespace IronRose.AssetPipeline
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[GltfImporter] Failed to load '{meshPath}': {ex.Message}");
+                EditorDebug.LogError($"[GltfImporter] Failed to load '{meshPath}': {ex.Message}");
                 return null!;
             }
 
             if (model.LogicalMeshes.Count == 0)
             {
-                Debug.LogError($"[GltfImporter] No meshes found in '{meshPath}'");
+                EditorDebug.LogError($"[GltfImporter] No meshes found in '{meshPath}'");
                 return null!;
             }
 
@@ -97,9 +97,9 @@ namespace IronRose.AssetPipeline
                     if (needsCalculateNormals)
                     {
                         if (!hasNormals)
-                            Debug.Log($"[GltfImporter] No normals in primitive, calculating smooth normals");
+                            EditorDebug.Log($"[GltfImporter] No normals in primitive, calculating smooth normals");
                         else
-                            Debug.Log($"[GltfImporter] Recalculating normals (generate_normals=true)");
+                            EditorDebug.Log($"[GltfImporter] Recalculating normals (generate_normals=true)");
                         CalculateSmoothNormals(vertices, triIndices.ToArray());
                     }
 
@@ -134,14 +134,14 @@ namespace IronRose.AssetPipeline
 
             if (namedMeshes.Count == 0)
             {
-                Debug.LogError($"[GltfImporter] No valid geometry in '{meshPath}'");
+                EditorDebug.LogError($"[GltfImporter] No valid geometry in '{meshPath}'");
                 return null!;
             }
 
             // 머티리얼 + 텍스처 추출 (텍스처 중복 제거)
             var (materials, textures) = ExtractMaterials(model);
 
-            Debug.Log($"[GltfImporter] Imported: {meshPath} ({namedMeshes.Count} meshes, {totalVerts} verts, {totalTris} tris, {materials.Length} materials, {textures.Length} textures)");
+            EditorDebug.Log($"[GltfImporter] Imported: {meshPath} ({namedMeshes.Count} meshes, {totalVerts} verts, {totalTris} tris, {materials.Length} materials, {textures.Length} textures)");
 
             return new MeshImportResult
             {
@@ -365,12 +365,12 @@ namespace IronRose.AssetPipeline
                 var bytes = content.Content.ToArray();
                 if (bytes.Length == 0) return null;
 
-                Debug.Log($"[GltfImporter] Loading texture: {image.Name ?? "unnamed"} ({bytes.Length} bytes, {content.MimeType})");
+                EditorDebug.Log($"[GltfImporter] Loading texture: {image.Name ?? "unnamed"} ({bytes.Length} bytes, {content.MimeType})");
                 return Texture2D.LoadFromMemory(bytes);
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[GltfImporter] Failed to load texture: {ex.Message}");
+                EditorDebug.LogWarning($"[GltfImporter] Failed to load texture: {ex.Message}");
                 return null;
             }
         }

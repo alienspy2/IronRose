@@ -79,7 +79,7 @@ namespace IronRose.AssetPipeline
         {
             if (RoseConfig.ForceClearCache)
             {
-                Debug.Log("[AssetDatabase] ForceClearCache enabled — clearing cache");
+                EditorDebug.Log("[AssetDatabase] ForceClearCache enabled — clearing cache");
                 _roseCache.ClearAll();
             }
 
@@ -91,7 +91,7 @@ namespace IronRose.AssetPipeline
 
             if (!Directory.Exists(projectPath))
             {
-                Debug.LogWarning($"Asset directory not found: {projectPath}");
+                EditorDebug.LogWarning($"Asset directory not found: {projectPath}");
                 return;
             }
 
@@ -116,7 +116,7 @@ namespace IronRose.AssetPipeline
                 }
             }
 
-            Debug.Log($"[AssetDatabase] Scanned {_guidToPath.Count} assets in {projectPath}");
+            EditorDebug.Log($"[AssetDatabase] Scanned {_guidToPath.Count} assets in {projectPath}");
 
             // Subscribe to .rose save events for automatic reimport
             RoseMetadata.OnSaved -= OnRoseMetadataSaved;
@@ -147,12 +147,12 @@ namespace IronRose.AssetPipeline
             if (string.IsNullOrEmpty(guid)) return null;
             if (!_guidToPath.TryGetValue(guid, out var path))
             {
-                Debug.LogWarning($"[AssetDatabase] LoadByGuid<{typeof(T).Name}>: GUID '{guid}' not found in _guidToPath ({_guidToPath.Count} entries)");
+                EditorDebug.LogWarning($"[AssetDatabase] LoadByGuid<{typeof(T).Name}>: GUID '{guid}' not found in _guidToPath ({_guidToPath.Count} entries)");
                 return null;
             }
             var result = Load<T>(path);
             if (result == null)
-                Debug.LogWarning($"[AssetDatabase] LoadByGuid<{typeof(T).Name}>: Load('{path}') returned null for GUID '{guid}'");
+                EditorDebug.LogWarning($"[AssetDatabase] LoadByGuid<{typeof(T).Name}>: Load('{path}') returned null for GUID '{guid}'");
             return result;
         }
 
@@ -282,7 +282,7 @@ namespace IronRose.AssetPipeline
             else
             {
                 _failedImports.Add(path);
-                Debug.LogWarning($"[AssetDatabase] Import failed, marking as failed (will not retry): {path}");
+                EditorDebug.LogWarning($"[AssetDatabase] Import failed, marking as failed (will not retry): {path}");
             }
 
             return ExtractFromResult<T>(asset);
@@ -477,7 +477,7 @@ namespace IronRose.AssetPipeline
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[AssetDatabase] StoreDiskCache failed: {path} — {ex.Message}");
+                EditorDebug.LogError($"[AssetDatabase] StoreDiskCache failed: {path} — {ex.Message}");
             }
         }
 
@@ -485,7 +485,7 @@ namespace IronRose.AssetPipeline
 
         public void Reimport(string path)
         {
-            Debug.Log($"[AssetDatabase] Reimport starting: {path}");
+            EditorDebug.Log($"[AssetDatabase] Reimport starting: {path}");
             _importDepth++;
             _failedImports.Remove(path);
             var meta = RoseMetadata.LoadOrCreate(path);
@@ -659,7 +659,7 @@ namespace IronRose.AssetPipeline
 
             ProjectDirty = true;
             _importDepth--;
-            Debug.Log($"[AssetDatabase] Reimported: {path}");
+            EditorDebug.Log($"[AssetDatabase] Reimported: {path}");
         }
 
         // ─── Async Reimport (비동기 재임포트 + 진행 UI) ──────────────
@@ -689,11 +689,11 @@ namespace IronRose.AssetPipeline
         {
             if (_reimportTask != null)
             {
-                Debug.LogWarning("[AssetDatabase] Reimport already in progress, ignoring");
+                EditorDebug.LogWarning("[AssetDatabase] Reimport already in progress, ignoring");
                 return;
             }
 
-            Debug.Log($"[AssetDatabase] Async reimport starting: {path}");
+            EditorDebug.Log($"[AssetDatabase] Async reimport starting: {path}");
             _failedImports.Remove(path);
             _reimportPath = path;
             _reimportTimer = System.Diagnostics.Stopwatch.StartNew();
@@ -772,7 +772,7 @@ namespace IronRose.AssetPipeline
             if (_reimportTask.IsFaulted)
             {
                 var ex = _reimportTask.Exception?.InnerException;
-                Debug.LogError($"[AssetDatabase] Async reimport failed: {ex?.Message}");
+                EditorDebug.LogError($"[AssetDatabase] Async reimport failed: {ex?.Message}");
             }
 
             var path = _reimportPath!;
@@ -856,7 +856,7 @@ namespace IronRose.AssetPipeline
             }
 
             _reimportTimer?.Stop();
-            Debug.Log($"[AssetDatabase] Async reimport complete: {path} ({_reimportTimer?.Elapsed.TotalSeconds:F1}s)");
+            EditorDebug.Log($"[AssetDatabase] Async reimport complete: {path} ({_reimportTimer?.Elapsed.TotalSeconds:F1}s)");
 
             // 상태 초기화
             _reimportTask = null;
@@ -906,7 +906,7 @@ namespace IronRose.AssetPipeline
                 // 캐시에서 제거
                 var path = GetPathFromGuid(current);
                 if (path != null && _loadedAssets.Remove(path))
-                    Debug.Log($"[AssetDatabase] Invalidated prefab cache: {Path.GetFileName(path)} (guid={current})");
+                    EditorDebug.Log($"[AssetDatabase] Invalidated prefab cache: {Path.GetFileName(path)} (guid={current})");
 
                 // 이 프리팹을 참조하는 부모들도 무효화
                 if (_prefabDependents.TryGetValue(current, out var parents))
@@ -992,11 +992,11 @@ namespace IronRose.AssetPipeline
                 }
 
                 if (oldDeps.Count > 0)
-                    Debug.Log($"[AssetDatabase] Prefab dependencies updated: {Path.GetFileName(prefabPath)} depends on [{string.Join(", ", oldDeps)}]");
+                    EditorDebug.Log($"[AssetDatabase] Prefab dependencies updated: {Path.GetFileName(prefabPath)} depends on [{string.Join(", ", oldDeps)}]");
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[AssetDatabase] Failed to parse prefab dependencies: {prefabPath} — {ex.Message}");
+                EditorDebug.LogWarning($"[AssetDatabase] Failed to parse prefab dependencies: {prefabPath} — {ex.Message}");
             }
         }
 
@@ -1221,7 +1221,7 @@ namespace IronRose.AssetPipeline
 
             if (changed)
             {
-                Debug.Log($"[AssetDatabase] Sub-assets changed, saving .rose: {filePath}");
+                EditorDebug.Log($"[AssetDatabase] Sub-assets changed, saving .rose: {filePath}");
                 meta.Save(filePath + ".rose");
                 ProjectDirty = true;
             }
@@ -1348,7 +1348,7 @@ namespace IronRose.AssetPipeline
                 }
             };
 
-            Debug.Log($"[AssetDatabase] FileSystemWatcher active on {projectPath}");
+            EditorDebug.Log($"[AssetDatabase] FileSystemWatcher active on {projectPath}");
         }
 
         /// <summary>
@@ -1440,7 +1440,7 @@ namespace IronRose.AssetPipeline
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"[AssetDatabase] ProcessFileChanges error: {evt.FullPath} ({evt.Type}) — {ex.Message}\n{ex.StackTrace}");
+                    EditorDebug.LogError($"[AssetDatabase] ProcessFileChanges error: {evt.FullPath} ({evt.Type}) — {ex.Message}\n{ex.StackTrace}");
                 }
             }
         }
@@ -1523,7 +1523,7 @@ namespace IronRose.AssetPipeline
                     _guidToPath[sub.guid] = subPath;
                 }
                 ProjectDirty = true;
-                Debug.Log($"[AssetDatabase] New asset detected: {fullPath}");
+                EditorDebug.Log($"[AssetDatabase] New asset detected: {fullPath}");
             }
         }
 
@@ -1565,7 +1565,7 @@ namespace IronRose.AssetPipeline
             _roseCache.InvalidateCache(fullPath);
 
             ProjectDirty = true;
-            Debug.Log($"[AssetDatabase] Asset removed: {fullPath}");
+            EditorDebug.Log($"[AssetDatabase] Asset removed: {fullPath}");
         }
 
         // ─── Rename ─────────────────────────────────────────────
@@ -1621,7 +1621,7 @@ namespace IronRose.AssetPipeline
             _failedImports.Remove(oldPath);
 
             ProjectDirty = true;
-            Debug.Log($"[AssetDatabase] Asset renamed: {oldPath} → {newPath}");
+            EditorDebug.Log($"[AssetDatabase] Asset renamed: {oldPath} → {newPath}");
         }
 
         /// <summary>
@@ -1668,7 +1668,7 @@ namespace IronRose.AssetPipeline
             }
 
             ProjectDirty = true;
-            Debug.Log($"[AssetDatabase] Folder paths renamed: {oldAbsFolderPath} → {newAbsFolderPath} ({guidUpdates.Count} entries updated)");
+            EditorDebug.Log($"[AssetDatabase] Folder paths renamed: {oldAbsFolderPath} → {newAbsFolderPath} ({guidUpdates.Count} entries updated)");
         }
 
         public void StopWatching()
@@ -1854,11 +1854,11 @@ namespace IronRose.AssetPipeline
                 float reduction = 0.1f;
 
                 bool hasKey = meta.importer.TryGetValue("generate_mipmesh", out var mmVal);
-                Debug.Log($"[MipMesh] '{path}' — generate_mipmesh key found={hasKey}, rawValue={mmVal} (type={mmVal?.GetType().Name ?? "null"})");
+                EditorDebug.Log($"[MipMesh] '{path}' — generate_mipmesh key found={hasKey}, rawValue={mmVal} (type={mmVal?.GetType().Name ?? "null"})");
                 if (hasKey && mmVal is bool mm)
                     generateMipMesh = mm;
                 else if (hasKey)
-                    Debug.LogWarning($"[MipMesh] generate_mipmesh value is not bool — attempting Convert.ToBoolean");
+                    EditorDebug.LogWarning($"[MipMesh] generate_mipmesh value is not bool — attempting Convert.ToBoolean");
                 if (hasKey && !generateMipMesh && mmVal != null)
                 {
                     try { generateMipMesh = Convert.ToBoolean(mmVal); }
@@ -1872,7 +1872,7 @@ namespace IronRose.AssetPipeline
                 if (meta.importer.TryGetValue("mipmesh_reduction", out var redVal))
                     reduction = Convert.ToSingle(redVal);
 
-                Debug.Log($"[MipMesh] '{path}' — generateMipMesh={generateMipMesh}, meshCount={result.Meshes.Length}, minTri={minTriangles}, targetError={targetError}, reduction={reduction}");
+                EditorDebug.Log($"[MipMesh] '{path}' — generateMipMesh={generateMipMesh}, meshCount={result.Meshes.Length}, minTri={minTriangles}, targetError={targetError}, reduction={reduction}");
 
                 if (generateMipMesh)
                 {
@@ -1880,22 +1880,22 @@ namespace IronRose.AssetPipeline
                     {
                         var mesh = result.Meshes[i].Mesh;
                         int triCount = mesh.indices.Length / 3;
-                        Debug.Log($"[MipMesh] Generating LOD for mesh[{i}] '{mesh.name}' ({mesh.vertices.Length} verts, {triCount} tris)");
+                        EditorDebug.Log($"[MipMesh] Generating LOD for mesh[{i}] '{mesh.name}' ({mesh.vertices.Length} verts, {triCount} tris)");
                         var mip = MipMeshGenerator.Generate(mesh, minTriangles, targetError, reduction);
                         result.Meshes[i].Mesh = mip.lodMeshes[0];
                         result.MipMeshes[i] = mip;
-                        Debug.Log($"[MipMesh] mesh[{i}] '{mesh.name}' → {mip.LodCount} LODs generated");
+                        EditorDebug.Log($"[MipMesh] mesh[{i}] '{mesh.name}' → {mip.LodCount} LODs generated");
                     }
-                    Debug.Log($"[MipMesh] Generated LODs for {result.Meshes.Length} meshes in {path}");
+                    EditorDebug.Log($"[MipMesh] Generated LODs for {result.Meshes.Length} meshes in {path}");
                 }
                 else
                 {
-                    Debug.LogWarning($"[MipMesh] LOD generation SKIPPED for '{path}' — generate_mipmesh={generateMipMesh}");
+                    EditorDebug.LogWarning($"[MipMesh] LOD generation SKIPPED for '{path}' — generate_mipmesh={generateMipMesh}");
                 }
             }
             else
             {
-                Debug.LogWarning($"[MipMesh] No meshes found in import result for '{path}' — skipping LOD generation");
+                EditorDebug.LogWarning($"[MipMesh] No meshes found in import result for '{path}' — skipping LOD generation");
             }
 
             return result;
@@ -1924,7 +1924,7 @@ namespace IronRose.AssetPipeline
             {
                 _guidToPath[meta.guid] = fullPath;
                 ProjectDirty = true;
-                Debug.Log($"[AssetDatabase] Registered prefab: {fullPath} (guid={meta.guid})");
+                EditorDebug.Log($"[AssetDatabase] Registered prefab: {fullPath} (guid={meta.guid})");
             }
         }
     }

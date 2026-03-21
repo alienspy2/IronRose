@@ -14,7 +14,7 @@ using IronRose.Rendering;
 using Silk.NET.Input;
 using Silk.NET.Windowing;
 using Veldrid;
-using Debug = RoseEngine.Debug;
+using Debug = RoseEngine.EditorDebug;
 
 namespace IronRose.Engine.Editor.ImGuiEditor
 {
@@ -2169,7 +2169,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             {
                 if (focusRequested)
                 {
-                    RoseEngine.Debug.Log("[SceneView:F] Dispatching focus (not hovered path)");
+                    RoseEngine.EditorDebug.Log("[SceneView:F] Dispatching focus (not hovered path)");
                     _editorCamera.Update(0, new SceneViewInputState { FocusRequested = true });
                 }
                 return;
