@@ -144,7 +144,7 @@ namespace RoseEngine
                 point = new Vector2(hitPoint.X, hitPoint.Y),
                 normal = new Vector2(hitNormal.X, hitNormal.Y),
                 fraction = fraction,
-                distance = fraction * distance,
+                distance = fraction * (float.IsInfinity(distance) ? 10000f : distance),
             };
 
             if (hitFixture != null)

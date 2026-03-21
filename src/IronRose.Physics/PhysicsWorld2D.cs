@@ -64,8 +64,10 @@ namespace IronRose.Physics
             var dirLen = direction.Length();
             if (dirLen < 1e-8f || maxDistance <= 0f) return false;
 
+            // Aether는 endPoint를 직접 받으므로 Infinity를 실용적 상한값으로 클램핑
+            var clampedDistance = float.IsInfinity(maxDistance) ? 10000f : maxDistance;
             var normalizedDir = direction / dirLen;
-            var endPoint = origin + normalizedDir * maxDistance;
+            var endPoint = origin + normalizedDir * clampedDistance;
 
             Fixture? closestFixture = null;
             AetherVector2 closestPoint = default;
