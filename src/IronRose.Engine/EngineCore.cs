@@ -8,7 +8,9 @@
 //          IronRose.Rendering/GraphicsManager, IronRose.Rendering/RenderSystem,
 //          IronRose.AssetPipeline/AssetDatabase, IronRose.Engine.Editor/EditorPlayMode,
 //          IronRose.Engine.Editor/EditorState,
-//          IronRose.Engine.Editor.ImGuiEditor/ImGuiOverlay, ShaderRegistry
+//          IronRose.Engine.Editor.ImGuiEditor/ImGuiOverlay, ShaderRegistry,
+//          IronRose.Engine.Cli/CliPipeServer, IronRose.Engine.Cli/CliCommandDispatcher,
+//          IronRose.Engine.Cli/CliLogBuffer
 // @exports
 //   class EngineCore
 //     Initialize(IWindow): void           — 엔진 초기화
@@ -33,6 +35,7 @@
 using IronRose.API;
 using IronRose.AssetPipeline;
 using IronRose.Engine.Automation;
+using IronRose.Engine.Cli;
 using IronRose.Engine.Editor;
 using IronRose.Engine.Editor.ImGuiEditor;
 using IronRose.Engine.Editor.ImGuiEditor.Panels;
@@ -82,6 +85,11 @@ namespace IronRose.Engine
         // 자동화 테스트 명령 실행기
         private TestCommandRunner? _testCommandRunner;
 
+        // CLI 브릿지 (Phase 46)
+        private CliPipeServer? _cliPipeServer;
+        private CliCommandDispatcher? _cliDispatcher;
+        private CliLogBuffer? _cliLogBuffer;
+
         // 디버깅 스크린캡처 (기본 off)
         public bool ScreenCaptureEnabled { get; set; } = false;
         public int FrameCount => _frameCount;
@@ -125,9 +133,12 @@ namespace IronRose.Engine
 
         public void Initialize(IWindow window)
         {
-            // EditorDebug + Debug 양쪽의 LogSink를 EditorBridge에 연결
-            RoseEngine.EditorDebug.LogSink = entry => EditorBridge.PushLog(entry);
-            RoseEngine.Debug.LogSink = entry => EditorBridge.PushLog(entry);
+            // CLI 로그 버퍼 생성 (LogSink 연결 전에 생성)
+            _cliLogBuffer = new CliLogBuffer();
+
+            // EditorDebug + Debug 양쪽의 LogSink를 EditorBridge + CLI 로그 버퍼에 연결
+            RoseEngine.EditorDebug.LogSink = entry => { EditorBridge.PushLog(entry); _cliLogBuffer.Push(entry); };
+            RoseEngine.Debug.LogSink = entry => { EditorBridge.PushLog(entry); _cliLogBuffer.Push(entry); };
 
             // 프로젝트 컨텍스트 초기화 (EngineRoot 확정)
             ProjectContext.Initialize();
@@ -186,6 +197,11 @@ namespace IronRose.Engine
             // Play/Stop 시 _fixedAccumulator 리셋 콜백 등록
             Editor.EditorPlayMode.OnResetFixedAccumulator = () => _fixedAccumulator = 0;
 
+            // CLI 브릿지 시작 (프로젝트 로드 상태와 무관하게 항상 시작)
+            _cliDispatcher = new CliCommandDispatcher(_cliLogBuffer!);
+            _cliPipeServer = new CliPipeServer();
+            _cliPipeServer.Start(_cliDispatcher);
+
             // 자동화 테스트 명령 파일 로드
             _testCommandRunner = TestCommandRunner.TryLoad();
 
@@ -197,6 +213,9 @@ namespace IronRose.Engine
         public void Update(double deltaTime)
         {
             EditorBridge.ProcessCommands();
+
+            // CLI 명령 큐 처리 (메인 스레드)
+            _cliDispatcher?.ProcessMainThreadQueue();
             Input.Update();
             RoseEngine.InputSystem.InputSystem.Update();
 
@@ -478,6 +497,7 @@ namespace IronRose.Engine
         public void Shutdown()
         {
             RoseEngine.EditorDebug.Log("[Engine] EngineCore shutting down...");
+            _cliPipeServer?.Stop();
             PlayerPrefs.Shutdown();  // 더티 상태면 자동 Save
             Application.isPlaying = false;
             Application.QuitAction = null;
