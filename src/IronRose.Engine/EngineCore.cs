@@ -31,6 +31,7 @@
 //          mid-session 프로젝트 전환은 지원하지 않음 (프로세스 = 프로젝트).
 //          InitApplication()에서 Application.InitializePaths() 및 PlayerPrefs.Initialize() 호출.
 //          Shutdown()에서 PlayerPrefs.Shutdown() 호출 (더티 상태면 자동 Save).
+//          Update()에서 CliCommandDispatcher._pendingScreenshotPath를 확인하여 CLI 스크린샷 요청 처리.
 // ------------------------------------------------------------
 using IronRose.API;
 using IronRose.AssetPipeline;
@@ -216,6 +217,21 @@ namespace IronRose.Engine
 
             // CLI 명령 큐 처리 (메인 스레드)
             _cliDispatcher?.ProcessMainThreadQueue();
+
+            // CLI 스크린샷 요청 처리
+            var cliScreenshotPath = CliCommandDispatcher._pendingScreenshotPath;
+            if (cliScreenshotPath != null)
+            {
+                CliCommandDispatcher._pendingScreenshotPath = null;
+                if (_graphicsManager != null)
+                {
+                    var dir = System.IO.Path.GetDirectoryName(cliScreenshotPath);
+                    if (!string.IsNullOrEmpty(dir))
+                        System.IO.Directory.CreateDirectory(dir);
+                    _graphicsManager.RequestScreenshot(cliScreenshotPath);
+                }
+            }
+
             Input.Update();
             RoseEngine.InputSystem.InputSystem.Update();
 

@@ -7,11 +7,14 @@
 //          IronRose.Engine.Editor/SceneSerializer, IronRose.Engine.Editor/GameObjectSnapshot,
 //          IronRose.Engine.Cli/CliLogBuffer,
 //          RoseEngine/Material, RoseEngine/MeshRenderer, RoseEngine/Light,
-//          RoseEngine/Camera, RoseEngine/RenderSettings
+//          RoseEngine/Camera, RoseEngine/RenderSettings, RoseEngine/Screen,
+//          RoseEngine/PrefabUtility, RoseEngine/Resources,
+//          IronRose.Engine.Editor/EditorClipboard, IronRose.Engine.Editor/UndoSystem
 // @exports
 //   class CliCommandDispatcher
-//     Dispatch(string requestLine): string  -- 요청 처리 후 응답 JSON 반환
-//     ProcessMainThreadQueue(): void        -- 메인 스레드에서 호출하여 대기 중 명령 실행
+//     Dispatch(string requestLine): string          -- 요청 처리 후 응답 JSON 반환
+//     ProcessMainThreadQueue(): void                -- 메인 스레드에서 호출하여 대기 중 명령 실행
+//     _pendingScreenshotPath: string? (internal)    -- CLI 스크린샷 요청 경로 (EngineCore에서 소비)
 // @note    백그라운드 스레드(Pipe)에서 Dispatch()가 호출된다.
 //          메인 스레드 접근이 필요한 명령은 _mainThreadQueue에 넣고
 //          ManualResetEventSlim으로 완료를 대기한다 (타임아웃 5초).
@@ -22,7 +25,15 @@
 //          material.info, material.set_color, material.set_metallic, material.set_roughness,
 //          light.info, light.set_color, light.set_intensity,
 //          camera.info, camera.set_fov,
-//          render.info, render.set_ambient
+//          render.info, render.set_ambient,
+//          transform.translate, transform.rotate, transform.look_at,
+//          transform.get_children, transform.set_local_position,
+//          prefab.create_variant, prefab.is_instance, prefab.unpack,
+//          asset.import, asset.scan,
+//          editor.screenshot, editor.copy, editor.paste, editor.select_all, editor.undo_history,
+//          screen.info, scene.clear,
+//          camera.set_clip, light.set_type, light.set_range, light.set_shadows,
+//          render.set_skybox_exposure
 // ------------------------------------------------------------
 using System;
 using System.Collections.Concurrent;
@@ -43,6 +54,9 @@ namespace IronRose.Engine.Cli
         private readonly Dictionary<string, Func<string[], string>> _handlers = new();
         private readonly ConcurrentQueue<MainThreadTask> _mainThreadQueue = new();
         private readonly CliLogBuffer _logBuffer;
+
+        /// <summary>CLI에서 요청한 스크린샷 경로. EngineCore.Update()에서 소비.</summary>
+        internal static string? _pendingScreenshotPath;
 
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
@@ -745,6 +759,560 @@ namespace IronRose.Engine.Cli
                     {
                         return JsonError($"Failed to parse color: {ex.Message}");
                     }
+                });
+            };
+
+            // ================================================================
+            // Wave 4: 편의 기능 명령
+            // ================================================================
+
+            // ----------------------------------------------------------------
+            // transform.translate -- 상대 이동 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["transform.translate"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: transform.translate <id> <x,y,z>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    try
+                    {
+                        go.transform.Translate(ParseVector3(args[1]));
+                        SceneManager.GetActiveScene().isDirty = true;
+                        return JsonOk(new { ok = true });
+                    }
+                    catch (Exception ex)
+                    {
+                        return JsonError($"Failed to parse translation: {ex.Message}");
+                    }
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // transform.rotate -- 상대 회전 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["transform.rotate"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: transform.rotate <id> <x,y,z>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    try
+                    {
+                        go.transform.Rotate(ParseVector3(args[1]));
+                        SceneManager.GetActiveScene().isDirty = true;
+                        return JsonOk(new { ok = true });
+                    }
+                    catch (Exception ex)
+                    {
+                        return JsonError($"Failed to parse rotation: {ex.Message}");
+                    }
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // transform.look_at -- 타겟을 바라봄 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["transform.look_at"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: transform.look_at <id> <targetId>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                if (!int.TryParse(args[1], out var targetId))
+                    return JsonError($"Invalid target GameObject ID: {args[1]}");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    var target = FindGameObjectById(targetId);
+                    if (target == null)
+                        return JsonError($"Target GameObject not found: {targetId}");
+
+                    go.transform.LookAt(target.transform);
+                    SceneManager.GetActiveScene().isDirty = true;
+                    return JsonOk(new { ok = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // transform.get_children -- 자식 목록 조회 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["transform.get_children"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: transform.get_children <id>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    var children = new List<object>();
+                    for (int i = 0; i < go.transform.childCount; i++)
+                    {
+                        var child = go.transform.GetChild(i).gameObject;
+                        if (!child._isDestroyed)
+                        {
+                            children.Add(new
+                            {
+                                id = child.GetInstanceID(),
+                                name = child.name,
+                                active = child.activeSelf
+                            });
+                        }
+                    }
+                    return JsonOk(new { children });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // transform.set_local_position -- 로컬 위치 설정 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["transform.set_local_position"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: transform.set_local_position <id> <x,y,z>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    try
+                    {
+                        go.transform.localPosition = ParseVector3(args[1]);
+                        SceneManager.GetActiveScene().isDirty = true;
+                        return JsonOk(new { ok = true });
+                    }
+                    catch (Exception ex)
+                    {
+                        return JsonError($"Failed to parse local position: {ex.Message}");
+                    }
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // prefab.create_variant -- Variant 프리팹 생성 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["prefab.create_variant"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: prefab.create_variant <baseGuid> <path>");
+
+                var baseGuid = args[0];
+                var path = args[1];
+                return ExecuteOnMainThread(() =>
+                {
+                    try
+                    {
+                        var variantGuid = PrefabUtility.CreateVariant(baseGuid, path);
+                        if (string.IsNullOrEmpty(variantGuid))
+                            return JsonError($"Failed to create variant for base: {baseGuid}");
+
+                        return JsonOk(new { created = true, path, guid = variantGuid });
+                    }
+                    catch (Exception ex)
+                    {
+                        return JsonError($"Failed to create variant: {ex.Message}");
+                    }
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // prefab.is_instance -- 프리팹 인스턴스 여부 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["prefab.is_instance"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: prefab.is_instance <goId>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    var isPrefab = PrefabUtility.IsPrefabInstance(go);
+                    var guid = PrefabUtility.GetPrefabGuid(go);
+                    return JsonOk(new { isPrefab, guid = guid ?? "" });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // prefab.unpack -- 프리팹 인스턴스 언팩 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["prefab.unpack"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: prefab.unpack <goId>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    if (!PrefabUtility.IsPrefabInstance(go))
+                        return JsonError($"GameObject is not a prefab instance: {id}");
+
+                    PrefabUtility.UnpackPrefabInstance(go);
+                    SceneManager.GetActiveScene().isDirty = true;
+                    return JsonOk(new { ok = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // asset.import -- 에셋 임포트/리임포트 트리거 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["asset.import"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: asset.import <path>");
+
+                var path = args[0];
+                return ExecuteOnMainThread(() =>
+                {
+                    if (!System.IO.File.Exists(path))
+                        return JsonError($"File not found: {path}");
+
+                    var db = Resources.GetAssetDatabase();
+                    if (db == null)
+                        return JsonError("AssetDatabase not initialized");
+
+                    var projectPath = ProjectContext.AssetsPath;
+                    if (!string.IsNullOrEmpty(projectPath))
+                    {
+                        db.ScanAssets(projectPath);
+                        return JsonOk(new { ok = true });
+                    }
+
+                    return JsonError("Project assets path not configured");
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // asset.scan -- 에셋 스캔 실행 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["asset.scan"] = args =>
+            {
+                return ExecuteOnMainThread(() =>
+                {
+                    var db = Resources.GetAssetDatabase();
+                    if (db == null)
+                        return JsonError("AssetDatabase not initialized");
+
+                    var projectPath = args.Length > 0 ? args[0] : ProjectContext.AssetsPath;
+                    if (string.IsNullOrEmpty(projectPath))
+                        return JsonError("No assets path specified");
+
+                    db.ScanAssets(projectPath);
+                    return JsonOk(new { count = db.AssetCount });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // editor.screenshot -- 현재 화면 캡처 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["editor.screenshot"] = args =>
+            {
+                return ExecuteOnMainThread(() =>
+                {
+                    string path;
+                    if (args.Length > 0)
+                    {
+                        path = args[0];
+                    }
+                    else
+                    {
+                        var dir = System.IO.Path.Combine(ProjectContext.ProjectRoot, "Screenshots");
+                        System.IO.Directory.CreateDirectory(dir);
+                        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
+                        path = System.IO.Path.Combine(dir, $"cli_screenshot_{timestamp}.png");
+                    }
+
+                    _pendingScreenshotPath = path;
+                    return JsonOk(new { saved = true, path });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // editor.copy -- GO 복사 (클립보드, 메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["editor.copy"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: editor.copy <goId>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    EditorSelection.Select(id);
+                    EditorClipboard.CopyGameObjects(cut: false);
+                    return JsonOk(new { ok = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // editor.paste -- 클립보드에서 붙여넣기 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["editor.paste"] = args =>
+            {
+                return ExecuteOnMainThread(() =>
+                {
+                    if (EditorClipboard.ClipboardKind != EditorClipboard.Kind.GameObjects)
+                        return JsonError("No GameObject in clipboard");
+
+                    EditorClipboard.PasteGameObjects();
+
+                    var selected = EditorSelection.SelectedGameObject;
+                    if (selected != null)
+                        return JsonOk(new { id = selected.GetInstanceID(), name = selected.name });
+
+                    return JsonOk(new { ok = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // editor.select_all -- 모든 GO 선택 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["editor.select_all"] = args =>
+            {
+                return ExecuteOnMainThread(() =>
+                {
+                    var ids = new List<int>();
+                    foreach (var go in SceneManager.AllGameObjects)
+                    {
+                        if (!go._isDestroyed)
+                            ids.Add(go.GetInstanceID());
+                    }
+                    EditorSelection.SetSelection(ids);
+                    return JsonOk(new { count = ids.Count });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // editor.undo_history -- Undo/Redo 스택 설명 조회 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["editor.undo_history"] = args =>
+            {
+                return ExecuteOnMainThread(() =>
+                {
+                    return JsonOk(new
+                    {
+                        undo = UndoSystem.UndoDescription ?? "",
+                        redo = UndoSystem.RedoDescription ?? ""
+                    });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // screen.info -- 화면 정보 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["screen.info"] = args =>
+            {
+                return ExecuteOnMainThread(() =>
+                {
+                    return JsonOk(new
+                    {
+                        width = Screen.width,
+                        height = Screen.height,
+                        dpi = Screen.dpi
+                    });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // scene.clear -- 씬 내 모든 GO 삭제 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["scene.clear"] = args =>
+            {
+                return ExecuteOnMainThread(() =>
+                {
+                    SceneManager.Clear();
+                    return JsonOk(new { ok = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // camera.set_clip -- 클리핑 설정 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["camera.set_clip"] = args =>
+            {
+                if (args.Length < 3)
+                    return JsonError("Usage: camera.set_clip <id> <near> <far>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                if (!float.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var near))
+                    return JsonError($"Invalid near value: {args[1]}");
+
+                if (!float.TryParse(args[2], NumberStyles.Float, CultureInfo.InvariantCulture, out var far))
+                    return JsonError($"Invalid far value: {args[2]}");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    var cam = go.GetComponent<Camera>();
+                    if (cam == null)
+                        return JsonError($"No Camera component on GameObject: {id}");
+
+                    cam.nearClipPlane = near;
+                    cam.farClipPlane = far;
+                    SceneManager.GetActiveScene().isDirty = true;
+                    return JsonOk(new { ok = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // light.set_type -- 라이트 타입 변경 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["light.set_type"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: light.set_type <id> <Directional|Point|Spot>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                if (!Enum.TryParse<LightType>(args[1], ignoreCase: true, out var lightType))
+                    return JsonError($"Unknown light type: {args[1]}. Valid: Directional, Point, Spot");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    var light = go.GetComponent<Light>();
+                    if (light == null)
+                        return JsonError($"No Light component on GameObject: {id}");
+
+                    light.type = lightType;
+                    SceneManager.GetActiveScene().isDirty = true;
+                    return JsonOk(new { ok = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // light.set_range -- 라이트 범위 변경 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["light.set_range"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: light.set_range <id> <value>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                if (!float.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+                    return JsonError($"Invalid float value: {args[1]}");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    var light = go.GetComponent<Light>();
+                    if (light == null)
+                        return JsonError($"No Light component on GameObject: {id}");
+
+                    light.range = value;
+                    SceneManager.GetActiveScene().isDirty = true;
+                    return JsonOk(new { ok = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // light.set_shadows -- 그림자 on/off (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["light.set_shadows"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: light.set_shadows <id> <true|false>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                if (!bool.TryParse(args[1], out var enabled))
+                    return JsonError($"Invalid bool value: {args[1]}");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    var light = go.GetComponent<Light>();
+                    if (light == null)
+                        return JsonError($"No Light component on GameObject: {id}");
+
+                    light.shadows = enabled;
+                    SceneManager.GetActiveScene().isDirty = true;
+                    return JsonOk(new { ok = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // render.set_skybox_exposure -- 스카이박스 노출 변경 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["render.set_skybox_exposure"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: render.set_skybox_exposure <value>");
+
+                if (!float.TryParse(args[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+                    return JsonError($"Invalid float value: {args[0]}");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    RenderSettings.skyboxExposure = value;
+                    if (RenderSettings.skybox != null)
+                        RenderSettings.skybox.exposure = value;
+                    SceneManager.GetActiveScene().isDirty = true;
+                    return JsonOk(new { ok = true });
                 });
             };
         }
