@@ -44,7 +44,7 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 - Linux 실제 경로: `/tmp/CoreFxPipe_ironrose-cli-{name}` (.NET 런타임 규칙, Unix Domain Socket)
 - Windows 실제 경로: `\\.\pipe\ironrose-cli-{name}`
 
-## 지원 명령 목록 (Phase 46c 완료)
+## 지원 명령 목록 (Phase 46d-w1 완료)
 
 | 명령 | 실행 위치 | 설명 |
 |------|-----------|------|
@@ -57,6 +57,21 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 | `go.find` | 메인 스레드 | 이름으로 GO 검색 (정확 매칭) |
 | `go.set_active` | 메인 스레드 | GO 활성/비활성 |
 | `go.set_field` | 메인 스레드 | 컴포넌트 필드 수정 (리플렉션) |
+| `go.create` | 메인 스레드 | 빈 GO 생성 |
+| `go.create_primitive` | 메인 스레드 | Primitive GO 생성 (Cube/Sphere/Capsule/Cylinder/Plane/Quad) |
+| `go.destroy` | 메인 스레드 | GO 삭제 |
+| `go.rename` | 메인 스레드 | GO 이름 변경 |
+| `go.duplicate` | 메인 스레드 | GO 복제 (Instantiate + _copy 접미사) |
+| `transform.get` | 메인 스레드 | position/rotation/scale 일괄 조회 |
+| `transform.set_position` | 메인 스레드 | 월드 위치 설정 |
+| `transform.set_rotation` | 메인 스레드 | 오일러 회전 설정 |
+| `transform.set_scale` | 메인 스레드 | 로컬 스케일 설정 |
+| `transform.set_parent` | 메인 스레드 | 부모 변경 (none/0이면 루트) |
+| `component.add` | 메인 스레드 | 컴포넌트 추가 (타입명으로 해석) |
+| `component.remove` | 메인 스레드 | 컴포넌트 제거 (Transform 제거 불가) |
+| `component.list` | 메인 스레드 | GO의 모든 컴포넌트 목록 (필드/프로퍼티 포함) |
+| `editor.undo` | 메인 스레드 | 실행취소 |
+| `editor.redo` | 메인 스레드 | 다시실행 |
 | `select` | 메인 스레드 | 에디터 선택 변경 |
 | `play.enter` | 메인 스레드 | Play 모드 진입 |
 | `play.stop` | 메인 스레드 | Play 모드 종료 |
@@ -69,6 +84,15 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 - float, int, bool, string, Vector3, Color, enum
 - `ParseFieldValue`/`ParseVector3`/`ParseColor` 헬퍼 메서드로 파싱
 - `SetFieldCommand.ParseValue`와 동일한 로직 (private이므로 별도 복사)
+
+### component.add 타입 해석 (ResolveComponentType)
+- 검색 순서: 1) RoseEngine 어셈블리 (엔진 내장) -> 2) FrozenCode 어셈블리 -> 3) LiveCode 어셈블리
+- `Type.Name == typeName`으로 짧은 이름 매칭 (네임스페이스 불필요)
+- LiveCode 어셈블리 접근 시 `ReflectionTypeLoadException` catch (collectible ALC 해제 후 안전 처리)
+
+### Object 모호성 주의
+- `IronRose.Engine.Cli` 네임스페이스에서 `using RoseEngine;`와 `System` 간 `Object` 충돌
+- `DestroyImmediate`, `Instantiate` 호출 시 반드시 `RoseEngine.Object.` 접두사 사용
 
 ## 주의사항
 - CLI 서버는 프로젝트 미로드 상태에서도 동작한다 (ping 등 기본 명령만 사용 가능)
