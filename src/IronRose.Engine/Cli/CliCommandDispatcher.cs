@@ -463,7 +463,7 @@ namespace IronRose.Engine.Cli
             _handlers["go.create_primitive"] = args =>
             {
                 if (args.Length < 1)
-                    return JsonError("Usage: go.create_primitive <type> (Cube|Sphere|Capsule|Cylinder|Plane|Quad)");
+                    return JsonError("Usage: go.create_primitive <type> [materialGuid|materialPath]");
 
                 if (!Enum.TryParse<PrimitiveType>(args[0], ignoreCase: true, out var primitiveType))
                     return JsonError($"Unknown primitive type: {args[0]}. Valid: Cube, Sphere, Capsule, Cylinder, Plane, Quad");
@@ -471,6 +471,25 @@ namespace IronRose.Engine.Cli
                 return ExecuteOnMainThread(() =>
                 {
                     var go = GameObject.CreatePrimitive(primitiveType);
+                    var renderer = go.GetComponent<MeshRenderer>();
+
+                    if (renderer != null && args.Length >= 2)
+                    {
+                        var matRef = args[1];
+                        var db = Resources.GetAssetDatabase();
+                        if (db != null)
+                        {
+                            Material? mat = null;
+                            var path = db.GetPathFromGuid(matRef);
+                            if (path != null)
+                                mat = db.Load<Material>(path);
+                            if (mat == null && File.Exists(matRef))
+                                mat = db.Load<Material>(matRef);
+                            if (mat != null)
+                                renderer.material = mat;
+                        }
+                    }
+
                     return JsonOk(new { id = go.GetInstanceID(), name = go.name });
                 });
             };
