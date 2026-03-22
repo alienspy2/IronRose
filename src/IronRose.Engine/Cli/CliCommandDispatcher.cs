@@ -2,7 +2,8 @@
 // @file    CliCommandDispatcher.cs
 // @brief   CLI 요청 평문을 파싱하여 적절한 핸들러를 호출하고 JSON 응답을 반환한다.
 //          메인 스레드 실행이 필요한 명령은 큐에 넣고 결과를 대기한다.
-// @deps    System.Text.Json, RoseEngine/SceneManager, IronRose.Engine/ProjectContext,
+// @deps    System.Text.Json, RoseEngine/SceneManager, RoseEngine/PrefabUtility,
+//          IronRose.Engine/ProjectContext, IronRose.AssetPipeline/AssetDatabase,
 //          IronRose.Engine.Editor/EditorPlayMode, IronRose.Engine.Editor/EditorSelection,
 //          IronRose.Engine.Editor/SceneSerializer, IronRose.Engine.Editor/GameObjectSnapshot,
 //          IronRose.Engine.Cli/CliLogBuffer
@@ -13,10 +14,14 @@
 // @note    백그라운드 스레드(Pipe)에서 Dispatch()가 호출된다.
 //          메인 스레드 접근이 필요한 명령은 _mainThreadQueue에 넣고
 //          ManualResetEventSlim으로 완료를 대기한다 (타임아웃 5초).
-//          지원 명령: ping, scene.info, scene.list, scene.save, scene.load,
+//          지원 명령:
+//          [Wave 1] ping, scene.info, scene.list, scene.save, scene.load,
 //          go.get, go.find, go.set_active, go.set_field,
 //          select, play.enter, play.stop, play.pause, play.resume, play.state,
 //          log.recent
+//          [Wave 2] prefab.instantiate, prefab.save,
+//          asset.list, asset.find, asset.guid, asset.path,
+//          scene.tree, scene.new
 // ------------------------------------------------------------
 using System;
 using System.Collections.Concurrent;
@@ -27,6 +32,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using IronRose.AssetPipeline;
 using IronRose.Engine.Editor;
 using RoseEngine;
 
@@ -387,6 +393,221 @@ namespace IronRose.Engine.Cli
                 });
                 return JsonOk(new { logs });
             };
+
+            // ================================================================
+            // Wave 2 -- 에셋/프리팹/씬 확장 명령
+            // ================================================================
+
+            // ----------------------------------------------------------------
+            // prefab.instantiate -- 프리팹 인스턴스 생성 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["prefab.instantiate"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: prefab.instantiate <guid> [x,y,z]");
+
+                var guid = args[0];
+                return ExecuteOnMainThread(() =>
+                {
+                    GameObject? go;
+                    if (args.Length >= 2)
+                    {
+                        try
+                        {
+                            var pos = ParseVector3(args[1]);
+                            go = PrefabUtility.InstantiatePrefab(guid, pos, Quaternion.identity);
+                        }
+                        catch (Exception ex)
+                        {
+                            return JsonError($"Failed to parse position: {ex.Message}");
+                        }
+                    }
+                    else
+                    {
+                        go = PrefabUtility.InstantiatePrefab(guid);
+                    }
+
+                    if (go == null)
+                        return JsonError($"Failed to instantiate prefab: guid={guid}");
+
+                    SceneManager.GetActiveScene().isDirty = true;
+                    return JsonOk(new { id = go.GetInstanceID(), name = go.name });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // prefab.save -- GO를 프리팹으로 저장 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["prefab.save"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: prefab.save <goId> <path>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                var path = args[1];
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    try
+                    {
+                        var guid = PrefabUtility.SaveAsPrefab(go, path);
+                        return JsonOk(new { saved = true, path, guid });
+                    }
+                    catch (Exception ex)
+                    {
+                        return JsonError($"Failed to save prefab: {ex.Message}");
+                    }
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // asset.list -- 에셋 폴더 탐색 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["asset.list"] = args =>
+            {
+                return ExecuteOnMainThread(() =>
+                {
+                    var db = Resources.GetAssetDatabase();
+                    if (db == null)
+                        return JsonError("AssetDatabase not initialized");
+
+                    var allPaths = db.GetAllAssetPaths();
+                    string filterPath = args.Length > 0 ? args[0] : "";
+
+                    var assets = new List<object>();
+                    foreach (var assetPath in allPaths)
+                    {
+                        // filterPath가 지정되었으면 해당 경로로 시작하는 에셋만 반환
+                        if (!string.IsNullOrEmpty(filterPath) &&
+                            !assetPath.Contains(filterPath, StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        var guid = db.GetGuidFromPath(assetPath);
+                        var ext = System.IO.Path.GetExtension(assetPath).TrimStart('.');
+                        assets.Add(new
+                        {
+                            path = assetPath,
+                            guid = guid ?? "",
+                            type = ext
+                        });
+                    }
+                    return JsonOk(new { assets });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // asset.find -- 이름으로 에셋 검색 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["asset.find"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: asset.find <name>");
+
+                var searchName = args[0];
+                return ExecuteOnMainThread(() =>
+                {
+                    var db = Resources.GetAssetDatabase();
+                    if (db == null)
+                        return JsonError("AssetDatabase not initialized");
+
+                    var allPaths = db.GetAllAssetPaths();
+                    var matches = new List<object>();
+                    foreach (var assetPath in allPaths)
+                    {
+                        var fileName = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+                        if (fileName.Contains(searchName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            var guid = db.GetGuidFromPath(assetPath);
+                            var ext = System.IO.Path.GetExtension(assetPath).TrimStart('.');
+                            matches.Add(new
+                            {
+                                path = assetPath,
+                                guid = guid ?? "",
+                                type = ext
+                            });
+                        }
+                    }
+                    return JsonOk(new { assets = matches });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // asset.guid -- 경로에서 GUID 조회 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["asset.guid"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: asset.guid <path>");
+
+                var path = args[0];
+                return ExecuteOnMainThread(() =>
+                {
+                    var db = Resources.GetAssetDatabase();
+                    if (db == null)
+                        return JsonError("AssetDatabase not initialized");
+
+                    var guid = db.GetGuidFromPath(path);
+                    if (string.IsNullOrEmpty(guid))
+                        return JsonError($"No GUID found for path: {path}");
+
+                    return JsonOk(new { guid });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // asset.path -- GUID에서 경로 조회 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["asset.path"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: asset.path <guid>");
+
+                var guid = args[0];
+                return ExecuteOnMainThread(() =>
+                {
+                    var db = Resources.GetAssetDatabase();
+                    if (db == null)
+                        return JsonError("AssetDatabase not initialized");
+
+                    var path = db.GetPathFromGuid(guid);
+                    if (string.IsNullOrEmpty(path))
+                        return JsonError($"No path found for GUID: {guid}");
+
+                    return JsonOk(new { path });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // scene.tree -- 계층 트리 (부모-자식 구조, 메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["scene.tree"] = args => ExecuteOnMainThread(() =>
+            {
+                var roots = new List<object>();
+                foreach (var go in SceneManager.AllGameObjects)
+                {
+                    if (go._isDestroyed) continue;
+                    if (go.transform.parent != null) continue; // 루트만
+                    roots.Add(BuildTreeNode(go));
+                }
+                return JsonOk(new { tree = roots });
+            });
+
+            // ----------------------------------------------------------------
+            // scene.new -- 새 빈 씬 생성 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["scene.new"] = args => ExecuteOnMainThread(() =>
+            {
+                SceneManager.Clear();
+                var newScene = new Scene();
+                newScene.name = "New Scene";
+                SceneManager.SetActiveScene(newScene);
+                return JsonOk(new { ok = true });
+            });
         }
 
         private string ExecuteOnMainThread(Func<string> action)
@@ -415,6 +636,25 @@ namespace IronRose.Engine.Cli
                     return go;
             }
             return null;
+        }
+
+        /// <summary>GO를 트리 노드로 변환 (재귀). 메인 스레드에서 호출.</summary>
+        private static object BuildTreeNode(GameObject go)
+        {
+            var children = new List<object>();
+            for (int i = 0; i < go.transform.childCount; i++)
+            {
+                var child = go.transform.GetChild(i).gameObject;
+                if (!child._isDestroyed)
+                    children.Add(BuildTreeNode(child));
+            }
+            return new
+            {
+                id = go.GetInstanceID(),
+                name = go.name,
+                active = go.activeSelf,
+                children
+            };
         }
 
         /// <summary>InstanceID로 GameObject를 찾는다. 메인 스레드에서 호출해야 한다.</summary>
