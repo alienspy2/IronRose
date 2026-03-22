@@ -867,7 +867,12 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 // Variant override 비교용 base 컴포넌트 매핑
                 Component? baseComp = baseGo != null ? FindBaseComponent(comp, baseGo) : null;
 
-                DrawAssetReferences(comp, type);
+                if (isPrefabLocked)
+                    ImGui.EndDisabled();
+                DrawAssetReferences(comp, type, isPrefabLocked);
+                if (isPrefabLocked)
+                    ImGui.BeginDisabled();
+
                 DrawComponentFields(comp, type, baseComp);
                 DrawComponentProperties(comp, type, baseComp);
             }
@@ -4157,7 +4162,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             [typeof(PostProcessProfile)] = obj => (obj as PostProcessProfile)?.name,
         };
 
-        private void DrawAssetReferences(Component comp, Type type)
+        private void DrawAssetReferences(Component comp, Type type, bool readOnly = false)
         {
             // Fields
             foreach (var field in type.GetFields(BindingFlags.Public | BindingFlags.Instance))
@@ -4165,7 +4170,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 if (AssetNameExtractors.TryGetValue(field.FieldType, out var extractor))
                 {
                     var val = field.GetValue(comp);
-                    Action<object?>? setter = v => field.SetValue(comp, v);
+                    Action<object?>? setter = readOnly ? null : v => field.SetValue(comp, v);
                     DrawPingableLabel(field.Name, val != null ? extractor(val) : null, val,
                         comp, field.Name, field.FieldType, setter);
                 }
@@ -4178,7 +4183,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 if (AssetNameExtractors.TryGetValue(prop.PropertyType, out var extractor))
                 {
                     var val = prop.GetValue(comp);
-                    Action<object?>? setter = prop.CanWrite ? v => prop.SetValue(comp, v) : null;
+                    Action<object?>? setter = readOnly ? null : (prop.CanWrite ? v => prop.SetValue(comp, v) : null);
                     DrawPingableLabel(prop.Name, val != null ? extractor(val) : null, val,
                         comp, prop.Name, prop.PropertyType, setter);
                 }

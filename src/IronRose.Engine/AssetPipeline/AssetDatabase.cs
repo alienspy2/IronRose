@@ -53,6 +53,9 @@ namespace IronRose.AssetPipeline
         private readonly Queue<string> _pendingReimports = new();
         public bool ProjectDirty { get; set; }
 
+        /// <summary>true면 Reimport, Scan, FileWatcher 등 상세 로그를 출력한다.</summary>
+        public static bool VerboseLogging { get; set; }
+
         internal static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
             ".glb", ".gltf", ".fbx", ".obj",
@@ -484,7 +487,7 @@ namespace IronRose.AssetPipeline
 
         public void Reimport(string path)
         {
-            EditorDebug.Log($"[AssetDatabase] Reimport starting: {path}");
+            if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Reimport starting: {path}");
             _importDepth++;
             _failedImports.Remove(path);
             var meta = RoseMetadata.LoadOrCreate(path);
@@ -658,7 +661,7 @@ namespace IronRose.AssetPipeline
 
             ProjectDirty = true;
             _importDepth--;
-            EditorDebug.Log($"[AssetDatabase] Reimported: {path}");
+            if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Reimported: {path}");
         }
 
         // ─── Async Reimport (비동기 재임포트 + 진행 UI) ──────────────
@@ -692,7 +695,7 @@ namespace IronRose.AssetPipeline
                 return;
             }
 
-            EditorDebug.Log($"[AssetDatabase] Async reimport starting: {path}");
+            if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Async reimport starting: {path}");
             _failedImports.Remove(path);
             _reimportPath = path;
             _reimportTimer = System.Diagnostics.Stopwatch.StartNew();
@@ -855,7 +858,7 @@ namespace IronRose.AssetPipeline
             }
 
             _reimportTimer?.Stop();
-            EditorDebug.Log($"[AssetDatabase] Async reimport complete: {path} ({_reimportTimer?.Elapsed.TotalSeconds:F1}s)");
+            if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Async reimport complete: {path} ({_reimportTimer?.Elapsed.TotalSeconds:F1}s)");
 
             // 상태 초기화
             _reimportTask = null;
@@ -904,7 +907,7 @@ namespace IronRose.AssetPipeline
 
                 // 캐시에서 제거
                 var path = GetPathFromGuid(current);
-                if (path != null && _loadedAssets.Remove(path))
+                if (path != null && _loadedAssets.Remove(path) && VerboseLogging)
                     EditorDebug.Log($"[AssetDatabase] Invalidated prefab cache: {Path.GetFileName(path)} (guid={current})");
 
                 // 이 프리팹을 참조하는 부모들도 무효화
@@ -989,7 +992,7 @@ namespace IronRose.AssetPipeline
                     parents.Add(parentGuid);
                 }
 
-                if (oldDeps.Count > 0)
+                if (oldDeps.Count > 0 && VerboseLogging)
                     EditorDebug.Log($"[AssetDatabase] Prefab dependencies updated: {Path.GetFileName(prefabPath)} depends on [{string.Join(", ", oldDeps)}]");
             }
             catch (Exception ex)
@@ -1219,7 +1222,7 @@ namespace IronRose.AssetPipeline
 
             if (changed)
             {
-                EditorDebug.Log($"[AssetDatabase] Sub-assets changed, saving .rose: {filePath}");
+                if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Sub-assets changed, saving .rose: {filePath}");
                 meta.Save(filePath + ".rose");
                 ProjectDirty = true;
             }
@@ -1521,7 +1524,7 @@ namespace IronRose.AssetPipeline
                     _guidToPath[sub.guid] = subPath;
                 }
                 ProjectDirty = true;
-                EditorDebug.Log($"[AssetDatabase] New asset detected: {fullPath}");
+                if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] New asset detected: {fullPath}");
             }
         }
 
@@ -1563,7 +1566,7 @@ namespace IronRose.AssetPipeline
             _roseCache.InvalidateCache(fullPath);
 
             ProjectDirty = true;
-            EditorDebug.Log($"[AssetDatabase] Asset removed: {fullPath}");
+            if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Asset removed: {fullPath}");
         }
 
         // ─── Rename ─────────────────────────────────────────────
@@ -1619,7 +1622,7 @@ namespace IronRose.AssetPipeline
             _failedImports.Remove(oldPath);
 
             ProjectDirty = true;
-            EditorDebug.Log($"[AssetDatabase] Asset renamed: {oldPath} → {newPath}");
+            if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Asset renamed: {oldPath} → {newPath}");
         }
 
         /// <summary>
@@ -1666,7 +1669,7 @@ namespace IronRose.AssetPipeline
             }
 
             ProjectDirty = true;
-            EditorDebug.Log($"[AssetDatabase] Folder paths renamed: {oldAbsFolderPath} → {newAbsFolderPath} ({guidUpdates.Count} entries updated)");
+            if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Folder paths renamed: {oldAbsFolderPath} → {newAbsFolderPath} ({guidUpdates.Count} entries updated)");
         }
 
         public void StopWatching()
@@ -1852,7 +1855,7 @@ namespace IronRose.AssetPipeline
                 float reduction = 0.1f;
 
                 bool hasKey = meta.importer.TryGetValue("generate_mipmesh", out var mmVal);
-                EditorDebug.Log($"[MipMesh] '{path}' — generate_mipmesh key found={hasKey}, rawValue={mmVal} (type={mmVal?.GetType().Name ?? "null"})");
+                if (VerboseLogging) EditorDebug.Log($"[MipMesh] '{path}' — generate_mipmesh key found={hasKey}, rawValue={mmVal} (type={mmVal?.GetType().Name ?? "null"})");
                 if (hasKey && mmVal is bool mm)
                     generateMipMesh = mm;
                 else if (hasKey)
@@ -1870,7 +1873,7 @@ namespace IronRose.AssetPipeline
                 if (meta.importer.TryGetValue("mipmesh_reduction", out var redVal))
                     reduction = Convert.ToSingle(redVal);
 
-                EditorDebug.Log($"[MipMesh] '{path}' — generateMipMesh={generateMipMesh}, meshCount={result.Meshes.Length}, minTri={minTriangles}, targetError={targetError}, reduction={reduction}");
+                if (VerboseLogging) EditorDebug.Log($"[MipMesh] '{path}' — generateMipMesh={generateMipMesh}, meshCount={result.Meshes.Length}, minTri={minTriangles}, targetError={targetError}, reduction={reduction}");
 
                 if (generateMipMesh)
                 {
@@ -1878,13 +1881,13 @@ namespace IronRose.AssetPipeline
                     {
                         var mesh = result.Meshes[i].Mesh;
                         int triCount = mesh.indices.Length / 3;
-                        EditorDebug.Log($"[MipMesh] Generating LOD for mesh[{i}] '{mesh.name}' ({mesh.vertices.Length} verts, {triCount} tris)");
+                        if (VerboseLogging) EditorDebug.Log($"[MipMesh] Generating LOD for mesh[{i}] '{mesh.name}' ({mesh.vertices.Length} verts, {triCount} tris)");
                         var mip = MipMeshGenerator.Generate(mesh, minTriangles, targetError, reduction);
                         result.Meshes[i].Mesh = mip.lodMeshes[0];
                         result.MipMeshes[i] = mip;
-                        EditorDebug.Log($"[MipMesh] mesh[{i}] '{mesh.name}' → {mip.LodCount} LODs generated");
+                        if (VerboseLogging) EditorDebug.Log($"[MipMesh] mesh[{i}] '{mesh.name}' → {mip.LodCount} LODs generated");
                     }
-                    EditorDebug.Log($"[MipMesh] Generated LODs for {result.Meshes.Length} meshes in {path}");
+                    if (VerboseLogging) EditorDebug.Log($"[MipMesh] Generated LODs for {result.Meshes.Length} meshes in {path}");
                 }
                 else
                 {
@@ -1922,7 +1925,7 @@ namespace IronRose.AssetPipeline
             {
                 _guidToPath[meta.guid] = fullPath;
                 ProjectDirty = true;
-                EditorDebug.Log($"[AssetDatabase] Registered prefab: {fullPath} (guid={meta.guid})");
+                if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Registered prefab: {fullPath} (guid={meta.guid})");
             }
         }
     }
