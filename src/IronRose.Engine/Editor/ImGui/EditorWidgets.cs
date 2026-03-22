@@ -287,9 +287,52 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             string widgetLabel = hasLayout ? ("##color_" + label) : label;
 
             var nc = new System.Numerics.Vector4(color.r, color.g, color.b, color.a);
-            bool changed = ImGui.ColorEdit4(widgetLabel, ref nc);
+            bool changed = ColorEdit4Core(widgetLabel, ref nc);
             if (changed)
                 color = new Color(nc.X, nc.Y, nc.Z, nc.W);
+            return changed;
+        }
+
+        public static bool ColorEdit4(string label, ref System.Numerics.Vector4 color)
+        {
+            string hiddenLabel = "##color4_" + label;
+            bool changed = ColorEdit4Core(hiddenLabel, ref color);
+
+            if (!IsHiddenLabel(label))
+            {
+                ImGui.SameLine(0, ImGui.GetStyle().ItemInnerSpacing.X);
+                ImGui.TextUnformatted(label);
+            }
+            return changed;
+        }
+
+        private static bool ColorEdit4Core(string widgetLabel, ref System.Numerics.Vector4 nc)
+        {
+            string pickerId = widgetLabel + "##cpk";
+            float totalW = ImGui.CalcItemWidth();
+            float btnSize = ImGui.GetFrameHeight();
+            float spacing = ImGui.GetStyle().ItemInnerSpacing.X;
+
+            ImGui.SetNextItemWidth(totalW - btnSize - spacing);
+            bool changed = ImGui.ColorEdit4(widgetLabel, ref nc,
+                ImGuiColorEditFlags.NoSmallPreview | ImGuiColorEditFlags.NoPicker);
+
+            ImGui.SameLine(0, spacing);
+
+            if (ImGui.ColorButton(widgetLabel + "##btn", nc,
+                ImGuiColorEditFlags.None,
+                new System.Numerics.Vector2(btnSize, btnSize)))
+                ImGui.OpenPopup(pickerId);
+
+            if (ImGui.BeginPopup(pickerId))
+            {
+                changed |= ImGui.ColorPicker4("##picker", ref nc,
+                    ImGuiColorEditFlags.AlphaBar | ImGuiColorEditFlags.AlphaPreview);
+                if (ImGui.IsKeyPressed(ImGuiKey.Escape))
+                    ImGui.CloseCurrentPopup();
+                ImGui.EndPopup();
+            }
+
             return changed;
         }
     }

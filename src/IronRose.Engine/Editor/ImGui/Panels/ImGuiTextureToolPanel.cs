@@ -315,8 +315,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 case ProceduralType.Checker:
                     ImGui.InputInt("Tile Count", ref _checkerTileCount);
                     _checkerTileCount = Math.Max(1, _checkerTileCount);
-                    ImGui.ColorEdit4("Color 1", ref _checkerColor1);
-                    ImGui.ColorEdit4("Color 2", ref _checkerColor2);
+                    EditorWidgets.ColorEdit4("Color 1", ref _checkerColor1);
+                    EditorWidgets.ColorEdit4("Color 2", ref _checkerColor2);
                     break;
 
                 case ProceduralType.Brick:
@@ -325,8 +325,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     _brickRows = Math.Max(1, _brickRows);
                     _brickCols = Math.Max(1, _brickCols);
                     ImGui.SliderFloat("Mortar Size", ref _brickMortarSize, 0f, 0.2f);
-                    ImGui.ColorEdit4("Brick Color", ref _brickColor);
-                    ImGui.ColorEdit4("Mortar Color", ref _brickMortarColor);
+                    EditorWidgets.ColorEdit4("Brick Color", ref _brickColor);
+                    EditorWidgets.ColorEdit4("Mortar Color", ref _brickMortarColor);
                     break;
 
                 case ProceduralType.Voronoi:
@@ -342,8 +342,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     int dirInt = (int)_gradientDir;
                     if (ImGui.Combo("Direction", ref dirInt, GradientDirNames, GradientDirNames.Length))
                         _gradientDir = (GradientDirection)dirInt;
-                    ImGui.ColorEdit4("Start Color", ref _gradientStart);
-                    ImGui.ColorEdit4("End Color", ref _gradientEnd);
+                    EditorWidgets.ColorEdit4("Start Color", ref _gradientStart);
+                    EditorWidgets.ColorEdit4("End Color", ref _gradientEnd);
                     break;
 
                 case ProceduralType.Noise:
