@@ -1137,6 +1137,7 @@ namespace IronRose.Engine.Cli
                     try
                     {
                         renderer.material.color = ParseColor(args[1]);
+                        SaveMaterialToDisk(renderer.material);
                         SceneManager.GetActiveScene().isDirty = true;
                         return JsonOk(new { ok = true });
                     }
@@ -1172,6 +1173,7 @@ namespace IronRose.Engine.Cli
                         return JsonError($"No material on GameObject: {id}");
 
                     renderer.material.metallic = value;
+                    SaveMaterialToDisk(renderer.material);
                     SceneManager.GetActiveScene().isDirty = true;
                     return JsonOk(new { ok = true });
                 });
@@ -1202,8 +1204,89 @@ namespace IronRose.Engine.Cli
                         return JsonError($"No material on GameObject: {id}");
 
                     renderer.material.roughness = value;
+                    SaveMaterialToDisk(renderer.material);
                     SceneManager.GetActiveScene().isDirty = true;
                     return JsonOk(new { ok = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // material.create -- 새 머티리얼 파일 생성 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["material.create"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: material.create <name> <dirPath> [r,g,b,a]");
+
+                var matName = args[0];
+                var dirPath = args[1];
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var filePath = Path.Combine(dirPath, matName + ".mat");
+
+                    // 색상이 지정되면 해당 색으로, 아니면 기본 흰색으로 생성
+                    if (args.Length >= 3)
+                    {
+                        var mat = new Material { name = matName, color = ParseColor(args[2]) };
+                        MaterialImporter.WriteMaterial(filePath, mat);
+                    }
+                    else
+                    {
+                        MaterialImporter.WriteDefault(filePath);
+                    }
+
+                    // AssetDatabase에 등록하기 위해 리스캔
+                    var db = Resources.GetAssetDatabase();
+                    db?.ScanAssets(ProjectContext.ProjectRoot);
+
+                    var guid = db?.GetGuidFromPath(filePath);
+                    return JsonOk(new { created = true, path = filePath, guid = guid ?? "" });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // material.apply -- GO의 MeshRenderer에 머티리얼 적용 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["material.apply"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: material.apply <goId> <materialGuid|materialPath>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                var matRef = args[1];
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    var renderer = go.GetComponent<MeshRenderer>();
+                    if (renderer == null)
+                        return JsonError($"No MeshRenderer on GameObject: {id}");
+
+                    var db = Resources.GetAssetDatabase();
+                    if (db == null)
+                        return JsonError("AssetDatabase not available");
+
+                    Material? mat = null;
+                    // GUID로 시도
+                    var path = db.GetPathFromGuid(matRef);
+                    if (path != null)
+                        mat = db.Load<Material>(path);
+                    // 경로로 시도
+                    if (mat == null && System.IO.File.Exists(matRef))
+                        mat = db.Load<Material>(matRef);
+
+                    if (mat == null)
+                        return JsonError($"Material not found: {matRef}");
+
+                    renderer.material = mat;
+                    SceneManager.GetActiveScene().isDirty = true;
+                    return JsonOk(new { ok = true, materialName = mat.name });
                 });
             };
 
@@ -2123,6 +2206,18 @@ namespace IronRose.Engine.Cli
         private static string FormatColor(Color c)
         {
             return $"{c.r.ToString(CultureInfo.InvariantCulture)}, {c.g.ToString(CultureInfo.InvariantCulture)}, {c.b.ToString(CultureInfo.InvariantCulture)}, {c.a.ToString(CultureInfo.InvariantCulture)}";
+        }
+
+        /// <summary>머티리얼 변경 후 .mat 파일에 저장한다. 메인 스레드에서 호출.</summary>
+        private static void SaveMaterialToDisk(Material mat)
+        {
+            var db = Resources.GetAssetDatabase();
+            if (db == null) return;
+            var guid = db.FindGuidForMaterial(mat);
+            if (guid == null) return;
+            var path = db.GetPathFromGuid(guid);
+            if (path == null) return;
+            MaterialImporter.WriteMaterial(path, mat);
         }
 
         private static Color ParseColor(string raw)
