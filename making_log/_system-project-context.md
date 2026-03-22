@@ -9,10 +9,13 @@
 ## 핵심 동작
 
 ### 초기화 흐름 (Initialize)
-1. 명시적 projectRoot가 주어지면 그것을 사용, 아니면 CWD/AppBaseDir에서 project.toml 상위 탐색
-2. project.toml이 있으면: engine.path 읽기, IsProjectLoaded = true, BuildProps 검증
-3. project.toml이 없으면: `~/.ironrose/settings.toml`에서 last_project 읽기 시도 -> 재귀 Initialize
-4. 그래도 없으면: IsProjectLoaded = false, EngineRoot = ProjectRoot (엔진 레포 직접 실행 케이스)
+1. 명시적 projectRoot가 주어지면 그것을 사용
+2. 아니면 `~/.ironrose/settings.toml`의 `[editor] last_project` 경로를 사용
+3. 그것도 없으면 CWD를 폴백으로 사용
+4. 결정된 ProjectRoot에 project.toml이 있으면: engine.path 읽기, IsProjectLoaded = true, BuildProps 검증
+5. project.toml이 없으면: IsProjectLoaded = false, EngineRoot = ProjectRoot (엔진 레포 직접 실행 케이스)
+
+> **CWD/상위 디렉토리 탐색 로직은 제거됨**. FindProjectRoot 메서드가 삭제되어 더 이상 파일시스템을 올라가며 project.toml을 찾지 않는다.
 
 ### 글로벌 설정 파일
 - 위치: `~/.ironrose/settings.toml`
@@ -27,7 +30,7 @@
 
 ## 주의사항
 - `SaveLastProjectPath()`는 `TomlConfig` read-modify-write 패턴으로 기존 settings.toml의 다른 섹션을 보존한다.
-- `Initialize()`는 재귀 호출될 수 있다 (last_project 경로로 재시도). 무한 재귀 방지는 project.toml 존재 여부로 보장.
+- `Initialize()`는 더 이상 재귀 호출하지 않는다. ProjectRoot 결정이 단일 경로로 단순화되었다.
 - 레거시 `.rose_last_project` 마이그레이션: CWD에 파일이 있으면 settings.toml로 이전 후 삭제. 마이그레이션 실패 시 무시.
 - **로그 경로 전환**: EngineCore.Initialize()에서 ProjectContext 초기화 직후 `Debug.SetLogDirectory(ProjectRoot/Logs/)`를 호출하여 로그를 프로젝트 폴더로 전환. 프로젝트 .gitignore에 `Logs/` 포함 필요.
 - **프로세스 = 프로젝트 모델**: mid-session 프로젝트 전환은 지원하지 않음. 프로젝트 전환은 프로세스 재시작을 통해서만 가능.

@@ -6,7 +6,7 @@
 // @deps    IronRose.Engine/TomlConfig, RoseEngine/Debug, RoseEngine/Application
 // @exports
 //   class ProjectContext (static)
-//     Initialize(string?): void        -- 프로젝트 루트 탐색 및 초기화
+//     Initialize(string?): void        -- 프로젝트 루트 설정 및 초기화 (settings.toml last_project 사용)
 //     SaveLastProjectPath(string): void -- 마지막 프로젝트 경로를 글로벌 설정에 저장
 //     ProjectRoot: string              -- 에셋 프로젝트 루트 절대 경로
 //     EngineRoot: string               -- 엔진 소스 루트 절대 경로
@@ -17,7 +17,8 @@
 //     CachePath: string                -- RoseCache/ 절대 경로
 //     LiveCodePath: string             -- LiveCode/ 절대 경로
 //     FrozenCodePath: string           -- FrozenCode/ 절대 경로
-// @note    project.toml이 없으면 CWD를 프로젝트 루트로 폴백 (엔진 레포 직접 실행 케이스).
+// @note    projectRoot 인자가 없으면 ~/.ironrose/settings.toml의 last_project 경로를 사용한다.
+//          last_project도 없으면 CWD를 프로젝트 루트로 폴백 (엔진 레포 직접 실행 케이스).
 //          Directory.Build.props의 IronRoseRoot와 engine.path 불일치 시 경고 로그 출력.
 //          TOML 읽기/쓰기에 TomlConfig API를 사용한다.
 //          하위 호환: CWD의 .rose_last_project가 있으면 settings.toml로 마이그레이션 후 삭제.
@@ -65,16 +66,17 @@ namespace IronRose.Engine
         public static string FrozenCodePath => Path.Combine(ProjectRoot, "FrozenCode");
 
         /// <summary>
-        /// 프로젝트 루트를 탐색하고 project.toml을 읽어 초기화한다.
+        /// 프로젝트 루트를 설정하고 project.toml을 읽어 초기화한다.
+        /// projectRoot가 null이면 ~/.ironrose/settings.toml의 last_project 경로를 사용한다.
         /// </summary>
         /// <param name="projectRoot">
-        /// 명시적으로 프로젝트 루트를 지정할 때 사용. null이면 자동 탐색.
+        /// 명시적으로 프로젝트 루트를 지정할 때 사용. null이면 settings.toml에서 읽기.
         /// </param>
         public static void Initialize(string? projectRoot = null)
         {
+            // 프로젝트 루트 결정: 명시 인자 -> settings.toml last_project -> CWD 폴백
             ProjectRoot = projectRoot
-                ?? FindProjectRoot(Directory.GetCurrentDirectory())
-                ?? FindProjectRoot(AppContext.BaseDirectory)
+                ?? ReadLastProjectPath()
                 ?? Directory.GetCurrentDirectory();
 
             // 정규화: 후행 슬래시 제거, 심볼릭 링크 해석
@@ -119,15 +121,6 @@ namespace IronRose.Engine
             }
             else
             {
-                // project.toml이 없으면 ~/.ironrose/settings.toml에서 마지막 프로젝트 경로 시도
-                var lastProjectPath = ReadLastProjectPath();
-                if (lastProjectPath != null)
-                {
-                    EditorDebug.Log($"[ProjectContext] Trying last project: {lastProjectPath}");
-                    Initialize(lastProjectPath);
-                    if (IsProjectLoaded) return;
-                }
-
                 // 엔진 레포 직접 실행 케이스. EngineRoot를 ProjectRoot 자신으로 폴백.
                 EngineRoot = ProjectRoot;
                 IsProjectLoaded = false;
@@ -217,28 +210,6 @@ namespace IronRose.Engine
             {
                 EditorDebug.LogWarning($"[ProjectContext] Failed to save settings: {ex.Message}");
             }
-        }
-
-        /// <summary>
-        /// startDir에서 상위 디렉토리로 올라가며 project.toml을 탐색한다.
-        /// </summary>
-        /// <param name="startDir">탐색 시작 디렉토리.</param>
-        /// <returns>project.toml이 있는 디렉토리 경로. 없으면 null.</returns>
-        private static string? FindProjectRoot(string startDir)
-        {
-            var dir = Path.GetFullPath(startDir);
-            while (dir != null)
-            {
-                if (File.Exists(Path.Combine(dir, "project.toml")))
-                    return dir;
-
-                var parent = Path.GetDirectoryName(dir);
-                // 루트 디렉토리에 도달하면 중단 (parent == dir인 경우)
-                if (parent == null || parent == dir)
-                    break;
-                dir = parent;
-            }
-            return null;
         }
 
         /// <summary>

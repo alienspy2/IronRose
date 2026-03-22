@@ -28,7 +28,7 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 
 ### Python CLI 래퍼 동작
 1. `argparse`로 `--project`, `--timeout`, 나머지 command 인자를 파싱
-2. `--project` 미지정 시 `project.toml`을 현재 디렉토리부터 상위로 탐색하여 프로젝트명 자동 감지
+2. `--project` 미지정 시 `~/.ironrose/settings.toml`의 `[editor] last_project` 경로에서 `project.toml`을 읽어 프로젝트명 감지
 3. 파이프 경로 결정: Linux `/tmp/CoreFxPipe_ironrose-cli-{name}`, Windows `\\.\pipe\ironrose-cli-{name}`
 4. 공백 포함 인자에 쌍따옴표를 씌워서 평문 요청 문자열 생성
 5. Unix Domain Socket (Linux) 또는 파일 핸들 (Windows)로 연결

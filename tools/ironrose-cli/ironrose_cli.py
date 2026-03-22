@@ -7,7 +7,8 @@
 #          so that adding new commands to the engine requires no wrapper changes.
 # @deps    None (Python 3.8+ standard library only)
 # @exports
-#   find_project_name() -> str                    -- auto-detect project name from project.toml
+#   find_project_name() -> str                    -- read project name from ~/.ironrose/settings.toml
+#   _read_toml_string(file, section, key) -> str   -- simple TOML string value reader
 #   sanitize_pipe_name(name: str) -> str          -- sanitize project name for pipe path
 #   get_pipe_path(project_name: str) -> str       -- build platform-specific pipe path
 #   build_request(command_args: list) -> str       -- join CLI args into a request string
@@ -18,6 +19,7 @@
 #   main() -> None                                -- entry point
 # @note    Linux: connects to /tmp/CoreFxPipe_ironrose-cli-{project} via AF_UNIX.
 #          Windows: opens \\.\pipe\ironrose-cli-{project} as a binary file.
+#          --project 미지정 시 ~/.ironrose/settings.toml의 last_project에서 프로젝트명을 읽는다.
 #          Message frame: [4 bytes LE uint32 length][N bytes UTF-8 string].
 #          Max message size: 16MB.
 # ------------------------------------------------------------
@@ -40,24 +42,87 @@ MAX_MESSAGE_SIZE = 16 * 1024 * 1024  # 16MB
 
 
 def find_project_name():
-    """project.toml을 현재 디렉토리부터 상위로 탐색하여 프로젝트 이름을 반환한다."""
-    d = os.getcwd()
-    while True:
-        toml_path = os.path.join(d, "project.toml")
-        if os.path.isfile(toml_path):
-            try:
-                with open(toml_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                m = re.search(r'^\s*name\s*=\s*"([^"]+)"', content, re.MULTILINE)
-                if m:
-                    return m.group(1)
-            except Exception:
-                pass
-        parent = os.path.dirname(d)
-        if parent == d:
-            break
-        d = parent
-    return "default"
+    """~/.ironrose/settings.toml의 last_project 경로에서 프로젝트 이름을 읽어 반환한다.
+
+    1. ~/.ironrose/settings.toml을 열어 [editor] 섹션의 last_project 값을 읽는다.
+    2. 해당 경로의 project.toml에서 [project] 섹션의 name 필드를 읽는다.
+    settings.toml이나 project.toml을 찾을 수 없으면 에러 메시지를 출력하고 종료한다.
+    """
+    settings_path = os.path.join(
+        os.path.expanduser("~"), ".ironrose", "settings.toml"
+    )
+    if not os.path.isfile(settings_path):
+        print(
+            f"Error: Settings file not found: {settings_path}\n"
+            "Please open a project in IronRose Editor first.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # settings.toml에서 [editor] last_project 읽기
+    project_path = _read_toml_string(settings_path, "editor", "last_project")
+    if not project_path:
+        print(
+            f"Error: 'last_project' not found in [editor] section of {settings_path}\n"
+            "Please open a project in IronRose Editor first.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # project.toml에서 [project] name 읽기
+    toml_path = os.path.join(project_path, "project.toml")
+    if not os.path.isfile(toml_path):
+        print(
+            f"Error: project.toml not found at: {toml_path}\n"
+            f"The last_project path '{project_path}' may be invalid.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    name = _read_toml_string(toml_path, "project", "name")
+    if not name:
+        print(
+            f"Error: 'name' not found in [project] section of {toml_path}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    return name
+
+
+def _read_toml_string(file_path, section, key):
+    """간이 TOML 파서. 지정한 섹션의 문자열 키 값을 반환한다.
+
+    정규 TOML 파서 없이 [section]과 key = "value" 패턴만 처리한다.
+    해당 키가 없으면 None을 반환한다.
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception:
+        return None
+
+    # 섹션 시작 위치 찾기
+    section_pattern = re.compile(r'^\s*\[\s*' + re.escape(section) + r'\s*\]', re.MULTILINE)
+    section_match = section_pattern.search(content)
+    if not section_match:
+        return None
+
+    # 섹션 시작 이후의 내용에서 다음 섹션 전까지 범위 결정
+    after_section = content[section_match.end():]
+    next_section = re.search(r'^\s*\[', after_section, re.MULTILINE)
+    if next_section:
+        section_body = after_section[:next_section.start()]
+    else:
+        section_body = after_section
+
+    # key = "value" 패턴 매칭
+    key_pattern = re.compile(r'^\s*' + re.escape(key) + r'\s*=\s*"([^"]*)"', re.MULTILINE)
+    key_match = key_pattern.search(section_body)
+    if key_match:
+        return key_match.group(1)
+
+    return None
 
 
 def sanitize_pipe_name(name):
@@ -212,7 +277,7 @@ def parse_args():
     parser.add_argument(
         "--project",
         default=None,
-        help="Project name (default: auto-detect from project.toml)",
+        help="Project name (default: read from ~/.ironrose/settings.toml)",
     )
     parser.add_argument(
         "--timeout",

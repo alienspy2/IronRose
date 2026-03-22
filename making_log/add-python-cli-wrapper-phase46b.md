@@ -8,7 +8,7 @@
 - 길이 접두사 메시지 프레임 (4바이트 little-endian uint32) 구현
 - `--project` 옵션으로 프로젝트 이름 지정 가능
 - `--timeout` 옵션으로 연결 타임아웃 지정 가능 (기본 3초)
-- `project.toml` 자동 감지 (현재 디렉토리부터 상위 탐색, `[project]` 섹션의 `name` 값 읽기)
+- `~/.ironrose/settings.toml`의 `[editor] last_project` 경로에서 `project.toml`을 읽어 프로젝트명 감지
 - 공백 포함 인자는 쌍따옴표로 감싸서 전송
 
 ## 변경된 파일
