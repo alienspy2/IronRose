@@ -44,7 +44,7 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 - Linux 실제 경로: `/tmp/CoreFxPipe_ironrose-cli-{name}` (.NET 런타임 규칙, Unix Domain Socket)
 - Windows 실제 경로: `\\.\pipe\ironrose-cli-{name}`
 
-## 지원 명령 목록 (Phase 46c 완료)
+## 지원 명령 목록 (Phase 46d-w2 완료)
 
 | 명령 | 실행 위치 | 설명 |
 |------|-----------|------|
@@ -53,6 +53,8 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 | `scene.list` | 메인 스레드 | 전체 GameObject 목록 |
 | `scene.save` | 메인 스레드 | 현재 씬 저장 ([path] 선택) |
 | `scene.load` | 메인 스레드 | 씬 파일 로드 |
+| `scene.tree` | 메인 스레드 | 계층 트리 (부모-자식 재귀 구조) |
+| `scene.new` | 메인 스레드 | 새 빈 씬 생성 (Clear + 새 Scene) |
 | `go.get` | 메인 스레드 | GO 상세 정보 (컴포넌트/필드 포함) |
 | `go.find` | 메인 스레드 | 이름으로 GO 검색 (정확 매칭) |
 | `go.set_active` | 메인 스레드 | GO 활성/비활성 |
@@ -63,6 +65,12 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 | `play.pause` | 메인 스레드 | 일시정지 |
 | `play.resume` | 메인 스레드 | 재개 |
 | `play.state` | 메인 스레드 | 현재 Play 상태 조회 |
+| `prefab.instantiate` | 메인 스레드 | GUID로 프리팹 인스턴스 생성 ([x,y,z] 위치 옵션) |
+| `prefab.save` | 메인 스레드 | GO를 .prefab 파일로 저장 (GUID 반환) |
+| `asset.list` | 메인 스레드 | 에셋 DB 전체/필터 목록 (Contains 부분 매칭) |
+| `asset.find` | 메인 스레드 | 이름으로 에셋 검색 (case-insensitive 부분 매칭) |
+| `asset.guid` | 메인 스레드 | 경로에서 GUID 조회 |
+| `asset.path` | 메인 스레드 | GUID에서 경로 조회 |
 | `log.recent` | 백그라운드 | 최근 로그 조회 (스레드 안전) |
 
 ### go.set_field 지원 타입
