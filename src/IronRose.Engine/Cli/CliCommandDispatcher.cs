@@ -355,6 +355,28 @@ namespace IronRose.Engine.Cli
             };
 
             // ----------------------------------------------------------------
+            // select.get -- 현재 선택된 GameObject 조회 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["select.get"] = args =>
+            {
+                return ExecuteOnMainThread(() =>
+                {
+                    var ids = EditorSelection.SelectedGameObjectIds;
+                    if (ids.Count == 0)
+                        return JsonOk(new { count = 0, gameObjects = Array.Empty<object>() });
+
+                    var list = new List<object>();
+                    foreach (var id in ids)
+                    {
+                        var go = FindGameObjectById(id);
+                        if (go != null)
+                            list.Add(new { id = go.GetInstanceID(), name = go.name, active = go.activeSelf });
+                    }
+                    return JsonOk(new { count = list.Count, gameObjects = list });
+                });
+            };
+
+            // ----------------------------------------------------------------
             // play.enter -- Play 모드 진입 (메인 스레드)
             // ----------------------------------------------------------------
             _handlers["play.enter"] = args => ExecuteOnMainThread(() =>
