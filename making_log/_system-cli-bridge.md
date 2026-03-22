@@ -44,7 +44,7 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 - Linux 실제 경로: `/tmp/CoreFxPipe_ironrose-cli-{name}` (.NET 런타임 규칙, Unix Domain Socket)
 - Windows 실제 경로: `\\.\pipe\ironrose-cli-{name}`
 
-## 지원 명령 목록 (Phase 46d-w2 완료)
+## 지원 명령 목록 (Phase 46d-w3 완료)
 
 | 명령 | 실행 위치 | 설명 |
 |------|-----------|------|
@@ -71,12 +71,27 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 | `asset.find` | 메인 스레드 | 이름으로 에셋 검색 (case-insensitive 부분 매칭) |
 | `asset.guid` | 메인 스레드 | 경로에서 GUID 조회 |
 | `asset.path` | 메인 스레드 | GUID에서 경로 조회 |
+| `material.info` | 메인 스레드 | GO의 MeshRenderer 머티리얼 정보 조회 |
+| `material.set_color` | 메인 스레드 | 머티리얼 색상 변경 |
+| `material.set_metallic` | 메인 스레드 | metallic 값 변경 |
+| `material.set_roughness` | 메인 스레드 | roughness 값 변경 |
+| `light.info` | 메인 스레드 | Light 컴포넌트 정보 조회 |
+| `light.set_color` | 메인 스레드 | 라이트 색상 변경 |
+| `light.set_intensity` | 메인 스레드 | 라이트 강도 변경 |
+| `camera.info` | 메인 스레드 | 카메라 정보 조회 (id 미지정 시 Camera.main) |
+| `camera.set_fov` | 메인 스레드 | FOV 설정 |
+| `render.info` | 메인 스레드 | 전역 렌더 설정 조회 (ambient, skybox, FSR, SSIL) |
+| `render.set_ambient` | 메인 스레드 | 앰비언트 라이트 색상 변경 |
 | `log.recent` | 백그라운드 | 최근 로그 조회 (스레드 안전) |
 
 ### go.set_field 지원 타입
 - float, int, bool, string, Vector3, Color, enum
 - `ParseFieldValue`/`ParseVector3`/`ParseColor` 헬퍼 메서드로 파싱
 - `SetFieldCommand.ParseValue`와 동일한 로직 (private이므로 별도 복사)
+
+### FormatColor 헬퍼
+- Color를 "r, g, b, a" 문자열로 포맷 (InvariantCulture 사용)
+- material.info, light.info, camera.info, render.info에서 사용
 
 ## 주의사항
 - CLI 서버는 프로젝트 미로드 상태에서도 동작한다 (ping 등 기본 명령만 사용 가능)
