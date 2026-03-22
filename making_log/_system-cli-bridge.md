@@ -44,7 +44,7 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 - Linux 실제 경로: `/tmp/CoreFxPipe_ironrose-cli-{name}` (.NET 런타임 규칙, Unix Domain Socket)
 - Windows 실제 경로: `\\.\pipe\ironrose-cli-{name}`
 
-## 지원 명령 목록 (Phase 46d-w3 완료)
+## 지원 명령 목록 (Phase 46d-w4 완료)
 
 | 명령 | 실행 위치 | 설명 |
 |------|-----------|------|
@@ -83,6 +83,28 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 | `render.info` | 메인 스레드 | 전역 렌더 설정 조회 (ambient, skybox, FSR, SSIL) |
 | `render.set_ambient` | 메인 스레드 | 앰비언트 라이트 색상 변경 |
 | `log.recent` | 백그라운드 | 최근 로그 조회 (스레드 안전) |
+| `transform.translate` | 메인 스레드 | 상대 이동 (월드 좌표) |
+| `transform.rotate` | 메인 스레드 | 상대 회전 (로컬, 오일러) |
+| `transform.look_at` | 메인 스레드 | 타겟 GO를 바라봄 |
+| `transform.get_children` | 메인 스레드 | 직접 자식 목록 조회 |
+| `transform.set_local_position` | 메인 스레드 | 로컬 위치 설정 |
+| `prefab.create_variant` | 메인 스레드 | Variant 프리팹 생성 |
+| `prefab.is_instance` | 메인 스레드 | 프리팹 인스턴스 여부 확인 |
+| `prefab.unpack` | 메인 스레드 | 프리팹 인스턴스 언팩 |
+| `asset.import` | 메인 스레드 | 에셋 임포트/리임포트 (ScanAssets 호출) |
+| `asset.scan` | 메인 스레드 | 에셋 스캔 실행 ([path] 선택) |
+| `editor.screenshot` | 메인 스레드 | 화면 캡처 (비동기, 다음 프레임에서 캡처) |
+| `editor.copy` | 메인 스레드 | GO 복사 (클립보드) |
+| `editor.paste` | 메인 스레드 | 클립보드에서 붙여넣기 |
+| `editor.select_all` | 메인 스레드 | 모든 GO 선택 |
+| `editor.undo_history` | 메인 스레드 | Undo/Redo 스택 설명 조회 |
+| `screen.info` | 메인 스레드 | 화면 정보 (width, height, dpi) |
+| `scene.clear` | 메인 스레드 | 씬 내 모든 GO 삭제 (Scene 유지) |
+| `camera.set_clip` | 메인 스레드 | 클리핑 near/far 설정 |
+| `light.set_type` | 메인 스레드 | 라이트 타입 변경 (Directional/Point/Spot) |
+| `light.set_range` | 메인 스레드 | 라이트 범위 변경 |
+| `light.set_shadows` | 메인 스레드 | 그림자 on/off |
+| `render.set_skybox_exposure` | 메인 스레드 | 스카이박스 노출 변경 |
 
 ### go.set_field 지원 타입
 - float, int, bool, string, Vector3, Color, enum
@@ -100,6 +122,9 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 - Linux에서 Stop() 시 소켓 파일을 직접 삭제하여 WaitForConnectionAsync 블로킹을 해제함
 - LogSink 람다에서 CliLogBuffer.Push()를 호출하므로, CliLogBuffer는 반드시 LogSink 연결 전에 생성해야 함
 - Python 래퍼는 명령을 해석하지 않으므로, C# 서버에 명령만 추가하면 래퍼 수정 불필요
+- `editor.screenshot`은 비동기 패턴 사용: CLI 핸들러가 `_pendingScreenshotPath`에 경로 저장 -> EngineCore.Update()에서 소비 -> `GraphicsManager.RequestScreenshot()` 호출 -> 다음 EndFrame에서 캡처. 응답은 즉시 반환되지만 파일은 다음 프레임 이후 생성
+- `editor.copy`는 `EditorSelection.Select(id)` 후 `EditorClipboard.CopyGameObjects(cut: false)` 호출 (선택 상태 변경 사이드 이펙트 있음)
+- `scene.clear`는 `SceneManager.Clear()` 호출. `scene.new`와 달리 새 Scene 객체를 만들지 않고 기존 씬의 name/path 유지
 
 ## 사용하는 외부 라이브러리
 - `System.IO.Pipes` -- .NET 표준 라이브러리. Named Pipe 서버/클라이언트.
