@@ -227,34 +227,64 @@ namespace IronRose.Engine.Editor.SceneView
 
         private void FocusFitBounds(GameObject go)
         {
-            // Calculate world-space bounds from MeshFilter if available
-            var filter = go.GetComponent<MeshFilter>();
-            Bounds localBounds;
-            if (filter?.mesh != null)
+            // Collect world-space bounds from all MeshFilters in this object and its children
+            var filters = go.transform.GetComponentsInChildren<MeshFilter>();
+            bool hasBounds = false;
+            Bounds worldBounds = default;
+
+            foreach (var filter in filters)
             {
-                localBounds = filter.mesh.bounds;
-            }
-            else
-            {
-                // Fallback: small default bounds
-                localBounds = new Bounds(Vector3.zero, Vector3.one);
+                if (filter.mesh == null) continue;
+                var meshBounds = filter.mesh.bounds;
+                var t = filter.transform;
+                var scale = t.lossyScale;
+
+                // Transform local bounds corners to world space for accurate AABB
+                var localCenter = meshBounds.center;
+                var localExtents = meshBounds.extents;
+                var worldCenter = t.TransformPoint(localCenter);
+
+                // Compute world-space extents by transforming the 3 local axes
+                // and taking the absolute dot product with each world axis
+                var rot = t.rotation;
+                var axisX = rot * new Vector3(localExtents.x * MathF.Abs(scale.x), 0, 0);
+                var axisY = rot * new Vector3(0, localExtents.y * MathF.Abs(scale.y), 0);
+                var axisZ = rot * new Vector3(0, 0, localExtents.z * MathF.Abs(scale.z));
+
+                var worldExtents = new Vector3(
+                    MathF.Abs(axisX.x) + MathF.Abs(axisY.x) + MathF.Abs(axisZ.x),
+                    MathF.Abs(axisX.y) + MathF.Abs(axisY.y) + MathF.Abs(axisZ.y),
+                    MathF.Abs(axisX.z) + MathF.Abs(axisY.z) + MathF.Abs(axisZ.z));
+
+                var childBounds = new Bounds(worldCenter, worldExtents * 2f);
+
+                if (!hasBounds)
+                {
+                    worldBounds = childBounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    worldBounds.Encapsulate(childBounds);
+                }
             }
 
-            // Transform bounds to world space (approximate using scale)
-            var scale = go.transform.lossyScale;
-            var worldSize = new Vector3(
-                localBounds.size.x * MathF.Abs(scale.x),
-                localBounds.size.y * MathF.Abs(scale.y),
-                localBounds.size.z * MathF.Abs(scale.z));
-            var worldCenter = go.transform.TransformPoint(localBounds.center);
+            if (!hasBounds)
+            {
+                // Fallback: no MeshFilter found — use small bounds around the object position
+                var scale = go.transform.lossyScale;
+                float fallbackSize = MathF.Max(MathF.Abs(scale.x), MathF.Max(MathF.Abs(scale.y), MathF.Abs(scale.z)));
+                if (fallbackSize < 0.01f) fallbackSize = 1f;
+                worldBounds = new Bounds(go.transform.position, new Vector3(fallbackSize, fallbackSize, fallbackSize));
+            }
 
             // Calculate distance to fit the bounding sphere in view
-            float radius = worldSize.magnitude * 0.5f;
+            float radius = worldBounds.size.magnitude * 0.5f;
             if (radius < 0.01f) radius = 0.5f;
             float halfFovRad = FieldOfView * 0.5f * Mathf.Deg2Rad;
             float fitDist = radius / MathF.Sin(halfFovRad);
 
-            StartAnimation(worldCenter - Forward * fitDist, worldCenter);
+            StartAnimation(worldBounds.center - Forward * fitDist, worldBounds.center);
         }
 
         /// <summary>
