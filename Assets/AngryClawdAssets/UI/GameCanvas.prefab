@@ -1,0 +1,247 @@
+[prefab]
+version = 1
+rootName = "GameCanvas"
+[[gameObjects]]
+name = "GameCanvas"
+guid = "b472dadd-e0d9-4ff0-b079-fd343821f991"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "RoseEngine.Canvas"
+[gameObjects.components.fields]
+renderMode = "ScreenSpaceOverlay"
+sortingOrder = 0
+referenceResolution = [1280.0, 720.0]
+scaleMode = "ScaleWithScreenSize"
+matchWidthOrHeight = 0.5
+[[gameObjects.components]]
+type = "RoseEngine.RectTransform"
+[gameObjects.components.fields]
+anchorMin = [0.0, 0.0]
+anchorMax = [1.0, 1.0]
+anchoredPosition = [0.0, 0.0]
+sizeDelta = [0.0, 0.0]
+pivot = [0.5, 0.5]
+offsetMin = [0.0, 0.0]
+offsetMax = [0.0, 0.0]
+[[gameObjects]]
+name = "TopPanel"
+guid = "3dd1dea7-35ab-4d09-8e0b-f215d795b94a"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 0
+[[gameObjects.components]]
+type = "RoseEngine.RectTransform"
+[gameObjects.components.fields]
+anchorMin = [0.0, 0.0]
+anchorMax = [1.0, 0.0]
+anchoredPosition = [0.0, 0.0]
+sizeDelta = [0.0, 50.0]
+pivot = [0.5, 0.0]
+offsetMin = [0.0, 0.0]
+offsetMax = [0.0, 50.0]
+[[gameObjects.components]]
+type = "RoseEngine.UIPanel"
+[gameObjects.components.fields]
+color = [0.1000000014901161, 0.1000000014901161, 0.1000000014901161, 0.699999988079071]
+imageType = "Simple"
+[[gameObjects]]
+name = "StageText"
+guid = "1234e0e2-4891-4fa5-9713-3f5ddfec0128"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 1
+[[gameObjects.components]]
+type = "RoseEngine.RectTransform"
+[gameObjects.components.fields]
+anchorMin = [0.0, 0.5]
+anchorMax = [0.0, 0.5]
+anchoredPosition = [20.0, 0.0]
+sizeDelta = [200.0, 40.0]
+pivot = [0.0, 0.5]
+offsetMin = [20.0, -20.0]
+offsetMax = [220.0, 20.0]
+[[gameObjects.components]]
+type = "RoseEngine.UIText"
+[gameObjects.components.fields]
+text = "Stage 1"
+fontSize = 28.0
+color = [1.0, 1.0, 1.0, 1.0]
+alignment = "UpperLeft"
+overflow = "Overflow"
+[[gameObjects]]
+name = "PigCountText"
+guid = "e0a097e8-1811-48d9-b9d9-8f3c569450d7"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 1
+[[gameObjects.components]]
+type = "RoseEngine.RectTransform"
+[gameObjects.components.fields]
+anchorMin = [0.5, 0.5]
+anchorMax = [0.5, 0.5]
+anchoredPosition = [0.0, 0.0]
+sizeDelta = [200.0, 40.0]
+pivot = [0.5, 0.5]
+offsetMin = [-100.0, -20.0]
+offsetMax = [100.0, 20.0]
+[[gameObjects.components]]
+type = "RoseEngine.UIText"
+[gameObjects.components.fields]
+text = "Pigs: 0"
+fontSize = 24.0
+color = [1.0, 1.0, 1.0, 1.0]
+alignment = "UpperLeft"
+overflow = "Overflow"
+[[gameObjects]]
+name = "ShotCountText"
+guid = "5b0f9d02-31e4-452c-9f59-c3f3891b7a3c"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 1
+[[gameObjects.components]]
+type = "RoseEngine.RectTransform"
+[gameObjects.components.fields]
+anchorMin = [1.0, 0.5]
+anchorMax = [1.0, 0.5]
+anchoredPosition = [-20.0, 0.0]
+sizeDelta = [200.0, 40.0]
+pivot = [1.0, 0.5]
+offsetMin = [-220.0, -20.0]
+offsetMax = [-20.0, 20.0]
+[[gameObjects.components]]
+type = "RoseEngine.UIText"
+[gameObjects.components.fields]
+text = "Shots: 5"
+fontSize = 24.0
+color = [1.0, 1.0, 1.0, 1.0]
+alignment = "UpperLeft"
+overflow = "Overflow"
+[[gameObjects]]
+name = "CenterMessage"
+guid = "bc10820e-f31b-46ca-b638-dbb48334ff45"
+activeSelf = false
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 0
+[[gameObjects.components]]
+type = "RoseEngine.RectTransform"
+[gameObjects.components.fields]
+anchorMin = [0.5, 0.5]
+anchorMax = [0.5, 0.5]
+anchoredPosition = [0.0, 0.0]
+sizeDelta = [500.0, 120.0]
+pivot = [0.5, 0.5]
+offsetMin = [-250.0, -60.0]
+offsetMax = [250.0, 60.0]
+[[gameObjects.components]]
+type = "RoseEngine.UIPanel"
+[gameObjects.components.fields]
+color = [0.0, 0.0, 0.0, 0.800000011920929]
+imageType = "Simple"
+[[gameObjects]]
+name = "MessageText"
+guid = "b117837c-0378-4f63-98ca-9dbdf56d347a"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 5
+[[gameObjects.components]]
+type = "RoseEngine.RectTransform"
+[gameObjects.components.fields]
+anchorMin = [0.0, 0.0]
+anchorMax = [1.0, 1.0]
+anchoredPosition = [0.0, 0.0]
+sizeDelta = [0.0, 0.0]
+pivot = [0.5, 0.5]
+offsetMin = [0.0, 0.0]
+offsetMax = [0.0, 0.0]
+[[gameObjects.components]]
+type = "RoseEngine.UIText"
+[gameObjects.components.fields]
+text = "Stage Clear!"
+fontSize = 48.0
+color = [1.0, 1.0, 0.0, 1.0]
+alignment = "MiddleCenter"
+overflow = "Overflow"
+[[gameObjects]]
+name = "RestartButton"
+guid = "b315e6c8-f30f-4002-8779-2d4900614d43"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 0
+[[gameObjects.components]]
+type = "RoseEngine.RectTransform"
+[gameObjects.components.fields]
+anchorMin = [1.0, 1.0]
+anchorMax = [1.0, 1.0]
+anchoredPosition = [-20.0, 20.0]
+sizeDelta = [120.0, 40.0]
+pivot = [1.0, 1.0]
+offsetMin = [-140.0, -20.0]
+offsetMax = [-20.0, 20.0]
+[[gameObjects.components]]
+type = "RoseEngine.UIImage"
+[gameObjects.components.fields]
+color = [1.0, 1.0, 1.0, 1.0]
+imageType = "Simple"
+preserveAspect = false
+[[gameObjects.components]]
+type = "RoseEngine.UIButton"
+[gameObjects.components.fields]
+normalColor = [1.0, 1.0, 1.0, 1.0]
+hoverColor = [0.8999999761581421, 0.8999999761581421, 0.8999999761581421, 1.0]
+pressedColor = [0.699999988079071, 0.699999988079071, 0.699999988079071, 1.0]
+disabledColor = [0.5, 0.5, 0.5, 0.5]
+transition = "ColorTint"
+interactable = true
+[[gameObjects]]
+name = "Label"
+guid = "f7e4d448-892f-40bd-8de2-84637ae346c3"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = 7
+[[gameObjects.components]]
+type = "RoseEngine.RectTransform"
+[gameObjects.components.fields]
+anchorMin = [0.0, 0.0]
+anchorMax = [1.0, 1.0]
+anchoredPosition = [0.0, 0.0]
+sizeDelta = [0.0, 0.0]
+pivot = [0.5, 0.5]
+offsetMin = [0.0, 0.0]
+offsetMax = [0.0, 0.0]
+[[gameObjects.components]]
+type = "RoseEngine.UIText"
+[gameObjects.components.fields]
+text = "Restart"
+fontSize = 16.0
+color = [1.0, 1.0, 1.0, 1.0]
+alignment = "MiddleCenter"
+overflow = "Overflow"

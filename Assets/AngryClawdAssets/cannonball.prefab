@@ -1,0 +1,28 @@
+[prefab]
+version = 1
+rootName = "cannonball_temp"
+[[gameObjects]]
+name = "cannonball_temp"
+guid = "be81c085-39b9-41c8-85a4-1be291b9a1a9"
+activeSelf = true
+[gameObjects.transform]
+localPosition = [0.0, 0.0, 0.0]
+localRotation = [0.0, 0.0, 0.0, 1.0]
+localScale = [1.0, 1.0, 1.0]
+parentIndex = -1
+[[gameObjects.components]]
+type = "MeshFilter"
+[gameObjects.components.fields]
+primitiveType = "Sphere"
+[[gameObjects.components]]
+type = "MeshRenderer"
+[gameObjects.components.fields]
+color = [1.0, 1.0, 1.0, 1.0]
+metallic = 0.0
+roughness = 0.5
+[[gameObjects.components]]
+type = "RoseEngine.SphereCollider"
+[gameObjects.components.fields]
+radius = 0.5
+isTrigger = false
+center = [0.0, 0.0, 0.0]
