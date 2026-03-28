@@ -77,7 +77,8 @@ namespace IronRose.Scripting
                 {
                     if (!File.Exists(f)) continue;
                     var source = File.ReadAllText(f);
-                    syntaxTrees.Add(CSharpSyntaxTree.ParseText(source, path: f));
+                    syntaxTrees.Add(CSharpSyntaxTree.ParseText(source, path: f,
+                        encoding: System.Text.Encoding.UTF8));
                 }
                 catch (IOException ex)
                 {
@@ -92,7 +93,8 @@ namespace IronRose.Scripting
         {
             EditorDebug.Log($"[Scripting] Compiling: {assemblyName}");
 
-            var syntaxTree = CSharpSyntaxTree.ParseText(sourceCode);
+            var syntaxTree = CSharpSyntaxTree.ParseText(sourceCode,
+                encoding: System.Text.Encoding.UTF8);
 
             return CompileFromSyntaxTrees(new[] { syntaxTree }, assemblyName);
         }
