@@ -53,6 +53,9 @@ namespace IronRose.Engine
         /// <summary>캐시를 강제로 삭제합니다.</summary>
         public static bool ForceClearCache { get; set; }
 
+        /// <summary>상세 로그 출력 여부 (기본 false).</summary>
+        public static bool VerboseLog { get; set; }
+
         private static string FindOrCreatePath() =>
             Path.Combine(ProjectContext.ProjectRoot, FileName);
 
@@ -100,6 +103,15 @@ namespace IronRose.Engine
                         ForceClearCache = cache.GetBool("force_clear_cache", ForceClearCache);
                     }
 
+                    var log = config.GetSection("log");
+                    if (log != null)
+                    {
+                        VerboseLog = log.GetBool("verbose", VerboseLog);
+                    }
+
+                    // Verbose 플래그를 EditorDebug에 즉시 반영
+                    EditorDebug.Verbose = VerboseLog;
+
                     EditorDebug.Log($"[ProjectSettings] Loaded: {path}");
                 }
             }
@@ -136,6 +148,9 @@ namespace IronRose.Engine
 
                 toml += "\n[editor]\n";
                 toml += $"external_script_editor = \"{ExternalScriptEditor}\"\n";
+
+                toml += "\n[log]\n";
+                toml += $"verbose = {VerboseLog.ToString().ToLowerInvariant()}\n";
 
                 toml += "\n[cache]\n";
                 toml += $"dont_use_cache = {DontUseCache.ToString().ToLowerInvariant()}\n";

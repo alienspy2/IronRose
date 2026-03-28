@@ -16,6 +16,7 @@
 //          Write()에서 _lock으로 파일 접근 동기화. IOException 발생 시 무시 (콘솔 출력은 완료).
 // ------------------------------------------------------------
 using System;
+using System.Diagnostics;
 using System.IO;
 
 namespace RoseEngine
@@ -95,7 +96,10 @@ namespace RoseEngine
                 "ERROR" => LogLevel.Error,
                 _ => LogLevel.Info,
             };
-            LogSink?.Invoke(new LogEntry(logLevel, LogSource.Project, message?.ToString() ?? "null", DateTime.Now));
+            var st = new StackTrace(1, true);
+            var (callerFile, callerLine) = StackTraceHelper.ResolveCallerFrame(st);
+            LogSink?.Invoke(new LogEntry(logLevel, LogSource.Project, message?.ToString() ?? "null", DateTime.Now,
+                st.ToString(), callerFile, callerLine));
         }
     }
 }

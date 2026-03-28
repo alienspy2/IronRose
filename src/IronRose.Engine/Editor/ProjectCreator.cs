@@ -11,7 +11,9 @@
 //          템플릿 디렉토리가 없으면 최소 구조(rose_projectSettings.toml, Assets/, Shaders/)를 직접 생성한다.
 // ------------------------------------------------------------
 using System;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using RoseEngine;
@@ -199,84 +201,123 @@ start_scene = """"
         }
 
         /// <summary>
-        /// 엔진 루트의 IronRose.code-workspace에 프로젝트 폴더를 추가/갱신합니다.
+        /// 프로젝트 폴더에 .code-workspace와 통합 솔루션(.sln)을 생성합니다.
         /// </summary>
-        /// <summary>
-        /// 엔진 루트의 IronRose.code-workspace를 생성/갱신합니다.
-        /// 파일이 없으면 새로 생성합니다.
-        /// </summary>
-        /// <returns>생성/갱신된 workspace 파일의 절대 경로. 실패 시 null.</returns>
+        /// <returns>생성된 workspace 파일의 절대 경로. 실패 시 null.</returns>
         public static string? UpdateEngineWorkspace(string projectDir)
         {
             var engineRoot = ProjectContext.EngineRoot;
             if (string.IsNullOrEmpty(engineRoot)) return null;
 
-            var wsPath = Path.Combine(engineRoot, "IronRose.code-workspace");
+            var projectName = Path.GetFileName(projectDir);
+            var wsPath = Path.Combine(projectDir, $"{projectName}.code-workspace");
 
             try
             {
-                var projectName = Path.GetFileName(projectDir);
-                var relPath = Path.GetRelativePath(engineRoot, projectDir).Replace('\\', '/');
+                var engineRelPath = Path.GetRelativePath(projectDir, engineRoot).Replace('\\', '/');
 
-                JsonNode? doc;
-                if (File.Exists(wsPath))
-                {
-                    doc = JsonNode.Parse(File.ReadAllText(wsPath));
-                    if (doc == null) doc = new JsonObject();
-                }
-                else
-                {
-                    doc = new JsonObject();
-                }
+                // 통합 솔루션 생성
+                GenerateDevSolution(projectDir);
 
-                var folders = doc["folders"]?.AsArray();
-                if (folders == null)
+                // workspace 파일 생성
+                var doc = new JsonObject
                 {
-                    folders = new JsonArray();
-                    doc["folders"] = folders;
-                }
-
-                // 기존 프로젝트 폴더 제거 (엔진 자체 "." 제외)
-                for (int i = folders.Count - 1; i >= 0; i--)
-                {
-                    var path = folders[i]?["path"]?.GetValue<string>();
-                    if (path != null && path != ".")
-                        folders.RemoveAt(i);
-                }
-
-                // 엔진 폴더가 없으면 추가 (primary)
-                bool hasEngine = false;
-                foreach (var f in folders)
-                {
-                    if (f?["path"]?.GetValue<string>() == ".")
-                    { hasEngine = true; break; }
-                }
-                if (!hasEngine)
-                {
-                    folders.Insert(0, new JsonObject
+                    ["folders"] = new JsonArray
                     {
-                        ["name"] = "RoseEngine",
-                        ["path"] = "."
-                    });
-                }
-
-                // 프로젝트 폴더 추가
-                folders.Add(new JsonObject
-                {
-                    ["name"] = projectName,
-                    ["path"] = relPath
-                });
+                        new JsonObject
+                        {
+                            ["name"] = "RoseEngine",
+                            ["path"] = engineRelPath
+                        },
+                        new JsonObject
+                        {
+                            ["name"] = projectName,
+                            ["path"] = "."
+                        }
+                    },
+                    ["settings"] = new JsonObject
+                    {
+                        ["dotnet.defaultSolution"] = $"{projectName}.sln"
+                    }
+                };
 
                 var options = new JsonSerializerOptions { WriteIndented = true };
                 File.WriteAllText(wsPath, doc.ToJsonString(options) + "\n");
-                EditorDebug.Log($"[ProjectCreator] Workspace updated: {wsPath}");
+                EditorDebug.Log($"[ProjectCreator] Workspace created: {wsPath}");
                 return wsPath;
             }
             catch (Exception ex)
             {
-                EditorDebug.LogWarning($"[ProjectCreator] Failed to update workspace: {ex.Message}");
+                EditorDebug.LogWarning($"[ProjectCreator] Failed to create workspace: {ex.Message}");
                 return null;
             }
+        }
+
+        /// <summary>
+        /// 게임 프로젝트 폴더에 통합 솔루션(엔진+게임)을 생성합니다.
+        /// dotnet new sln으로 새 .sln을 만든 뒤 게임/엔진 .csproj를 모두 추가합니다.
+        /// </summary>
+        /// <returns>생성된 .sln의 절대 경로. 실패 시 null.</returns>
+        public static string? GenerateDevSolution(string projectDir)
+        {
+            var engineRoot = ProjectContext.EngineRoot;
+            if (string.IsNullOrEmpty(engineRoot)) return null;
+
+            var projectName = Path.GetFileName(projectDir);
+            var slnPath = Path.Combine(projectDir, $"{projectName}.sln");
+            var engineSrcDir = Path.Combine(engineRoot, "src");
+
+            if (!Directory.Exists(engineSrcDir))
+                return null;
+
+            try
+            {
+                // 기존 .sln 제거 후 새로 생성
+                if (File.Exists(slnPath))
+                    File.Delete(slnPath);
+
+                RunDotnet(projectDir, $"new sln -n \"{projectName}\" --output \"{projectDir}\" --format sln");
+
+                // 게임 프로젝트 (.csproj) 수집
+                var gameProjects = Directory.GetFiles(projectDir, "*.csproj", SearchOption.AllDirectories)
+                    .Where(p => !p.Contains(Path.Combine("obj", "")))
+                    .ToArray();
+
+                // 엔진 프로젝트 (.csproj) 수집
+                var engineProjects = Directory.GetFiles(engineSrcDir, "*.csproj", SearchOption.AllDirectories);
+
+                // 전부 추가
+                var allProjects = gameProjects.Concat(engineProjects).ToArray();
+                if (allProjects.Length > 0)
+                {
+                    var args = $"sln \"{slnPath}\" add";
+                    foreach (var csproj in allProjects)
+                        args += $" \"{csproj}\"";
+                    RunDotnet(projectDir, args);
+                }
+
+                EditorDebug.Log($"[ProjectCreator] Solution generated: {slnPath}");
+                return slnPath;
+            }
+            catch (Exception ex)
+            {
+                EditorDebug.LogWarning($"[ProjectCreator] Failed to generate Dev solution: {ex.Message}");
+                return null;
+            }
+        }
+
+        private static void RunDotnet(string workingDir, string args)
+        {
+            var psi = new ProcessStartInfo("dotnet", args)
+            {
+                WorkingDirectory = workingDir,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var process = Process.Start(psi);
+            process?.WaitForExit(15000);
         }
 
         private static void ReplaceInFiles(string dir, string placeholder, string replacement)

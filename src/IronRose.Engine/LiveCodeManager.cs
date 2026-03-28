@@ -93,6 +93,7 @@ namespace IronRose.Engine
             foreach (var path in _liveCodePaths)
             {
                 var watcher = new FileSystemWatcher(path, "*.cs");
+                watcher.IncludeSubdirectories = true;
                 watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size;
                 watcher.Changed += OnLiveCodeChanged;
                 watcher.Created += OnLiveCodeChanged;
@@ -125,6 +126,9 @@ namespace IronRose.Engine
 
             // Play/에디터 모두 동일: GO를 유지하고 컴포넌트만 새 어셈블리 타입으로 교체
             MigrateEditorComponents();
+
+            // 모든 외부 참조(씬 컴포넌트, 타입 캐시)가 해제된 후 ALC 수거 검증
+            _scriptDomain?.VerifyPreviousContextUnloaded();
 
             if (isPlaying)
                 RestoreHotReloadableState();
@@ -185,7 +189,15 @@ namespace IronRose.Engine
         {
             var csFiles = _liveCodePaths
                 .Where(Directory.Exists)
-                .SelectMany(p => Directory.GetFiles(p, "*.cs"))
+                .SelectMany(p => Directory.GetFiles(p, "*.cs", SearchOption.AllDirectories))
+                .Where(f =>
+                {
+                    // obj/, bin/ 등 빌드 산출물 디렉토리 제외
+                    var sep = Path.DirectorySeparatorChar;
+                    var altSep = Path.AltDirectorySeparatorChar;
+                    return !f.Contains($"{sep}obj{sep}") && !f.Contains($"{altSep}obj{altSep}")
+                        && !f.Contains($"{sep}bin{sep}") && !f.Contains($"{altSep}bin{altSep}");
+                })
                 .ToArray();
 
             if (csFiles.Length == 0)
@@ -197,9 +209,13 @@ namespace IronRose.Engine
             if (result.Success && result.AssemblyBytes != null)
             {
                 if (_scriptDomain!.IsLoaded)
-                    _scriptDomain.Reload(result.AssemblyBytes);
+                {
+                    // 이전 ALC Type 참조를 해제하여 GC가 이전 ALC를 수거할 수 있도록 한다
+                    MonoBehaviour.ClearMethodCache();
+                    _scriptDomain.Reload(result.AssemblyBytes, result.PdbBytes);
+                }
                 else
-                    _scriptDomain.LoadScripts(result.AssemblyBytes);
+                    _scriptDomain.LoadScripts(result.AssemblyBytes, result.PdbBytes);
 
                 RegisterLiveCodeBehaviours();
                 RoseEngine.EditorDebug.Log("[Engine] LiveCode loaded!");

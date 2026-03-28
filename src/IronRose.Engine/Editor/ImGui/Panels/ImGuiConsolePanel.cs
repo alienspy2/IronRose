@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Numerics;
 using System.Text;
+using System.Text.RegularExpressions;
 using ImGuiNET;
 using RoseEngine;
 using Vector4 = System.Numerics.Vector4;
@@ -17,9 +20,13 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         private readonly List<LogEntry> _entries = new();
         private readonly List<LogEntry> _drainBuffer = new();
         private bool _autoScroll = true;
+        private bool _clearOnPlay = true;
         private bool _showInfo = true;
         private bool _showWarning = true;
         private bool _showError = true;
+
+        // Track play mode state to detect transitions
+        private PlayModeState _prevPlayModeState = PlayModeState.Edit;
 
         // Selection state (indices refer to visible/filtered items)
         private int _selectionAnchor = -1;
@@ -54,6 +61,16 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 }
             }
 
+            // Detect Play mode entry and clear if enabled
+            var currentPlayState = EditorPlayMode.State;
+            if (_clearOnPlay && _prevPlayModeState == PlayModeState.Edit && currentPlayState == PlayModeState.Playing)
+            {
+                _entries.Clear();
+                _selectionAnchor = -1;
+                _selectionEnd = -1;
+            }
+            _prevPlayModeState = currentPlayState;
+
             if (ImGui.Begin("Console", ref _isOpen))
             {
                 // Toolbar
@@ -66,6 +83,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
                 ImGui.SameLine();
                 ImGui.Checkbox("Auto-scroll", ref _autoScroll);
+
+                ImGui.SameLine();
+                ImGui.Checkbox("Clear on Play", ref _clearOnPlay);
 
                 ImGui.SameLine();
                 ImGui.Spacing();
@@ -145,9 +165,13 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                         ImGui.PushStyleColor(ImGuiCol.Text, color);
                         // Use Selectable with SpanAllColumns for full-row click area
                         if (ImGui.Selectable($"{text}##log_{vi}", isSelected,
-                            ImGuiSelectableFlags.AllowOverlap, System.Numerics.Vector2.Zero))
+                            ImGuiSelectableFlags.AllowOverlap | ImGuiSelectableFlags.AllowDoubleClick,
+                            System.Numerics.Vector2.Zero))
                         {
-                            HandleItemClick(vi);
+                            if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+                                OpenSourceInEditor(entry);
+                            else
+                                HandleItemClick(vi);
                         }
 
                         // Drag selection: if mouse is held and hovering an item, extend selection
@@ -220,9 +244,69 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 };
                 if (sb.Length > 0) sb.AppendLine();
                 sb.Append($"{prefix} [{entry.Timestamp:HH:mm:ss}] {entry.Message}");
+                if (!string.IsNullOrEmpty(entry.StackInfo))
+                {
+                    sb.AppendLine();
+                    sb.Append(entry.StackInfo.TrimEnd());
+                }
             }
 
             SystemClipboard.SetText(sb.ToString());
+        }
+
+        private static readonly Regex StackFileRegex = new(@"in\s+(.+):line\s+(\d+)", RegexOptions.Compiled);
+
+        private static void OpenSourceInEditor(LogEntry entry)
+        {
+            string? filePath = entry.CallerFilePath;
+            int line = entry.CallerLine;
+
+            // Fallback: 캡처 시 CallerFilePath가 없으면 스택트레이스에서 파싱
+            if (string.IsNullOrEmpty(filePath) && !string.IsNullOrEmpty(entry.StackInfo))
+            {
+                var matches = StackFileRegex.Matches(entry.StackInfo);
+                foreach (Match m in matches)
+                {
+                    string f = m.Groups[1].Value;
+                    string fileName = Path.GetFileName(f);
+                    // Skip known logging infrastructure
+                    if (fileName is "Debug.cs" or "EditorDebug.cs")
+                        continue;
+                    if (File.Exists(f))
+                    {
+                        filePath = f;
+                        if (int.TryParse(m.Groups[2].Value, out int parsed))
+                            line = parsed;
+                        break;
+                    }
+                }
+            }
+
+            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
+                return;
+
+            string lineStr = line.ToString();
+            string editor = ProjectSettings.ExternalScriptEditor;
+            string args = editor switch
+            {
+                "code" or "code-insiders" => $"--goto \"{filePath}\":{lineStr}",
+                "rider" or "rider64" => $"--line {lineStr} \"{filePath}\"",
+                _ => $"\"{filePath}\"",
+            };
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = editor,
+                    Arguments = args,
+                    UseShellExecute = false,
+                });
+            }
+            catch (Exception ex)
+            {
+                RoseEngine.Debug.LogError($"[Console] Failed to open editor '{editor}': {ex.Message}");
+            }
         }
 
         private bool ShouldShow(LogLevel level) => level switch

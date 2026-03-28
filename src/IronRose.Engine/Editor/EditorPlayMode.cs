@@ -82,7 +82,7 @@ namespace IronRose.Engine.Editor
             // 커서 상태는 스크립트가 설정하므로 기본값으로 시작
             Cursor.ResetToDefault();
 
-            Debug.Log("[Editor] Entered Play mode");
+            EditorDebug.Log("[Editor] Entered Play mode");
         }
 
         public static void PausePlayMode()
@@ -95,7 +95,7 @@ namespace IronRose.Engine.Editor
             // 일시정지 시 커서 잠금 해제 (에디터 조작 가능하도록)
             Cursor.ApplyState(); // IsLockAllowed가 Paused에서는 false
 
-            Debug.Log("[Editor] Paused");
+            EditorDebug.Log("[Editor] Paused");
         }
 
         public static void ResumePlayMode()
@@ -108,7 +108,7 @@ namespace IronRose.Engine.Editor
             // Resume 시 스크립트가 설정한 커서 상태 재적용
             Cursor.ApplyState();
 
-            Debug.Log("[Editor] Resumed");
+            EditorDebug.Log("[Editor] Resumed");
         }
 
         public static void StopPlayMode()
@@ -150,7 +150,7 @@ namespace IronRose.Engine.Editor
             // Play 모드 종료 시 커서를 기본 상태로 복원
             Cursor.ResetToDefault();
 
-            Debug.Log("[Editor] Stopped Play mode, scene restored");
+            EditorDebug.Log("[Editor] Stopped Play mode, scene restored");
         }
 
         /// <summary>ProjectSettings에 저장된 활성 렌더러 프로파일을 로드하여 RenderSettings에 반영.</summary>

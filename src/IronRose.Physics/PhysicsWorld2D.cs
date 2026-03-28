@@ -12,7 +12,7 @@ namespace IronRose.Physics
         public void Initialize(float gravityX = 0, float gravityY = -9.81f)
         {
             _world = new World(new AetherVector2(gravityX, gravityY));
-            Debug.Log("[Physics2D] Initialized");
+            EditorDebug.Log("[Physics2D] Initialized");
         }
 
         public void Step(float deltaTime)

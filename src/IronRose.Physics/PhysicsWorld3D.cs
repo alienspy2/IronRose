@@ -241,7 +241,7 @@ namespace IronRose.Physics
                 new SolveDescription(8, 1)
             );
 
-            Debug.Log($"[Physics3D] Initialized with {threadCount} threads");
+            EditorDebug.Log($"[Physics3D] Initialized with {threadCount} threads");
         }
 
         private int _stepCount;
@@ -251,7 +251,7 @@ namespace IronRose.Physics
             _stepCount++;
             if (_stepCount <= 3 || _stepCount % 300 == 0)
             {
-                Debug.Log($"[Physics3D:Step#{_stepCount}] bodies={_simulation.Bodies.ActiveSet.Count} statics={_simulation.Statics.Count} noGravity={_noGravityBodies.Count} ({string.Join(",", _noGravityBodies)})");
+                EditorDebug.Log($"[Physics3D:Step#{_stepCount}] bodies={_simulation.Bodies.ActiveSet.Count} statics={_simulation.Statics.Count} noGravity={_noGravityBodies.Count} ({string.Join(",", _noGravityBodies)})");
             }
             _simulation.Timestep(deltaTime, _threadDispatcher);
         }
@@ -364,7 +364,7 @@ namespace IronRose.Physics
         {
             if (!_simulation.Bodies.BodyExists(handle))
             {
-                Debug.LogWarning($"[Physics3D] GetBodyPose: body handle {handle.Value} does not exist");
+                EditorDebug.LogWarning($"[Physics3D] GetBodyPose: body handle {handle.Value} does not exist");
                 return default;
             }
             return _simulation.Bodies[handle].Pose;
@@ -374,7 +374,7 @@ namespace IronRose.Physics
         {
             if (!_simulation.Bodies.BodyExists(handle))
             {
-                Debug.LogWarning($"[Physics3D] GetBodyVelocity: body handle {handle.Value} does not exist");
+                EditorDebug.LogWarning($"[Physics3D] GetBodyVelocity: body handle {handle.Value} does not exist");
                 return default;
             }
             return _simulation.Bodies[handle].Velocity;
@@ -384,7 +384,7 @@ namespace IronRose.Physics
         {
             if (!_simulation.Bodies.BodyExists(handle))
             {
-                Debug.LogWarning($"[Physics3D] SetBodyVelocity: body handle {handle.Value} does not exist");
+                EditorDebug.LogWarning($"[Physics3D] SetBodyVelocity: body handle {handle.Value} does not exist");
                 return;
             }
             var bodyRef = _simulation.Bodies[handle];
@@ -397,7 +397,7 @@ namespace IronRose.Physics
         {
             if (!_simulation.Bodies.BodyExists(handle))
             {
-                Debug.LogWarning($"[Physics3D] ApplyLinearImpulse: body handle {handle.Value} does not exist");
+                EditorDebug.LogWarning($"[Physics3D] ApplyLinearImpulse: body handle {handle.Value} does not exist");
                 return;
             }
             var bodyRef = _simulation.Bodies[handle];
@@ -410,7 +410,7 @@ namespace IronRose.Physics
         {
             if (!_simulation.Bodies.BodyExists(handle))
             {
-                Debug.LogWarning($"[Physics3D] ApplyAngularImpulse: body handle {handle.Value} does not exist");
+                EditorDebug.LogWarning($"[Physics3D] ApplyAngularImpulse: body handle {handle.Value} does not exist");
                 return;
             }
             var bodyRef = _simulation.Bodies[handle];
@@ -423,7 +423,7 @@ namespace IronRose.Physics
         {
             if (!_simulation.Bodies.BodyExists(handle))
             {
-                Debug.LogWarning($"[Physics3D] SetBodyPose: body handle {handle.Value} does not exist");
+                EditorDebug.LogWarning($"[Physics3D] SetBodyPose: body handle {handle.Value} does not exist");
                 return;
             }
             _simulation.Bodies[handle].Pose = pose;
@@ -434,7 +434,7 @@ namespace IronRose.Physics
         {
             if (!_simulation.Bodies.BodyExists(handle))
             {
-                Debug.LogWarning($"[Physics3D] WakeBody: body handle {handle.Value} does not exist");
+                EditorDebug.LogWarning($"[Physics3D] WakeBody: body handle {handle.Value} does not exist");
                 return;
             }
             var bodyRef = _simulation.Bodies[handle];
@@ -444,10 +444,10 @@ namespace IronRose.Physics
 
         public void SetBodyUseGravity(BodyHandle handle, bool useGravity)
         {
-            Debug.Log($"[Physics3D] SetBodyUseGravity handle={handle.Value} useGravity={useGravity}");
+            EditorDebug.Log($"[Physics3D] SetBodyUseGravity handle={handle.Value} useGravity={useGravity}");
             if (!_simulation.Bodies.BodyExists(handle))
             {
-                Debug.LogWarning($"[Physics3D] SetBodyUseGravity: body handle {handle.Value} does not exist");
+                EditorDebug.LogWarning($"[Physics3D] SetBodyUseGravity: body handle {handle.Value} does not exist");
                 return;
             }
             if (useGravity)
@@ -699,7 +699,7 @@ namespace IronRose.Physics
             _bodyUserData.Remove(handle.Value);
             if (!_simulation.Bodies.BodyExists(handle))
             {
-                Debug.LogWarning($"[Physics3D] RemoveBody: body handle {handle.Value} does not exist, skipping");
+                EditorDebug.LogWarning($"[Physics3D] RemoveBody: body handle {handle.Value} does not exist, skipping");
                 return;
             }
             _simulation.Bodies.Remove(handle);
@@ -714,7 +714,7 @@ namespace IronRose.Physics
         /// <summary>시뮬레이션 내 모든 body/static 제거 (BufferPool, ThreadDispatcher 유지)</summary>
         public void Reset()
         {
-            Debug.Log("[Physics3D] Reset — recreating simulation");
+            EditorDebug.Log("[Physics3D] Reset — recreating simulation");
             _simulation?.Dispose();
             _noGravityBodies.Clear();
             _bodyUserData.Clear();

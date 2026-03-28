@@ -53,7 +53,7 @@ namespace RoseEngine
             _isPaused = false;
 
             BuildTargets();
-            Debug.Log($"[Animator] Play '{clip.name}' on '{gameObject.name}' ({_targets?.Length ?? 0} targets)");
+            EditorDebug.Log($"[Animator] Play '{clip.name}' on '{gameObject.name}' ({_targets?.Length ?? 0} targets)");
         }
 
         public void Stop()

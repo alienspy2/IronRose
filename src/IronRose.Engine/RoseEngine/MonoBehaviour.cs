@@ -137,5 +137,10 @@ namespace RoseEngine
             }
             return method;
         }
+
+        /// <summary>
+        /// 핫 리로드 시 이전 ALC의 Type 참조를 해제하기 위해 메서드 캐시를 초기화한다.
+        /// </summary>
+        internal static void ClearMethodCache() => _methodCache.Clear();
     }
 }

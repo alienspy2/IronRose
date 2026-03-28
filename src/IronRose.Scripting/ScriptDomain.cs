@@ -12,6 +12,8 @@ namespace IronRose.Scripting
         private Assembly? _currentAssembly;
         private readonly List<object> _scriptInstances = new();
         private Func<Type, bool>? _typeFilter;
+        private Func<AssemblyLoadContext, AssemblyName, Assembly?>? _resolvingHandler;
+        private WeakReference? _previousALCWeakRef;
 
         public bool IsLoaded => _currentALC != null;
 
@@ -25,7 +27,7 @@ namespace IronRose.Scripting
             return _currentAssembly?.GetTypes() ?? Array.Empty<Type>();
         }
 
-        public void LoadScripts(byte[] assemblyBytes)
+        public void LoadScripts(byte[] assemblyBytes, byte[]? pdbBytes = null)
         {
             EditorDebug.Log("[ScriptDomain] Loading scripts...");
 
@@ -33,7 +35,7 @@ namespace IronRose.Scripting
             _currentALC = new AssemblyLoadContext($"ScriptContext_{DateTime.Now.Ticks}", isCollectible: true);
 
             // ALC Resolving: default ALC fallback (IronRose.Engine 등 참조 해결)
-            _currentALC.Resolving += (alc, assemblyName) =>
+            _resolvingHandler = (alc, assemblyName) =>
             {
                 // default ALC에서 이미 로드된 어셈블리 찾기
                 foreach (var loaded in AssemblyLoadContext.Default.Assemblies)
@@ -43,10 +45,19 @@ namespace IronRose.Scripting
                 }
                 return null;
             };
+            _currentALC.Resolving += _resolvingHandler;
 
-            // 어셈블리 로드
+            // 어셈블리 로드 (PDB가 있으면 함께 로드하여 스택트레이스에 소스 정보 포함)
             using var ms = new System.IO.MemoryStream(assemblyBytes);
-            _currentAssembly = _currentALC.LoadFromStream(ms);
+            if (pdbBytes != null && pdbBytes.Length > 0)
+            {
+                using var pdbMs = new System.IO.MemoryStream(pdbBytes);
+                _currentAssembly = _currentALC.LoadFromStream(ms, pdbMs);
+            }
+            else
+            {
+                _currentAssembly = _currentALC.LoadFromStream(ms);
+            }
 
             EditorDebug.Log($"[ScriptDomain] Loaded assembly: {_currentAssembly.FullName}");
 
@@ -54,12 +65,12 @@ namespace IronRose.Scripting
             InstantiateScripts();
         }
 
-        public void Reload(byte[] newAssemblyBytes)
+        public void Reload(byte[] newAssemblyBytes, byte[]? pdbBytes = null)
         {
             EditorDebug.Log("[ScriptDomain] Hot reloading scripts...");
 
             UnloadPreviousContext();
-            LoadScripts(newAssemblyBytes);
+            LoadScripts(newAssemblyBytes, pdbBytes);
 
             EditorDebug.Log("[ScriptDomain] Hot reload completed!");
         }
@@ -77,24 +88,40 @@ namespace IronRose.Scripting
             _scriptInstances.Clear();
             _currentAssembly = null;
 
-            var weakRef = new WeakReference(_currentALC, trackResurrection: true);
+            // Resolving 이벤트 구독 해제
+            if (_resolvingHandler != null)
+            {
+                _currentALC.Resolving -= _resolvingHandler;
+                _resolvingHandler = null;
+            }
+
+            _previousALCWeakRef = new WeakReference(_currentALC, trackResurrection: true);
             _currentALC.Unload();
             _currentALC = null;
+        }
 
-            // GC 강제 실행
-            for (int i = 0; i < 3; i++)
+        /// <summary>
+        /// 이전 ALC가 GC에 의해 수거되었는지 검증한다.
+        /// 모든 외부 참조(씬 컴포넌트, 타입 캐시 등)가 해제된 후 호출해야 정확하다.
+        /// </summary>
+        public void VerifyPreviousContextUnloaded()
+        {
+            if (_previousALCWeakRef == null || !_previousALCWeakRef.IsAlive) return;
+
+            for (int i = 0; i < 5; i++)
             {
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
             }
 
-            if (weakRef.IsAlive)
+            if (_previousALCWeakRef.IsAlive)
             {
                 EditorDebug.LogWarning("[ScriptDomain] WARNING: ALC not fully unloaded!");
             }
             else
             {
                 EditorDebug.Log("[ScriptDomain] Previous context unloaded successfully");
+                _previousALCWeakRef = null;
             }
         }
 

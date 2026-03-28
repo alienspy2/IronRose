@@ -48,7 +48,7 @@ namespace IronRose.Engine.Editor
             var result = db.GetMeshImportResult(path);
             if (result == null || result.Meshes.Length == 0)
             {
-                Debug.LogWarning($"[AssetSpawner] Failed to load mesh: {path}");
+                EditorDebug.LogWarning($"[AssetSpawner] Failed to load mesh: {path}");
                 return null;
             }
 

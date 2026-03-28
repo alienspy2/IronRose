@@ -307,11 +307,13 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 {
                     ImGui.Separator();
                     ImGui.Spacing();
-                    ImGui.TextWrapped("To open with VS Code, run:");
+                    ImGui.TextWrapped("To open with VS Code (with full IntelliSense), run:");
                     ImGui.Spacing();
                     ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.1f, 0.3f, 0.7f, 1.0f));
                     ImGui.TextWrapped($"  code \"{_workspacePath}\"");
                     ImGui.PopStyleColor();
+                    ImGui.Spacing();
+                    ImGui.TextDisabled("A solution (engine + game) has been generated for IntelliSense.");
                 }
 
                 ImGui.Spacing();

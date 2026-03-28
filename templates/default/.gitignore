@@ -17,3 +17,7 @@ Thumbs.db
 .vscode/
 *.user
 *.suo
+
+# Generated workspace & solution (engine+game combined, local only)
+*.code-workspace
+*.sln

@@ -55,7 +55,7 @@ namespace IronRose.Engine
             bool logThisFrame = _fixedUpdateCount <= 3;
 
             if (logThisFrame)
-                Debug.Log($"[PhysicsMgr:FixedUpdate#{_fixedUpdateCount}] colliders={Collider._allColliders.Count} rigidbodies={Rigidbody._rigidbodies.Count}");
+                EditorDebug.Log($"[PhysicsMgr:FixedUpdate#{_fixedUpdateCount}] colliders={Collider._allColliders.Count} rigidbodies={Rigidbody._rigidbodies.Count}");
 
             // 0. Rigidbody 없는 Collider를 static body로 지연 등록
             EnsureStaticColliders();
@@ -102,10 +102,10 @@ namespace IronRose.Engine
                 {
                     // CharacterController + Rigidbody 조합은 Unity에서도 지원하지 않음
                     if (col is CharacterController)
-                        Debug.LogWarning($"[PhysicsMgr] CharacterController on '{col.gameObject.name}' has a Rigidbody — this combination is not supported. Remove the Rigidbody.");
+                        EditorDebug.LogWarning($"[PhysicsMgr] CharacterController on '{col.gameObject.name}' has a Rigidbody — this combination is not supported. Remove the Rigidbody.");
                     continue;
                 }
-                Debug.Log($"[PhysicsMgr] Registering STATIC collider: '{col.gameObject.name}' type={col.GetType().Name} pos={col.transform.position}");
+                EditorDebug.Log($"[PhysicsMgr] Registering STATIC collider: '{col.gameObject.name}' type={col.GetType().Name} pos={col.transform.position}");
                 col.RegisterAsStatic(this);
             }
 

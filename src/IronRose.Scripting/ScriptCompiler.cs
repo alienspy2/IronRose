@@ -109,7 +109,8 @@ namespace IronRose.Scripting
             );
 
             using var ms = new MemoryStream();
-            EmitResult result = compilation.Emit(ms);
+            using var pdbStream = new MemoryStream();
+            EmitResult result = compilation.Emit(ms, pdbStream);
 
             if (!result.Success)
             {
@@ -132,14 +133,17 @@ namespace IronRose.Scripting
             }
 
             ms.Seek(0, SeekOrigin.Begin);
+            pdbStream.Seek(0, SeekOrigin.Begin);
             byte[] assemblyBytes = ms.ToArray();
+            byte[] pdbBytes = pdbStream.ToArray();
 
-            EditorDebug.Log($"[Scripting] Compilation SUCCESS ({assemblyBytes.Length} bytes)");
+            EditorDebug.Log($"[Scripting] Compilation SUCCESS ({assemblyBytes.Length} bytes, PDB {pdbBytes.Length} bytes)");
 
             return new CompilationResult
             {
                 Success = true,
-                AssemblyBytes = assemblyBytes
+                AssemblyBytes = assemblyBytes,
+                PdbBytes = pdbBytes
             };
         }
 
@@ -165,6 +169,7 @@ namespace IronRose.Scripting
     {
         public bool Success { get; set; }
         public byte[]? AssemblyBytes { get; set; }
+        public byte[]? PdbBytes { get; set; }
         public List<string> Errors { get; set; } = new();
     }
 }

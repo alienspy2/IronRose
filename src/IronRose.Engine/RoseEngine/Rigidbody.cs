@@ -179,7 +179,7 @@ namespace RoseEngine
             var mgr = GetPhysicsManager();
             if (mgr == null)
             {
-                Debug.LogWarning($"[Rigidbody] RegisterWithPhysics: PhysicsManager is null for '{gameObject.name}'");
+                EditorDebug.LogWarning($"[Rigidbody] RegisterWithPhysics: PhysicsManager is null for '{gameObject.name}'");
                 return;
             }
 
@@ -206,7 +206,7 @@ namespace RoseEngine
                         boxCol.size.x * Mathf.Abs(scale.x), boxCol.size.y * Mathf.Abs(scale.y), boxCol.size.z * Mathf.Abs(scale.z));
                 else if (sphereCol != null)
                     bodyHandle = mgr.World3D.AddKinematicBox(sPos, sRot, 1, 1, 1); // fallback
-                Debug.Log($"[Rigidbody] Registered KINEMATIC '{gameObject.name}' handle={bodyHandle?.Value} pos={pos} scale={scale}");
+                EditorDebug.Log($"[Rigidbody] Registered KINEMATIC '{gameObject.name}' handle={bodyHandle?.Value} pos={pos} scale={scale}");
                 if (bodyHandle != null)
                     mgr.World3D.SetBodyUserData(bodyHandle.Value, this);
                 return;
@@ -255,7 +255,7 @@ namespace RoseEngine
                 bodyHandle = mgr.World3D.AddDynamicBox(sPos, sRot, bw, bh, bl, mass);
             }
 
-            Debug.Log($"[Rigidbody] Registered DYNAMIC '{gameObject.name}' handle={bodyHandle?.Value} shape={shapeType} pos={pos} mass={mass} useGravity={_useGravity}");
+            EditorDebug.Log($"[Rigidbody] Registered DYNAMIC '{gameObject.name}' handle={bodyHandle?.Value} shape={shapeType} pos={pos} mass={mass} useGravity={_useGravity}");
 
             if (bodyHandle != null)
                 mgr.World3D.SetBodyUserData(bodyHandle.Value, this);

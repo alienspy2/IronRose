@@ -15,7 +15,7 @@ namespace RoseEngine
         {
             if (_assetDatabase == null)
             {
-                Debug.LogError("[Resources] AssetDatabase not initialized");
+                EditorDebug.LogError("[Resources] AssetDatabase not initialized");
                 return null;
             }
 

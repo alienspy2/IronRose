@@ -438,19 +438,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                             }
                         }
 
-                        // Drop target: Hierarchy GO → Prefab 저장 (에셋 영역 빈 공간)
-                        if (ImGui.BeginDragDropTarget())
-                        {
-                            unsafe
-                            {
-                                var goPayload = ImGui.AcceptDragDropPayload("HIERARCHY_GO");
-                                if (goPayload.NativePtr != null && _selectedFolder != null)
-                                {
-                                    SaveDraggedGOsAsPrefab(_selectedFolder.FullPath);
-                                }
-                            }
-                            ImGui.EndDragDropTarget();
-                        }
+                        // (Hierarchy GO drop target은 EndChild() 뒤에서 child window 전체를 커버)
 
                         // Context menu on empty space (right-click)
                         if (ImGui.BeginPopupContextWindow("##AssetListContext", ImGuiPopupFlags.NoOpenOverItems | ImGuiPopupFlags.MouseButtonRight))
@@ -505,6 +493,21 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                         }
                     }
                     ImGui.EndChild();
+
+                    // Drop target: Hierarchy GO → Prefab 저장 (AssetList child window 전체를 커버)
+                    // EndChild() 뒤에 배치하면 child window 영역 전체가 드롭 타겟이 된다.
+                    if (ImGui.BeginDragDropTarget())
+                    {
+                        unsafe
+                        {
+                            var goPayload = ImGui.AcceptDragDropPayload("HIERARCHY_GO");
+                            if (goPayload.NativePtr != null && _selectedFolder != null)
+                            {
+                                SaveDraggedGOsAsPrefab(_selectedFolder.FullPath);
+                            }
+                        }
+                        ImGui.EndDragDropTarget();
+                    }
                     } // end normal view
 
                     // Create Folder modal (must be outside child window)
@@ -945,6 +948,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
             SceneManager.GetActiveScene().isDirty = true;
             PrefabVariantTree.Instance.Rebuild();
+            RebuildTree();
         }
 
         private void HandleAssetDoubleClick(string path)

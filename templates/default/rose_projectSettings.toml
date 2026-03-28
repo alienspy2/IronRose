@@ -4,6 +4,9 @@ active_profile_guid = ""
 [build]
 start_scene = "Assets/Scenes/Sample.scene"
 
+[log]
+verbose = false
+
 [cache]
 dont_use_cache = false
 dont_use_compress_texture = false

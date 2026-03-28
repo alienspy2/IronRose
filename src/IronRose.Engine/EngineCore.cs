@@ -167,6 +167,7 @@ namespace IronRose.Engine
 
             RoseConfig.Load();
             ProjectSettings.Load();
+            RoseEngine.EditorDebug.Log($"[Engine] IronRose started (Build: {RoseEngine.BuildVersion.BuildTime})", force: true);
             EditorState.Load();
             _window = window;
             SetWindowIcon(_window);

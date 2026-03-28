@@ -38,7 +38,7 @@ namespace IronRose.RoseEditor
 
         static void Main(string[] _)
         {
-            Debug.Log("[IronRose Editor] Starting...");
+            EditorDebug.Log("[IronRose Editor] Starting...");
 
             var options = WindowOptions.DefaultVulkan;
             options.Size = new Vector2D<int>(1280, 720);
@@ -56,12 +56,12 @@ namespace IronRose.RoseEditor
 
             _window.Run();
 
-            Debug.Log("[IronRose Editor] Stopped");
+            EditorDebug.Log("[IronRose Editor] Stopped");
         }
 
         static void OnLoad()
         {
-            Debug.Log($"[IronRose Editor] Window created: {_window!.Size.X}x{_window.Size.Y}");
+            EditorDebug.Log($"[IronRose Editor] Window created: {_window!.Size.X}x{_window.Size.Y}");
 
             // 화면 밖이면 기본 위치로 리셋
             ValidateWindowPosition();
@@ -96,12 +96,12 @@ namespace IronRose.RoseEditor
         /// </summary>
         static void LoadSceneChain()
         {
-            Debug.Log("[IronRose Editor] Loading scene...");
+            EditorDebug.Log("[IronRose Editor] Loading scene...");
 
             // 1. 마지막으로 열었던 씬
             if (!string.IsNullOrEmpty(EditorState.LastScenePath) && File.Exists(EditorState.LastScenePath))
             {
-                Debug.Log($"[IronRose Editor] Restoring last scene: {EditorState.LastScenePath}");
+                EditorDebug.Log($"[IronRose Editor] Restoring last scene: {EditorState.LastScenePath}");
                 SceneSerializer.Load(EditorState.LastScenePath);
                 return;
             }
@@ -110,14 +110,14 @@ namespace IronRose.RoseEditor
             var defaultPath = DefaultScenePath;
             if (File.Exists(defaultPath))
             {
-                Debug.Log($"[IronRose Editor] Opening default scene: {defaultPath}");
+                EditorDebug.Log($"[IronRose Editor] Opening default scene: {defaultPath}");
                 SceneSerializer.Load(defaultPath);
                 EditorState.UpdateLastScene(defaultPath);
                 return;
             }
 
             // 3. 기본 씬 생성 + 저장
-            Debug.Log("[IronRose Editor] Creating default scene...");
+            EditorDebug.Log("[IronRose Editor] Creating default scene...");
 
             var scenesDir = Path.GetDirectoryName(defaultPath)!;
             if (!Directory.Exists(scenesDir))
@@ -166,7 +166,7 @@ namespace IronRose.RoseEditor
 
             if (outOfBounds)
             {
-                Debug.Log($"[EditorState] Window position ({wx},{wy}) out of bounds, resetting to default");
+                EditorDebug.Log($"[EditorState] Window position ({wx},{wy}) out of bounds, resetting to default");
                 _window.Position = new Vector2D<int>(100, 100);
                 _window.Size = new Vector2D<int>(1280, 720);
             }
@@ -185,14 +185,14 @@ namespace IronRose.RoseEditor
             try { _engine!.Update(deltaTime); }
             catch (Exception ex)
             {
-                Debug.LogError($"[IronRose Editor] Update ERROR: {ex.Message}\n{ex.StackTrace}");
+                EditorDebug.LogError($"[IronRose Editor] Update ERROR: {ex.Message}\n{ex.StackTrace}");
             }
         }
 
         static void OnRender(double deltaTime)
         {
             try { _engine!.Render(); }
-            catch (Exception ex) { Debug.LogError($"[IronRose Editor] Render ERROR: {ex.Message}\n{ex.StackTrace}"); }
+            catch (Exception ex) { EditorDebug.LogError($"[IronRose Editor] Render ERROR: {ex.Message}\n{ex.StackTrace}"); }
         }
 
         static void OnClosing()
@@ -207,7 +207,7 @@ namespace IronRose.RoseEditor
                 return;
             }
 
-            Debug.Log("[IronRose Editor] Shutting down...");
+            EditorDebug.Log("[IronRose Editor] Shutting down...");
 
             // Prefab Edit Mode 상태 정리 + 씬 경로 저장
             EditorState.CleanupPrefabEditMode();
@@ -238,7 +238,7 @@ namespace IronRose.RoseEditor
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[IronRose Editor] Failed to prevent close: {ex.Message}");
+                EditorDebug.LogError($"[IronRose Editor] Failed to prevent close: {ex.Message}");
             }
         }
     }

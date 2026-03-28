@@ -64,7 +64,7 @@ namespace RoseEngine
             else
             {
                 isPaused = true;
-                Debug.Log("[Engine] PAUSED");
+                EditorDebug.Log("[Engine] PAUSED");
             }
         }
 
@@ -76,13 +76,13 @@ namespace RoseEngine
             else
             {
                 isPaused = false;
-                Debug.Log("[Engine] PLAYING");
+                EditorDebug.Log("[Engine] PLAYING");
             }
         }
 
         public static void Quit()
         {
-            Debug.Log("[Application] Quit requested");
+            EditorDebug.Log("[Application] Quit requested");
             QuitAction?.Invoke();
         }
 

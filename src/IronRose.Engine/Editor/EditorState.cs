@@ -193,7 +193,7 @@ namespace IronRose.Engine.Editor
             }
 
             var winInfo = WindowX.HasValue ? $"{WindowX},{WindowY} {WindowW}x{WindowH}" : "default";
-            Debug.Log($"[EditorState] Loaded: last_scene={LastScenePath ?? "(none)"}, window={winInfo}");
+            EditorDebug.Log($"[EditorState] Loaded: last_scene={LastScenePath ?? "(none)"}, window={winInfo}");
         }
 
         public static void Save()
@@ -242,7 +242,7 @@ namespace IronRose.Engine.Editor
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[EditorState] Failed to save {path}: {ex.Message}");
+                EditorDebug.LogWarning($"[EditorState] Failed to save {path}: {ex.Message}");
             }
         }
 

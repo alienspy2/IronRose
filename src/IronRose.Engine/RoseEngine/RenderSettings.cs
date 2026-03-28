@@ -62,7 +62,7 @@ namespace RoseEngine
             var tex = db?.LoadByGuid<Texture2D>(skyboxTextureGuid);
             if (tex == null)
             {
-                Debug.LogWarning($"[RenderSettings] Skybox texture not found for GUID: {skyboxTextureGuid}");
+                EditorDebug.LogWarning($"[RenderSettings] Skybox texture not found for GUID: {skyboxTextureGuid}");
                 skybox = null;
                 return;
             }

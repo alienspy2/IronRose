@@ -16,6 +16,7 @@
 //          Write()에서 _lock으로 파일 접근 동기화. IOException 발생 시 무시 (콘솔 출력은 완료).
 // ------------------------------------------------------------
 using System;
+using System.Diagnostics;
 using System.IO;
 
 namespace RoseEngine
@@ -29,6 +30,9 @@ namespace RoseEngine
 
         /// <summary>로그 출력 활성화 여부 (기본 true)</summary>
         public static bool Enabled { get; set; } = true;
+
+        /// <summary>상세 로그 출력 여부 (기본 false). false이면 Log()가 무시되고 Warning/Error만 출력됨.</summary>
+        public static bool Verbose { get; set; } = false;
 
         /// <summary>에디터 Console 패널 등 외부 로그 수신용 delegate</summary>
         public static Action<LogEntry>? LogSink;
@@ -83,7 +87,11 @@ namespace RoseEngine
         /// <summary>현재 로그 파일의 디렉토리 경로.</summary>
         public static string LogDirectory => Path.GetDirectoryName(_logPath) ?? "";
 
-        public static void Log(object message) => Write("LOG", message);
+        public static void Log(object message, bool force = false)
+        {
+            if (!force && !Verbose) return;
+            Write("LOG", message);
+        }
         public static void LogWarning(object message) => Write("WARNING", message);
         public static void LogError(object message) => Write("ERROR", message);
 
@@ -113,7 +121,10 @@ namespace RoseEngine
                 "ERROR" => LogLevel.Error,
                 _ => LogLevel.Info,
             };
-            LogSink?.Invoke(new LogEntry(logLevel, LogSource.Editor, message?.ToString() ?? "null", DateTime.Now));
+            var st = new StackTrace(1, true);
+            var (callerFile, callerLine) = StackTraceHelper.ResolveCallerFrame(st);
+            LogSink?.Invoke(new LogEntry(logLevel, LogSource.Editor, message?.ToString() ?? "null", DateTime.Now,
+                st.ToString(), callerFile, callerLine));
         }
     }
 }

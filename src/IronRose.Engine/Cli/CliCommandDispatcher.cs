@@ -42,7 +42,8 @@
 //          editor.screenshot, editor.copy, editor.paste, editor.select_all, editor.undo_history,
 //          screen.info, scene.clear,
 //          camera.set_clip, light.set_type, light.set_range, light.set_shadows,
-//          render.set_skybox_exposure
+//          render.set_skybox_exposure,
+//          assembly.info
 // ------------------------------------------------------------
 using System;
 using System.Collections.Concurrent;
@@ -2075,6 +2076,60 @@ namespace IronRose.Engine.Cli
                         RenderSettings.skybox.exposure = value;
                     SceneManager.GetActiveScene().isDirty = true;
                     return JsonOk(new { ok = true });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // assembly.info -- 로드된 어셈블리 및 LiveCode 타입 정보 조회
+            // ----------------------------------------------------------------
+            _handlers["assembly.info"] = args =>
+            {
+                var baseType = typeof(Component);
+
+                // 관련 어셈블리만 필터링
+                var assemblies = new List<object>();
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    var asmName = asm.GetName().Name;
+                    if (asmName == null) continue;
+                    if (asmName.StartsWith("System") || asmName.StartsWith("Microsoft")
+                        || asmName.StartsWith("netstandard") || asmName.StartsWith("ImGui")
+                        || asmName.StartsWith("Silk") || asmName.StartsWith("Vortice"))
+                        continue;
+
+                    var componentTypes = new List<string>();
+                    try
+                    {
+                        foreach (var t in asm.GetTypes())
+                        {
+                            if (!t.IsAbstract && !t.IsInterface && baseType.IsAssignableFrom(t))
+                                componentTypes.Add(t.FullName ?? t.Name);
+                        }
+                    }
+                    catch (ReflectionTypeLoadException)
+                    {
+                        // collectible ALC 해제 후 접근 시 발생 가능
+                    }
+
+                    assemblies.Add(new
+                    {
+                        name = asmName,
+                        componentCount = componentTypes.Count,
+                        components = componentTypes
+                    });
+                }
+
+                // LiveCode 데모 타입 (LiveCodeManager에서 등록된 것)
+                var liveCodeTypes = EngineCore.LiveCodeDemoTypes
+                    .Select(t => t.FullName ?? t.Name)
+                    .ToArray();
+
+                return JsonOk(new
+                {
+                    totalAssemblies = assemblies.Count,
+                    assemblies,
+                    liveCodeDemoTypes = liveCodeTypes,
+                    liveCodeDemoCount = liveCodeTypes.Length
                 });
             };
         }
