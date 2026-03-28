@@ -121,10 +121,14 @@ namespace RoseEngine
                 "ERROR" => LogLevel.Error,
                 _ => LogLevel.Info,
             };
-            var st = new StackTrace(1, true);
-            var (callerFile, callerLine) = StackTraceHelper.ResolveCallerFrame(st);
-            LogSink?.Invoke(new LogEntry(logLevel, LogSource.Editor, message?.ToString() ?? "null", DateTime.Now,
-                st.ToString(), callerFile, callerLine));
+            // 에디터 콘솔에는 Warning/Error만 표시, Info는 파일로만 기록
+            if (logLevel >= LogLevel.Warning)
+            {
+                var st = new StackTrace(1, true);
+                var (callerFile, callerLine) = StackTraceHelper.ResolveCallerFrame(st);
+                LogSink?.Invoke(new LogEntry(logLevel, LogSource.Editor, message?.ToString() ?? "null", DateTime.Now,
+                    st.ToString(), callerFile, callerLine));
+            }
         }
     }
 }

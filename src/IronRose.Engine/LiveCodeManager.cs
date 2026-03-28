@@ -122,6 +122,8 @@ namespace IronRose.Engine
             if (!_reloadRequested) return;
             _reloadRequested = false;
 
+            RoseEngine.EditorDebug.LogWarning($"[HotReload:DIAG] ProcessReload triggered. IsInPlaySession={EditorPlayMode.IsInPlaySession}, pendingReload={_pendingReloadAfterPlayStop}");
+
             // 플레이모드 중에는 리로드를 보류
             if (EditorPlayMode.IsInPlaySession)
             {
@@ -139,6 +141,7 @@ namespace IronRose.Engine
         /// </summary>
         public void FlushPendingReload()
         {
+            RoseEngine.EditorDebug.LogWarning($"[HotReload:DIAG] FlushPendingReload called. pending={_pendingReloadAfterPlayStop}");
             if (!_pendingReloadAfterPlayStop) return;
             _pendingReloadAfterPlayStop = false;
 
@@ -148,7 +151,7 @@ namespace IronRose.Engine
 
         private void ExecuteReload()
         {
-            RoseEngine.EditorDebug.Log("[Engine] Hot reloading LiveCode...");
+            RoseEngine.EditorDebug.LogWarning($"[HotReload:DIAG] ExecuteReload starting. PlayState={EditorPlayMode.State}");
 
             CompileAllLiveCode();
 
@@ -408,12 +411,16 @@ namespace IronRose.Engine
         private void OnLiveCodeChanged(object sender, FileSystemEventArgs e)
         {
             var now = DateTime.Now;
-            if ((now - _lastReloadTime).TotalSeconds < 1.0)
+            var elapsed = (now - _lastReloadTime).TotalSeconds;
+            if (elapsed < 1.0)
+            {
+                RoseEngine.EditorDebug.LogWarning($"[HotReload:DIAG] FileWatcher debounced: {e.Name} (elapsed={elapsed:F2}s < 1.0s)");
                 return;
+            }
 
             _lastReloadTime = now;
             _reloadRequested = true;
-            RoseEngine.EditorDebug.Log($"[Engine] LiveCode changed: {e.Name} -> reload scheduled");
+            RoseEngine.EditorDebug.LogWarning($"[HotReload:DIAG] FileWatcher fired: {e.Name}, changeType={e.ChangeType} -> _reloadRequested=true");
         }
     }
 }

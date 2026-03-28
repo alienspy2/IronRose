@@ -40,6 +40,86 @@ using System.Runtime.CompilerServices;
 
 namespace IronRose.Physics
 {
+    // --- 충돌 이벤트 수집기 (NarrowPhaseCallbacks에서 스레드 안전하게 접촉 쌍을 기록) ---
+
+    /// <summary>현재 프레임에서 접촉 중인 collidable 쌍을 수집합니다. 멀티스레드 안전.</summary>
+    internal class ContactEventCollector
+    {
+        private readonly object _lock = new();
+        private HashSet<(int, int)> _currentContacts = new();
+        private HashSet<(int, int)> _previousContacts = new();
+
+        /// <summary>현재 프레임에서 접촉이 발생한 쌍을 기록합니다 (멀티스레드 safe).</summary>
+        public void RecordContact(CollidableReference a, CollidableReference b)
+        {
+            int idA = GetCollidableId(a);
+            int idB = GetCollidableId(b);
+            // 순서를 정규화하여 (A,B)와 (B,A)를 같은 쌍으로 취급
+            var pair = idA < idB ? (idA, idB) : (idB, idA);
+            lock (_lock)
+            {
+                _currentContacts.Add(pair);
+            }
+        }
+
+        /// <summary>Step 종료 후 호출. Enter/Stay/Exit 이벤트를 분류하여 반환합니다.</summary>
+        public void Flush(
+            out List<(int, int)> entered,
+            out List<(int, int)> staying,
+            out List<(int, int)> exited)
+        {
+            entered = new List<(int, int)>();
+            staying = new List<(int, int)>();
+            exited = new List<(int, int)>();
+
+            foreach (var pair in _currentContacts)
+            {
+                if (_previousContacts.Contains(pair))
+                    staying.Add(pair);
+                else
+                    entered.Add(pair);
+            }
+
+            foreach (var pair in _previousContacts)
+            {
+                if (!_currentContacts.Contains(pair))
+                    exited.Add(pair);
+            }
+
+            // 현재를 이전으로 이동, 현재를 초기화
+            (_previousContacts, _currentContacts) = (_currentContacts, _previousContacts);
+            _currentContacts.Clear();
+        }
+
+        /// <summary>씬 전환 시 모든 접촉 기록을 초기화합니다.</summary>
+        public void Clear()
+        {
+            _currentContacts.Clear();
+            _previousContacts.Clear();
+        }
+
+        /// <summary>지정된 collidable ID와 접촉 중인 다른 collidable ID 목록을 반환합니다.</summary>
+        public List<int> GetContactingIds(int collidableId)
+        {
+            var result = new List<int>();
+            foreach (var (a, b) in _previousContacts)
+            {
+                if (a == collidableId) result.Add(b);
+                else if (b == collidableId) result.Add(a);
+            }
+            return result;
+        }
+
+        /// <summary>CollidableReference를 정수 ID로 변환. Dynamic body와 Static body를 구별하기 위해 Static은 음수.</summary>
+        private static int GetCollidableId(CollidableReference col)
+        {
+            if (col.Mobility == CollidableMobility.Static)
+                return -(col.StaticHandle.Value + 1); // 음수로 offset (0과 구별)
+            else
+                return col.BodyHandle.Value;
+        }
+    }
+
     // --- Sweep 결과 구조체 ---
 
     /// <summary>Sweep 쿼리의 충돌 결과를 담는 구조체.</summary>
@@ -225,6 +305,9 @@ namespace IronRose.Physics
         private readonly Dictionary<int, object> _bodyUserData = new();
         private readonly Dictionary<int, object> _staticUserData = new();
 
+        // --- 충돌 이벤트 수집 ---
+        private readonly ContactEventCollector _contactCollector = new();
+
         public void Initialize(Vector3? gravity = null)
         {
             var g = gravity ?? new Vector3(0, -9.81f, 0);
@@ -236,7 +319,7 @@ namespace IronRose.Physics
 
             _simulation = Simulation.Create(
                 _bufferPool,
-                new NarrowPhaseCallbacks(),
+                new NarrowPhaseCallbacks(_contactCollector),
                 new PoseIntegratorCallbacks(g, _noGravityBodies),
                 new SolveDescription(8, 1)
             );
@@ -246,6 +329,11 @@ namespace IronRose.Physics
 
         private int _stepCount;
 
+        // --- 충돌 이벤트 결과 (Step 후 FlushContactEvents로 채워짐) ---
+        private List<(int, int)> _enteredPairs = new();
+        private List<(int, int)> _stayingPairs = new();
+        private List<(int, int)> _exitedPairs = new();
+
         public void Step(float deltaTime)
         {
             _stepCount++;
@@ -254,7 +342,19 @@ namespace IronRose.Physics
                 EditorDebug.Log($"[Physics3D:Step#{_stepCount}] bodies={_simulation.Bodies.ActiveSet.Count} statics={_simulation.Statics.Count} noGravity={_noGravityBodies.Count} ({string.Join(",", _noGravityBodies)})");
             }
             _simulation.Timestep(deltaTime, _threadDispatcher);
+
+            // Narrow phase에서 수집된 접촉 쌍을 Enter/Stay/Exit로 분류
+            _contactCollector.Flush(out _enteredPairs, out _stayingPairs, out _exitedPairs);
         }
+
+        /// <summary>현재 스텝에서 새로 접촉이 시작된 쌍 (collidable ID 쌍).</summary>
+        public IReadOnlyList<(int IdA, int IdB)> EnteredPairs => _enteredPairs;
+
+        /// <summary>현재 스텝에서 접촉이 유지 중인 쌍.</summary>
+        public IReadOnlyList<(int IdA, int IdB)> StayingPairs => _stayingPairs;
+
+        /// <summary>현재 스텝에서 접촉이 끝난 쌍.</summary>
+        public IReadOnlyList<(int IdA, int IdB)> ExitedPairs => _exitedPairs;
 
         // --- Dynamic Body (shape 생성 + body 등록을 한번에) ---
 
@@ -691,6 +791,39 @@ namespace IronRose.Physics
             }
         }
 
+        /// <summary>ContactEventCollector의 정수 ID에서 UserData를 조회합니다.</summary>
+        public object? GetUserDataByContactId(int contactId)
+        {
+            if (contactId < 0)
+            {
+                // Static body (ID = -(staticHandle.Value + 1))
+                int staticVal = -(contactId + 1);
+                _staticUserData.TryGetValue(staticVal, out var data);
+                return data;
+            }
+            else
+            {
+                // Dynamic/Kinematic body (ID = bodyHandle.Value)
+                _bodyUserData.TryGetValue(contactId, out var data);
+                return data;
+            }
+        }
+
+        /// <summary>ContactEventCollector의 정수 ID에서 body의 linear velocity를 조회합니다.</summary>
+        public Vector3 GetVelocityByContactId(int contactId)
+        {
+            if (contactId < 0)
+            {
+                // Static body는 속도 0
+                return Vector3.Zero;
+            }
+            var handle = new BodyHandle(contactId);
+            if (!_simulation.Bodies.BodyExists(handle))
+                return Vector3.Zero;
+            var vel = _simulation.Bodies[handle].Velocity.Linear;
+            return vel;
+        }
+
         // --- Body/Static 제거 ---
 
         public void RemoveBody(BodyHandle handle)
@@ -702,7 +835,36 @@ namespace IronRose.Physics
                 EditorDebug.LogWarning($"[Physics3D] RemoveBody: body handle {handle.Value} does not exist, skipping");
                 return;
             }
+
+            // body 제거 전에, 이 body와 접촉 중인 다른 dynamic body들을 깨운다.
+            // sleep 상태의 body는 접촉 상대가 사라져도 자동으로 깨어나지 않으므로,
+            // 지지 구조물이 파괴될 때 위의 블록들이 공중에 떠 있는 문제를 방지한다.
+            WakeContactingBodies(handle.Value);
+
             _simulation.Bodies.Remove(handle);
+        }
+
+        /// <summary>
+        /// 지정된 collidable ID와 접촉 중인 모든 dynamic body를 깨웁니다.
+        /// body 제거 전에 호출하여, sleep 중인 인접 body들이 중력에 반응하도록 합니다.
+        /// </summary>
+        private void WakeContactingBodies(int collidableId)
+        {
+            var contactingIds = _contactCollector.GetContactingIds(collidableId);
+            foreach (var id in contactingIds)
+            {
+                // 양수 ID = dynamic body handle, 음수 ID = static handle (깨울 필요 없음)
+                if (id >= 0)
+                {
+                    var bodyHandle = new BodyHandle(id);
+                    if (_simulation.Bodies.BodyExists(bodyHandle))
+                    {
+                        var bodyRef = _simulation.Bodies[bodyHandle];
+                        if (!bodyRef.Awake)
+                            _simulation.Awakener.AwakenBody(bodyHandle);
+                    }
+                }
+            }
         }
 
         public void RemoveStatic(StaticHandle handle)
@@ -719,10 +881,14 @@ namespace IronRose.Physics
             _noGravityBodies.Clear();
             _bodyUserData.Clear();
             _staticUserData.Clear();
+            _contactCollector.Clear();
+            _enteredPairs.Clear();
+            _stayingPairs.Clear();
+            _exitedPairs.Clear();
             _stepCount = 0;
             _simulation = Simulation.Create(
                 _bufferPool,
-                new NarrowPhaseCallbacks(),
+                new NarrowPhaseCallbacks(_contactCollector),
                 new PoseIntegratorCallbacks(_gravity, _noGravityBodies),
                 new SolveDescription(8, 1)
             );
@@ -740,6 +906,13 @@ namespace IronRose.Physics
 
     internal struct NarrowPhaseCallbacks : INarrowPhaseCallbacks
     {
+        private ContactEventCollector _collector;
+
+        public NarrowPhaseCallbacks(ContactEventCollector collector)
+        {
+            _collector = collector;
+        }
+
         public void Initialize(Simulation simulation) { }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -762,6 +935,13 @@ namespace IronRose.Physics
             pairMaterial.FrictionCoefficient = 0.5f;
             pairMaterial.MaximumRecoveryVelocity = 2f;
             pairMaterial.SpringSettings = new SpringSettings(30, 1);
+
+            // 실제 접촉(depth > 0인 접점이 하나라도 있으면)이 있을 때만 이벤트로 기록
+            if (manifold.Count > 0)
+            {
+                _collector.RecordContact(pair.A, pair.B);
+            }
+
             return true;
         }
 

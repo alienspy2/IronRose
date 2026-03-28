@@ -18,8 +18,11 @@
 //          (Kinematic RB + CharacterController pose 동기화) → Step → PullPhysics.
 //          CharacterController + Rigidbody 조합 시 경고 로그 출력.
 // ------------------------------------------------------------
+using System;
+using System.Collections.Generic;
 using IronRose.Physics;
 using RoseEngine;
+using SysVector3 = System.Numerics.Vector3;
 
 namespace IronRose.Engine
 {
@@ -69,6 +72,9 @@ namespace IronRose.Engine
             // 2. 물리 시뮬레이션 스텝
             _world3D.Step(fixedDeltaTime);
             _world2D.Step(fixedDeltaTime);
+
+            // 2.5. 충돌 이벤트 콜백 디스패치 (Step에서 수집된 Enter/Stay/Exit 쌍)
+            DispatchCollisionEvents3D();
 
             // 3. Dynamic: Physics → Transform 동기화
             PullPhysicsToTransforms();
@@ -148,6 +154,107 @@ namespace IronRose.Engine
                 if (col is CharacterController cc && cc._kinematicHandle != null && cc._staticRegistered)
                 {
                     cc.SyncStaticPose(this);
+                }
+            }
+        }
+
+        /// <summary>3D 충돌 이벤트를 MonoBehaviour 콜백으로 디스패치합니다.</summary>
+        private void DispatchCollisionEvents3D()
+        {
+            // OnCollisionEnter
+            foreach (var (idA, idB) in _world3D.EnteredPairs)
+            {
+                DispatchCollisionCallback3D(idA, idB, CollisionEventType.Enter);
+            }
+
+            // OnCollisionStay
+            foreach (var (idA, idB) in _world3D.StayingPairs)
+            {
+                DispatchCollisionCallback3D(idA, idB, CollisionEventType.Stay);
+            }
+
+            // OnCollisionExit
+            foreach (var (idA, idB) in _world3D.ExitedPairs)
+            {
+                DispatchCollisionCallback3D(idA, idB, CollisionEventType.Exit);
+            }
+        }
+
+        private enum CollisionEventType { Enter, Stay, Exit }
+
+        private void DispatchCollisionCallback3D(int idA, int idB, CollisionEventType eventType)
+        {
+            var userDataA = _world3D.GetUserDataByContactId(idA);
+            var userDataB = _world3D.GetUserDataByContactId(idB);
+
+            // UserData에서 GameObject를 찾음 (Rigidbody 또는 Collider)
+            var goA = ResolveGameObject(userDataA);
+            var goB = ResolveGameObject(userDataB);
+
+            if (goA == null || goB == null) return;
+
+            // 상대 속도 계산
+            var velA = _world3D.GetVelocityByContactId(idA);
+            var velB = _world3D.GetVelocityByContactId(idB);
+            var relVel = velA - velB;
+            var roseRelVel = new Vector3(relVel.X, relVel.Y, relVel.Z);
+
+            // A → B에 대한 충돌 정보
+            var collisionForA = new Collision
+            {
+                gameObject = goB,
+                rigidbody = goB.GetComponent<Rigidbody>()!,
+                collider = goB.GetComponent<Collider>()!,
+                relativeVelocity = roseRelVel,
+            };
+
+            // B → A에 대한 충돌 정보
+            var collisionForB = new Collision
+            {
+                gameObject = goA,
+                rigidbody = goA.GetComponent<Rigidbody>()!,
+                collider = goA.GetComponent<Collider>()!,
+                relativeVelocity = roseRelVel,
+            };
+
+            FireCollisionOnGameObject(goA, collisionForA, eventType);
+            FireCollisionOnGameObject(goB, collisionForB, eventType);
+        }
+
+        private static GameObject? ResolveGameObject(object? userData)
+        {
+            if (userData is Rigidbody rb && !rb._isDestroyed)
+                return rb.gameObject;
+            if (userData is Collider col && !col._isDestroyed)
+                return col.gameObject;
+            return null;
+        }
+
+        private static void FireCollisionOnGameObject(GameObject go, Collision collision, CollisionEventType eventType)
+        {
+            if (go._isDestroyed || !go.activeInHierarchy) return;
+
+            foreach (var mb in go.GetComponents<MonoBehaviour>())
+            {
+                if (!mb.enabled || !mb._hasAwoken || mb._isDestroyed) continue;
+                try
+                {
+                    switch (eventType)
+                    {
+                        case CollisionEventType.Enter:
+                            mb.OnCollisionEnter(collision);
+                            break;
+                        case CollisionEventType.Stay:
+                            mb.OnCollisionStay(collision);
+                            break;
+                        case CollisionEventType.Exit:
+                            mb.OnCollisionExit(collision);
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[Physics] Exception in {eventType} of {mb.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
                 }
             }
         }
