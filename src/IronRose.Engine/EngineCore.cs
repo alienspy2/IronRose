@@ -299,7 +299,7 @@ namespace IronRose.Engine
             // 에셋 파일 변경 감지 처리 (Play 상태와 무관)
             _assetDatabase?.ProcessFileChanges();
 
-            // 핫 리로드 요청 처리 (Play 상태와 무관 — 에디터에서도 타입 등록 필요)
+            // 핫 리로드 요청 처리 (Play 중에는 보류, Stop 후 수행)
             _liveCodeManager?.ProcessReload();
 
             // 게임 로직은 Playing 상태에서만 실행
@@ -672,6 +672,11 @@ namespace IronRose.Engine
             }
 
             EnsureDefaultRendererProfile();
+
+            // Play 모드 종료 시 보류 중인 캐시 저장 수행
+            var assetDb = _assetDatabase;
+            if (assetDb != null)
+                Editor.EditorPlayMode.OnAfterStopPlayMode += () => assetDb.FlushPendingCacheOps();
         }
 
         private void EnsureDefaultRendererProfile()
@@ -779,6 +784,10 @@ namespace IronRose.Engine
                 _liveCodeManager.OnAfterReload = _pendingOnAfterReload;
                 _pendingOnAfterReload = null;
             }
+
+            // Play 모드 종료 시 보류 중인 핫 리로드 수행
+            var mgr = _liveCodeManager;
+            Editor.EditorPlayMode.OnAfterStopPlayMode += () => mgr.FlushPendingReload();
         }
 
         private void InitGpuCompressor()

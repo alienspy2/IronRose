@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using IronRose.Engine;
+using IronRose.Engine.Editor;
 using RoseEngine;
 using Tomlyn.Model;
 
@@ -52,6 +54,10 @@ namespace IronRose.AssetPipeline
         // Reimport queue filled by OnSaved when async reimport is busy
         private readonly Queue<string> _pendingReimports = new();
         public bool ProjectDirty { get; set; }
+
+        // ─── Play-mode deferred cache ops ───────────────────────
+        private readonly ConcurrentQueue<(string path, Texture2D tex, RoseMetadata meta)> _pendingCacheTextures = new();
+        private readonly ConcurrentQueue<(string path, MeshImportResult result, RoseMetadata meta)> _pendingCacheMeshes = new();
 
         /// <summary>true면 Reimport, Scan, FileWatcher 등 상세 로그를 출력한다.</summary>
         public static bool VerboseLogging { get; set; }
@@ -402,6 +408,46 @@ namespace IronRose.AssetPipeline
             return uncached.ToArray();
         }
 
+        // ─── Play-mode deferred cache helpers ───────────────────
+
+        private void StoreCacheOrDefer(string path, Texture2D tex, RoseMetadata meta)
+        {
+            if (EditorPlayMode.IsInPlaySession)
+            {
+                _pendingCacheTextures.Enqueue((path, tex, meta));
+                return;
+            }
+            _roseCache.StoreTexture(path, tex, meta);
+        }
+
+        private void StoreCacheOrDefer(string path, MeshImportResult result, RoseMetadata meta)
+        {
+            if (EditorPlayMode.IsInPlaySession)
+            {
+                _pendingCacheMeshes.Enqueue((path, result, meta));
+                return;
+            }
+            _roseCache.StoreMesh(path, result, meta);
+        }
+
+        /// <summary>플레이모드 종료 후, 보류 중인 캐시 저장을 일괄 수행한다.</summary>
+        public void FlushPendingCacheOps()
+        {
+            int count = 0;
+            while (_pendingCacheTextures.TryDequeue(out var item))
+            {
+                _roseCache.StoreTexture(item.path, item.tex, item.meta);
+                count++;
+            }
+            while (_pendingCacheMeshes.TryDequeue(out var item))
+            {
+                _roseCache.StoreMesh(item.path, item.result, item.meta);
+                count++;
+            }
+            if (count > 0)
+                EditorDebug.Log($"[AssetDatabase] Flushed {count} deferred cache operations after Play stop");
+        }
+
         /// <summary>Import and write disk cache for a single asset without keeping it in memory.</summary>
         public void EnsureDiskCached(string path)
         {
@@ -418,14 +464,14 @@ namespace IronRose.AssetPipeline
                     {
                         // .rose 저장 후 캐시 저장 (타임스탬프 일관성 보장)
                         RegisterSubAssets(path, meshResult, meta);
-                        _roseCache.StoreMesh(path, meshResult, meta);
+                        StoreCacheOrDefer(path, meshResult, meta);
                     }
                     break;
                 case "TextureImporter":
                     var tex = _textureImporter.Import(path, meta);
                     if (tex != null)
                     {
-                        _roseCache.StoreTexture(path, tex, meta);
+                        StoreCacheOrDefer(path, tex, meta);
                         if (IsSpriteTexture(meta))
                         {
                             var sr = BuildSpriteImportResult(tex, meta);
@@ -469,11 +515,11 @@ namespace IronRose.AssetPipeline
                 {
                     case "MeshImporter":
                         if (asset is MeshImportResult meshResult)
-                            _roseCache.StoreMesh(path, meshResult, meta);
+                            StoreCacheOrDefer(path, meshResult, meta);
                         break;
                     case "TextureImporter":
                         if (asset is Texture2D tex)
-                            _roseCache.StoreTexture(path, tex, meta);
+                            StoreCacheOrDefer(path, tex, meta);
                         break;
                 }
             }
@@ -519,7 +565,7 @@ namespace IronRose.AssetPipeline
                     if (newResult != null)
                     {
                         RegisterSubAssets(path, newResult, meta);
-                        _roseCache.StoreMesh(path, newResult, meta);
+                        StoreCacheOrDefer(path, newResult, meta);
                         _loadedAssets[path] = newResult;
                         CacheSubAssets(path, newResult, meta);
                         ReplaceMeshInScene(newResult);
@@ -532,7 +578,7 @@ namespace IronRose.AssetPipeline
                     var newTex = _textureImporter.Import(path, meta);
                     if (newTex != null)
                     {
-                        _roseCache.StoreTexture(path, newTex, meta);
+                        StoreCacheOrDefer(path, newTex, meta);
                         var oldTex = oldAsset is SpriteImportResult oldSpr ? oldSpr.Texture : oldAsset as Texture2D;
                         if (IsSpriteTexture(meta))
                         {
@@ -730,7 +776,7 @@ namespace IronRose.AssetPipeline
                         if (result != null)
                         {
                             RegisterSubAssets(path, result, meta);
-                            _roseCache.StoreMesh(path, result, meta);
+                            StoreCacheOrDefer(path, result, meta);
                         }
                         _reimportMeshResult = result;
                         break;
@@ -739,7 +785,7 @@ namespace IronRose.AssetPipeline
                     {
                         var tex = _textureImporter.Import(path, meta);
                         if (tex != null)
-                            _roseCache.StoreTexture(path, tex, meta);
+                            StoreCacheOrDefer(path, tex, meta);
                         // Sprite 서브 에셋 등록 (IO만 — bg 스레드 안전)
                         if (tex != null && IsSpriteTexture(meta))
                         {

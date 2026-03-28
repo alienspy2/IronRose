@@ -57,10 +57,11 @@ using System.Threading;
 using IronRose.AssetPipeline;
 using IronRose.Engine.Editor;
 using RoseEngine;
+using Tomlyn.Model;
 
 namespace IronRose.Engine.Cli
 {
-    public class CliCommandDispatcher
+    public partial class CliCommandDispatcher
     {
         private readonly Dictionary<string, Func<string[], string>> _handlers = new();
         private readonly ConcurrentQueue<MainThreadTask> _mainThreadQueue = new();
@@ -2132,6 +2133,269 @@ namespace IronRose.Engine.Cli
                     liveCodeDemoCount = liveCodeTypes.Length
                 });
             };
+
+            // ================================================================
+            // sprite.* -- 스프라이트 임포트 설정 조회/수정
+            // ================================================================
+
+            // ----------------------------------------------------------------
+            // sprite.info -- 텍스처/스프라이트 임포트 설정 조회
+            // ----------------------------------------------------------------
+            _handlers["sprite.info"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: sprite.info <assetPath|guid>");
+
+                var assetRef = args[0];
+                return ExecuteOnMainThread(() =>
+                {
+                    var path = ResolveAssetPath(assetRef);
+                    if (path == null)
+                        return JsonError($"Asset not found: {assetRef}");
+
+                    var meta = RoseMetadata.LoadOrCreate(path);
+                    var imp = meta.importer;
+                    var importerType = imp.TryGetValue("type", out var t) ? t?.ToString() : "";
+                    if (importerType != "TextureImporter")
+                        return JsonError($"Not a texture asset: {path} (importer: {importerType})");
+
+                    var textureType = imp.TryGetValue("texture_type", out var tt) ? tt?.ToString() : "Color";
+                    var isSprite = textureType == "Sprite";
+
+                    var info = new Dictionary<string, object?>
+                    {
+                        ["path"] = path,
+                        ["guid"] = meta.guid,
+                        ["textureType"] = textureType,
+                        ["isSprite"] = isSprite,
+                        ["maxSize"] = imp.TryGetValue("max_size", out var ms) ? ms : null,
+                        ["filterMode"] = imp.TryGetValue("filter_mode", out var fm) ? fm?.ToString() : null,
+                        ["wrapMode"] = imp.TryGetValue("wrap_mode", out var wm) ? wm?.ToString() : null,
+                        ["srgb"] = imp.TryGetValue("srgb", out var sr) ? sr : null,
+                    };
+
+                    if (isSprite)
+                    {
+                        info["spriteMode"] = imp.TryGetValue("sprite_mode", out var sm) ? sm?.ToString() : "Single";
+                        info["pixelsPerUnit"] = imp.TryGetValue("pixels_per_unit", out var ppu) ? ppu : 100.0;
+                        info["pivot"] = FormatTomlArray(imp, "pivot", "0.5, 0.5");
+                        info["border"] = FormatTomlArray(imp, "border", "0, 0, 0, 0");
+
+                        // Multiple 모드 슬라이스 목록
+                        var slices = new List<object>();
+                        foreach (var sub in meta.subAssets.Where(s => s.type == "Sprite"))
+                        {
+                            var sliceInfo = new Dictionary<string, object?> { ["name"] = sub.name, ["guid"] = sub.guid };
+                            var sliceKey = $"sprite_{sub.name}";
+                            if (imp.TryGetValue(sliceKey, out var sv) && sv is TomlTable st)
+                            {
+                                sliceInfo["rect"] = FormatTomlArrayFromTable(st, "rect", "0, 0, 0, 0");
+                                sliceInfo["pivot"] = FormatTomlArrayFromTable(st, "pivot", "0.5, 0.5");
+                                sliceInfo["border"] = FormatTomlArrayFromTable(st, "border", "0, 0, 0, 0");
+                            }
+                            slices.Add(sliceInfo);
+                        }
+                        if (slices.Count > 0)
+                            info["slices"] = slices;
+                    }
+
+                    return JsonOk(info);
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // sprite.set_type -- 텍스처를 스프라이트로 전환 (또는 반대)
+            // ----------------------------------------------------------------
+            _handlers["sprite.set_type"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: sprite.set_type <assetPath|guid> <Sprite|Color>");
+
+                var assetRef = args[0];
+                var newType = args[1];
+                if (newType != "Sprite" && newType != "Color")
+                    return JsonError("texture_type must be 'Sprite' or 'Color'");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var path = ResolveAssetPath(assetRef);
+                    if (path == null)
+                        return JsonError($"Asset not found: {assetRef}");
+
+                    var meta = RoseMetadata.LoadOrCreate(path);
+                    if (!IsTextureImporter(meta))
+                        return JsonError($"Not a texture asset: {path}");
+
+                    meta.importer["texture_type"] = newType;
+                    if (newType == "Sprite")
+                    {
+                        // 기본 스프라이트 설정 추가
+                        if (!meta.importer.ContainsKey("sprite_mode"))
+                            meta.importer["sprite_mode"] = "Single";
+                        if (!meta.importer.ContainsKey("pixels_per_unit"))
+                            meta.importer["pixels_per_unit"] = 100.0;
+                        // 스프라이트는 mipmap, Clamp 권장
+                        meta.importer["generate_mipmaps"] = false;
+                        meta.importer["wrap_mode"] = "Clamp";
+                        meta.importer["filter_mode"] = "Bilinear";
+                    }
+                    meta.Save(path + ".rose");
+                    ReimportAsset(path);
+                    return JsonOk(new { path, textureType = newType });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // sprite.set_border -- 9-slice border 설정 (left,bottom,right,top)
+            // ----------------------------------------------------------------
+            _handlers["sprite.set_border"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: sprite.set_border <assetPath|guid> <left,bottom,right,top>");
+
+                var assetRef = args[0];
+                return ExecuteOnMainThread(() =>
+                {
+                    var path = ResolveAssetPath(assetRef);
+                    if (path == null)
+                        return JsonError($"Asset not found: {assetRef}");
+
+                    var meta = RoseMetadata.LoadOrCreate(path);
+                    if (!IsSpriteAsset(meta))
+                        return JsonError($"Not a sprite asset: {path}. Use 'sprite.set_type' first.");
+
+                    var border = ParseFloatArray(args[1], 4);
+                    if (border == null)
+                        return JsonError("border must be 4 floats: left,bottom,right,top");
+
+                    meta.importer["border"] = FloatsToTomlArray(border);
+                    meta.Save(path + ".rose");
+                    ReimportAsset(path);
+                    return JsonOk(new { path, border = FormatFloats(border) });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // sprite.set_pivot -- 피벗 설정 (x,y, 0~1 범위)
+            // ----------------------------------------------------------------
+            _handlers["sprite.set_pivot"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: sprite.set_pivot <assetPath|guid> <x,y>");
+
+                var assetRef = args[0];
+                return ExecuteOnMainThread(() =>
+                {
+                    var path = ResolveAssetPath(assetRef);
+                    if (path == null)
+                        return JsonError($"Asset not found: {assetRef}");
+
+                    var meta = RoseMetadata.LoadOrCreate(path);
+                    if (!IsSpriteAsset(meta))
+                        return JsonError($"Not a sprite asset: {path}. Use 'sprite.set_type' first.");
+
+                    var pivot = ParseFloatArray(args[1], 2);
+                    if (pivot == null)
+                        return JsonError("pivot must be 2 floats: x,y (0~1 range)");
+
+                    meta.importer["pivot"] = FloatsToTomlArray(pivot);
+                    meta.Save(path + ".rose");
+                    ReimportAsset(path);
+                    return JsonOk(new { path, pivot = FormatFloats(pivot) });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // sprite.set_ppu -- Pixels Per Unit 설정
+            // ----------------------------------------------------------------
+            _handlers["sprite.set_ppu"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: sprite.set_ppu <assetPath|guid> <value>");
+
+                var assetRef = args[0];
+                if (!float.TryParse(args[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var ppu) || ppu <= 0)
+                    return JsonError("pixels_per_unit must be a positive number");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var path = ResolveAssetPath(assetRef);
+                    if (path == null)
+                        return JsonError($"Asset not found: {assetRef}");
+
+                    var meta = RoseMetadata.LoadOrCreate(path);
+                    if (!IsSpriteAsset(meta))
+                        return JsonError($"Not a sprite asset: {path}. Use 'sprite.set_type' first.");
+
+                    meta.importer["pixels_per_unit"] = (double)ppu;
+                    meta.Save(path + ".rose");
+                    ReimportAsset(path);
+                    return JsonOk(new { path, pixelsPerUnit = ppu });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // sprite.set_mode -- 스프라이트 모드 전환 (Single/Multiple)
+            // ----------------------------------------------------------------
+            _handlers["sprite.set_mode"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: sprite.set_mode <assetPath|guid> <Single|Multiple>");
+
+                var assetRef = args[0];
+                var mode = args[1];
+                if (mode != "Single" && mode != "Multiple")
+                    return JsonError("sprite_mode must be 'Single' or 'Multiple'");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var path = ResolveAssetPath(assetRef);
+                    if (path == null)
+                        return JsonError($"Asset not found: {assetRef}");
+
+                    var meta = RoseMetadata.LoadOrCreate(path);
+                    if (!IsSpriteAsset(meta))
+                        return JsonError($"Not a sprite asset: {path}. Use 'sprite.set_type' first.");
+
+                    meta.importer["sprite_mode"] = mode;
+                    meta.Save(path + ".rose");
+                    ReimportAsset(path);
+                    return JsonOk(new { path, spriteMode = mode });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // sprite.set_filter -- 필터 모드 설정 (Point/Bilinear/Trilinear)
+            // ----------------------------------------------------------------
+            _handlers["sprite.set_filter"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: sprite.set_filter <assetPath|guid> <Point|Bilinear|Trilinear>");
+
+                var assetRef = args[0];
+                var filter = args[1];
+                if (filter != "Point" && filter != "Bilinear" && filter != "Trilinear")
+                    return JsonError("filter_mode must be 'Point', 'Bilinear', or 'Trilinear'");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var path = ResolveAssetPath(assetRef);
+                    if (path == null)
+                        return JsonError($"Asset not found: {assetRef}");
+
+                    var meta = RoseMetadata.LoadOrCreate(path);
+                    if (!IsTextureImporter(meta))
+                        return JsonError($"Not a texture asset: {path}");
+
+                    meta.importer["filter_mode"] = filter;
+                    meta.Save(path + ".rose");
+                    ReimportAsset(path);
+                    return JsonOk(new { path, filterMode = filter });
+                });
+            };
+
+            // UI 명령 핸들러 등록 (partial class: CliCommandDispatcher.UI.cs)
+            RegisterUIHandlers();
         }
 
         private string ExecuteOnMainThread(Func<string> action)
@@ -2348,6 +2612,91 @@ namespace IronRose.Engine.Cli
         private static string JsonError(string message)
         {
             return JsonSerializer.Serialize(new { ok = false, error = message }, _jsonOptions);
+        }
+
+        // ================================================================
+        // Sprite 헬퍼 메서드
+        // ================================================================
+
+        /// <summary>에셋 경로 또는 GUID를 실제 파일 경로로 해석한다.</summary>
+        private static string? ResolveAssetPath(string assetRef)
+        {
+            // 파일 경로로 직접 존재하면 그대로
+            if (File.Exists(assetRef))
+                return assetRef;
+
+            // GUID로 해석 시도
+            var db = Resources.GetAssetDatabase();
+            if (db != null)
+            {
+                var path = db.GetPathFromGuid(assetRef);
+                if (path != null && File.Exists(path))
+                    return path;
+            }
+
+            return null;
+        }
+
+        private static bool IsTextureImporter(RoseMetadata meta)
+        {
+            return meta.importer.TryGetValue("type", out var t) && t?.ToString() == "TextureImporter";
+        }
+
+        private static bool IsSpriteAsset(RoseMetadata meta)
+        {
+            return IsTextureImporter(meta)
+                   && meta.importer.TryGetValue("texture_type", out var tt)
+                   && tt?.ToString() == "Sprite";
+        }
+
+        /// <summary>에셋을 Reimport한다 (캐시 무효화 후 재로드).</summary>
+        private static void ReimportAsset(string path)
+        {
+            var db = Resources.GetAssetDatabase();
+            db?.Reimport(path);
+        }
+
+        /// <summary>콤마로 구분된 float 배열을 파싱한다.</summary>
+        private static float[]? ParseFloatArray(string raw, int expectedCount)
+        {
+            var cleaned = raw.Trim('(', ')', ' ');
+            var parts = cleaned.Split(',');
+            if (parts.Length != expectedCount) return null;
+            var result = new float[expectedCount];
+            for (int i = 0; i < expectedCount; i++)
+            {
+                if (!float.TryParse(parts[i].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out result[i]))
+                    return null;
+            }
+            return result;
+        }
+
+        private static TomlArray FloatsToTomlArray(float[] values)
+        {
+            var arr = new TomlArray();
+            foreach (var v in values)
+                arr.Add((double)v);
+            return arr;
+        }
+
+        private static string FormatFloats(float[] values)
+        {
+            return string.Join(", ", values.Select(v => v.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        /// <summary>TomlTable의 importer에서 TomlArray 필드를 문자열로 포맷한다.</summary>
+        private static string FormatTomlArray(TomlTable importer, string key, string fallback)
+        {
+            if (importer.TryGetValue(key, out var val) && val is TomlArray arr)
+                return string.Join(", ", arr.Select(v => Convert.ToSingle(v).ToString(CultureInfo.InvariantCulture)));
+            return fallback;
+        }
+
+        private static string FormatTomlArrayFromTable(TomlTable table, string key, string fallback)
+        {
+            if (table.TryGetValue(key, out var val) && val is TomlArray arr)
+                return string.Join(", ", arr.Select(v => Convert.ToSingle(v).ToString(CultureInfo.InvariantCulture)));
+            return fallback;
         }
     }
 }

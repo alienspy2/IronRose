@@ -44,7 +44,14 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 - Linux 실제 경로: `/tmp/CoreFxPipe_ironrose-cli-{name}` (.NET 런타임 규칙, Unix Domain Socket)
 - Windows 실제 경로: `\\.\pipe\ironrose-cli-{name}`
 
-## 지원 명령 목록 (Phase 46d-w4 완료)
+## 구조 (추가)
+
+### partial class 분리
+- `CliCommandDispatcher.cs` -- 기존 핸들러 + 핵심 인프라 (Dispatch, ProcessMainThreadQueue, 헬퍼)
+- `CliCommandDispatcher.UI.cs` -- UI 관련 86개 핸들러 (RegisterUIHandlers()). partial class로 분리.
+  - 헬퍼: ParseVector2, FormatVector2, ParseVector4, FormatVector4, FindParentCanvas, BuildUITreeNode, CollectUIElements, ResolveSprite, CollectRectsForOverlap, RectsOverlap, ApplyThemeColorRecursive, ApplyFontSizeRecursive
+
+## 지원 명령 목록 (UI 명령 추가 완료)
 
 | 명령 | 실행 위치 | 설명 |
 |------|-----------|------|
@@ -105,6 +112,109 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 | `light.set_range` | 메인 스레드 | 라이트 범위 변경 |
 | `light.set_shadows` | 메인 스레드 | 그림자 on/off |
 | `render.set_skybox_exposure` | 메인 스레드 | 스카이박스 노출 변경 |
+| **UI 편의 생성** | | |
+| `ui.create_canvas` | 메인 스레드 | Canvas + RectTransform GO 생성 |
+| `ui.create_text` | 메인 스레드 | UIText GO 생성 (부모 하위) |
+| `ui.create_image` | 메인 스레드 | UIImage GO 생성 |
+| `ui.create_panel` | 메인 스레드 | UIPanel GO 생성 (색상 옵션) |
+| `ui.create_button` | 메인 스레드 | UIButton + UIImage + Label(UIText) 복합 생성 |
+| `ui.create_toggle` | 메인 스레드 | UIToggle GO 생성 |
+| `ui.create_slider` | 메인 스레드 | UISlider GO 생성 |
+| `ui.create_input` | 메인 스레드 | UIInputField GO 생성 |
+| `ui.create_layout` | 메인 스레드 | UILayoutGroup GO 생성 |
+| `ui.create_scroll` | 메인 스레드 | UIScrollView + Content 자식 GO 생성 |
+| **UI 트리/조회** | | |
+| `ui.tree` | 메인 스레드 | Canvas UI 계층 트리 (RectTransform 정보 포함) |
+| `ui.list` | 메인 스레드 | UI 요소 flat 목록 |
+| `ui.find` | 메인 스레드 | UI 컴포넌트가 있는 GO 이름 검색 |
+| `ui.canvas.list` | 메인 스레드 | 모든 Canvas 목록 |
+| **RectTransform** | | |
+| `ui.rect.get` | 메인 스레드 | RectTransform 전체 정보 |
+| `ui.rect.set_anchors` | 메인 스레드 | anchorMin, anchorMax 설정 |
+| `ui.rect.set_position` | 메인 스레드 | anchoredPosition 설정 |
+| `ui.rect.set_size` | 메인 스레드 | sizeDelta 설정 |
+| `ui.rect.set_pivot` | 메인 스레드 | pivot 설정 |
+| `ui.rect.set_offsets` | 메인 스레드 | offsetMin, offsetMax 설정 |
+| `ui.rect.set_preset` | 메인 스레드 | AnchorPreset 적용 |
+| `ui.rect.get_world_rect` | 메인 스레드 | lastScreenRect 조회 |
+| **Canvas** | | |
+| `ui.canvas.info` | 메인 스레드 | Canvas 상세 정보 |
+| `ui.canvas.set_render_mode` | 메인 스레드 | renderMode 변경 |
+| `ui.canvas.set_sorting_order` | 메인 스레드 | sortingOrder 변경 |
+| `ui.canvas.set_reference_resolution` | 메인 스레드 | referenceResolution 변경 |
+| `ui.canvas.set_scale_mode` | 메인 스레드 | scaleMode 변경 |
+| `ui.canvas.set_match` | 메인 스레드 | matchWidthOrHeight 변경 |
+| **UIText** | | |
+| `ui.text.info` | 메인 스레드 | UIText 정보 |
+| `ui.text.set_text` | 메인 스레드 | 텍스트 내용 변경 |
+| `ui.text.set_font_size` | 메인 스레드 | fontSize 변경 |
+| `ui.text.set_color` | 메인 스레드 | 색상 변경 |
+| `ui.text.set_alignment` | 메인 스레드 | alignment 변경 |
+| `ui.text.set_overflow` | 메인 스레드 | overflow 변경 |
+| **UIImage** | | |
+| `ui.image.info` | 메인 스레드 | UIImage 정보 |
+| `ui.image.set_color` | 메인 스레드 | 색상 변경 |
+| `ui.image.set_type` | 메인 스레드 | imageType 변경 |
+| `ui.image.set_sprite` | 메인 스레드 | 스프라이트 변경 (GUID 또는 경로) |
+| `ui.image.set_preserve_aspect` | 메인 스레드 | preserveAspect 변경 |
+| **UIPanel** | | |
+| `ui.panel.info` | 메인 스레드 | UIPanel 정보 |
+| `ui.panel.set_color` | 메인 스레드 | 색상 변경 |
+| `ui.panel.set_sprite` | 메인 스레드 | 스프라이트 변경 |
+| `ui.panel.set_type` | 메인 스레드 | imageType 변경 |
+| **UIButton** | | |
+| `ui.button.info` | 메인 스레드 | UIButton 정보 |
+| `ui.button.set_interactable` | 메인 스레드 | interactable 변경 |
+| `ui.button.set_colors` | 메인 스레드 | 4색 일괄 설정 |
+| `ui.button.set_transition` | 메인 스레드 | transition 변경 |
+| **UIToggle** | | |
+| `ui.toggle.info` | 메인 스레드 | UIToggle 정보 |
+| `ui.toggle.set_on` | 메인 스레드 | isOn 변경 |
+| `ui.toggle.set_interactable` | 메인 스레드 | interactable 변경 |
+| `ui.toggle.set_colors` | 메인 스레드 | 배경/체크마크 색상 설정 |
+| **UISlider** | | |
+| `ui.slider.info` | 메인 스레드 | UISlider 정보 |
+| `ui.slider.set_value` | 메인 스레드 | value 변경 |
+| `ui.slider.set_range` | 메인 스레드 | min/max 설정 |
+| `ui.slider.set_direction` | 메인 스레드 | direction 변경 |
+| `ui.slider.set_whole_numbers` | 메인 스레드 | wholeNumbers 변경 |
+| `ui.slider.set_interactable` | 메인 스레드 | interactable 변경 |
+| `ui.slider.set_colors` | 메인 스레드 | 3색 일괄 설정 |
+| **UIInputField** | | |
+| `ui.input.info` | 메인 스레드 | UIInputField 정보 |
+| `ui.input.set_text` | 메인 스레드 | text 변경 |
+| `ui.input.set_placeholder` | 메인 스레드 | placeholder 변경 |
+| `ui.input.set_font_size` | 메인 스레드 | fontSize 변경 |
+| `ui.input.set_max_length` | 메인 스레드 | maxLength 변경 |
+| `ui.input.set_content_type` | 메인 스레드 | contentType 변경 |
+| `ui.input.set_interactable` | 메인 스레드 | interactable 변경 |
+| `ui.input.set_read_only` | 메인 스레드 | readOnly 변경 |
+| **UILayoutGroup** | | |
+| `ui.layout.info` | 메인 스레드 | UILayoutGroup 정보 |
+| `ui.layout.set_direction` | 메인 스레드 | direction 변경 |
+| `ui.layout.set_spacing` | 메인 스레드 | spacing 변경 |
+| `ui.layout.set_padding` | 메인 스레드 | padding 변경 (Vector4) |
+| `ui.layout.set_child_alignment` | 메인 스레드 | childAlignment 변경 |
+| `ui.layout.set_force_expand` | 메인 스레드 | forceExpand width/height 설정 |
+| **UIScrollView** | | |
+| `ui.scroll.info` | 메인 스레드 | UIScrollView 정보 |
+| `ui.scroll.set_scroll_position` | 메인 스레드 | scrollPosition 변경 |
+| `ui.scroll.set_content_size` | 메인 스레드 | contentSize 변경 |
+| `ui.scroll.set_direction` | 메인 스레드 | horizontal/vertical 설정 |
+| `ui.scroll.set_sensitivity` | 메인 스레드 | scrollSensitivity 변경 |
+| **디버깅** | | |
+| `ui.debug.rects` | 메인 스레드 | CanvasRenderer.DebugDrawRects 토글 |
+| `ui.debug.overlap` | 메인 스레드 | 겹치는 UI 요소 검출 |
+| `ui.debug.hit_test` | 메인 스레드 | 스크린 좌표 hit test |
+| **정렬/분배** | | |
+| `ui.align` | 메인 스레드 | UI 요소 정렬 (left/right/top/bottom/center) |
+| `ui.distribute` | 메인 스레드 | UI 요소 균등 분배 |
+| **테마** | | |
+| `ui.theme.apply_color` | 메인 스레드 | Canvas 하위 색상 일괄 적용 |
+| `ui.theme.apply_font_size` | 메인 스레드 | Canvas 하위 폰트 크기 일괄 적용 |
+| **UI 프리팹** | | |
+| `ui.prefab.save` | 메인 스레드 | UI GO 프리팹 저장 |
+| `ui.prefab.instantiate` | 메인 스레드 | UI 프리팹 인스턴스화 (부모 즉시 설정) |
 
 ### go.set_field 지원 타입
 - float, int, bool, string, Vector3, Color, enum
@@ -125,6 +235,10 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 - `editor.screenshot`은 비동기 패턴 사용: CLI 핸들러가 `_pendingScreenshotPath`에 경로 저장 -> EngineCore.Update()에서 소비 -> `GraphicsManager.RequestScreenshot()` 호출 -> 다음 EndFrame에서 캡처. 응답은 즉시 반환되지만 파일은 다음 프레임 이후 생성
 - `editor.copy`는 `EditorSelection.Select(id)` 후 `EditorClipboard.CopyGameObjects(cut: false)` 호출 (선택 상태 변경 사이드 이펙트 있음)
 - `scene.clear`는 `SceneManager.Clear()` 호출. `scene.new`와 달리 새 Scene 객체를 만들지 않고 기존 씬의 name/path 유지
+- `ui.debug.overlap`은 lastScreenRect 기반이므로, CanvasRenderer.RenderAll()이 한 번 이상 호출된 후에만 유효한 결과 반환
+- `ui.image.set_sprite`, `ui.panel.set_sprite`는 GUID 또는 에셋 경로 모두 지원. AssetDatabase.LoadByGuid/Load 사용
+- `ui.create_button`은 Button GO(UIButton+UIImage) + Label 자식(UIText, StretchAll 앵커) 복합 구조
+- `ui.create_scroll`은 ScrollView GO(UIScrollView) + Content 자식(RectTransform, TopStretch) 복합 구조
 
 ## 사용하는 외부 라이브러리
 - `System.IO.Pipes` -- .NET 표준 라이브러리. Named Pipe 서버/클라이언트.

@@ -1,3 +1,21 @@
+// ------------------------------------------------------------
+// @file    Matrix4x4.cs
+// @brief   Unity 호환 4x4 변환 행렬. 내부적으로 System.Numerics.Matrix4x4(SIMD)에 위임.
+//          왼손 좌표계 LookAt/Perspective를 직접 구현하고, TRS/곱셈/역행렬 등을 제공.
+// @deps    RoseEngine/Vector3, RoseEngine/Quaternion
+// @exports
+//   struct Matrix4x4
+//     static identity: Matrix4x4                                           — 단위 행렬
+//     inverse: Matrix4x4                                                   — 역행렬 (singular이면 identity 반환)
+//     static Inverse(Matrix4x4 m): Matrix4x4                              — 역행렬 static 버전
+//     static TRS(Vector3, Quaternion, Vector3): Matrix4x4                  — Translation * Rotation * Scale 행렬 생성
+//     static Perspective(float, float, float, float): Matrix4x4            — 왼손 좌표계 원근 투영 행렬
+//     static LookAt(Vector3, Vector3, Vector3): Matrix4x4                  — 왼손 좌표계 뷰 행렬
+//     static operator *(Matrix4x4, Matrix4x4): Matrix4x4                   — 행렬 곱셈
+//     ToNumerics(): System.Numerics.Matrix4x4                              — 내부 SN 행렬 반환 (internal)
+// @note    System.Numerics row-major 곱셈 순서: S * R * T = TRS.
+//          inverse는 SN.Matrix4x4.Invert() 실패 시 identity 반환.
+// ------------------------------------------------------------
 using System;
 using System.Runtime.CompilerServices;
 using SN = System.Numerics;
@@ -78,6 +96,22 @@ namespace RoseEngine
             // System.Numerics 곱셈 = SIMD 가속
             return new Matrix4x4 { inner = a.inner * b.inner };
         }
+
+        /// <summary>역행렬을 반환. 역행렬을 구할 수 없는 경우(singular) identity를 반환.</summary>
+        public Matrix4x4 inverse
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get
+            {
+                if (SN.Matrix4x4.Invert(inner, out var result))
+                    return new Matrix4x4 { inner = result };
+                return identity;
+            }
+        }
+
+        /// <summary>역행렬을 반환. 역행렬을 구할 수 없는 경우(singular) identity를 반환.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Matrix4x4 Inverse(Matrix4x4 m) => m.inverse;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal SN.Matrix4x4 ToNumerics() => inner;

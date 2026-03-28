@@ -168,11 +168,17 @@ namespace RoseEngine
             }
 
             // Copy public instance properties with both getter and setter
+            // Skip physics-runtime properties that depend on live simulation state
+            var skipProps = type == typeof(Rigidbody) || type == typeof(Rigidbody2D)
+                ? new HashSet<string> { "velocity", "angularVelocity" }
+                : null;
+
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
                 if (!prop.CanRead || !prop.CanWrite) continue;
                 if (prop.GetIndexParameters().Length > 0) continue;
                 if (prop.Name == "gameObject" || prop.Name == "transform") continue;
+                if (skipProps != null && skipProps.Contains(prop.Name)) continue;
                 try { prop.SetValue(target, prop.GetValue(source)); }
                 catch { /* skip uncopyable properties */ }
             }

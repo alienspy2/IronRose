@@ -42,6 +42,7 @@ namespace IronRose.Engine
         private readonly List<string> _liveCodePaths = new();
         private readonly List<FileSystemWatcher> _liveCodeWatchers = new();
         private bool _reloadRequested;
+        private bool _pendingReloadAfterPlayStop;
         private DateTime _lastReloadTime = DateTime.MinValue;
         private readonly Dictionary<string, string> _savedHotReloadStates = new();
 
@@ -56,6 +57,11 @@ namespace IronRose.Engine
         public Action? OnAfterReload { get; set; }
 
         public bool ReloadRequested => _reloadRequested;
+
+        /// <summary>
+        /// 플레이모드 종료 후 수행해야 할 보류 중인 리로드가 있는지 여부.
+        /// </summary>
+        public bool HasPendingReload => _pendingReloadAfterPlayStop;
 
         public void Initialize()
         {
@@ -109,29 +115,48 @@ namespace IronRose.Engine
 
         /// <summary>
         /// 메인 스레드에서 매 프레임 호출. 리로드 요청이 있으면 처리합니다.
+        /// 플레이모드 중에는 리로드를 보류하고, 플레이모드 종료 시 수행합니다.
         /// </summary>
         public void ProcessReload()
         {
             if (!_reloadRequested) return;
             _reloadRequested = false;
 
-            bool isPlaying = EditorPlayMode.State == PlayModeState.Playing;
+            // 플레이모드 중에는 리로드를 보류
+            if (EditorPlayMode.IsInPlaySession)
+            {
+                _pendingReloadAfterPlayStop = true;
+                RoseEngine.EditorDebug.Log("[Engine] LiveCode change detected during Play mode — reload deferred until Play stops");
+                return;
+            }
 
+            ExecuteReload();
+        }
+
+        /// <summary>
+        /// 플레이모드 종료 후 보류 중인 리로드를 수행합니다.
+        /// EditorPlayMode.StopPlayMode()에서 호출됩니다.
+        /// </summary>
+        public void FlushPendingReload()
+        {
+            if (!_pendingReloadAfterPlayStop) return;
+            _pendingReloadAfterPlayStop = false;
+
+            RoseEngine.EditorDebug.Log("[Engine] Flushing deferred LiveCode reload after Play stop");
+            ExecuteReload();
+        }
+
+        private void ExecuteReload()
+        {
             RoseEngine.EditorDebug.Log("[Engine] Hot reloading LiveCode...");
-
-            if (isPlaying)
-                SaveHotReloadableState();
 
             CompileAllLiveCode();
 
-            // Play/에디터 모두 동일: GO를 유지하고 컴포넌트만 새 어셈블리 타입으로 교체
+            // GO를 유지하고 컴포넌트만 새 어셈블리 타입으로 교체
             MigrateEditorComponents();
 
             // 모든 외부 참조(씬 컴포넌트, 타입 캐시)가 해제된 후 ALC 수거 검증
             _scriptDomain?.VerifyPreviousContextUnloaded();
-
-            if (isPlaying)
-                RestoreHotReloadableState();
         }
 
         public void UpdateScripts()

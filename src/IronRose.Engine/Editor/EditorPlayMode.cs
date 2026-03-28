@@ -43,6 +43,12 @@ namespace IronRose.Engine.Editor
         /// <summary>EngineCore가 Play/Stop 시 _fixedAccumulator를 리셋할 수 있도록 하는 콜백.</summary>
         public static Action? OnResetFixedAccumulator;
 
+        /// <summary>
+        /// Play 모드 종료 후 호출되는 콜백.
+        /// LiveCodeManager가 보류 중인 핫 리로드를 수행하는 데 사용됩니다.
+        /// </summary>
+        public static Action? OnAfterStopPlayMode;
+
         public static bool IsInPlaySession => State == PlayModeState.Playing || State == PlayModeState.Paused;
 
         public static void EnterPlayMode()
@@ -151,6 +157,9 @@ namespace IronRose.Engine.Editor
             Cursor.ResetToDefault();
 
             EditorDebug.Log("[Editor] Stopped Play mode, scene restored");
+
+            // Play 모드 종료 후 보류 중인 작업 수행 (예: 핫 리로드)
+            OnAfterStopPlayMode?.Invoke();
         }
 
         /// <summary>ProjectSettings에 저장된 활성 렌더러 프로파일을 로드하여 RenderSettings에 반영.</summary>

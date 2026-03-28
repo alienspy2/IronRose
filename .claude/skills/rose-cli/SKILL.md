@@ -1,6 +1,6 @@
 ---
 name: rose-cli
-description: "IronRose 에디터 CLI 브릿지를 통해 실행 중인 엔진과 상호작용합니다. 씬 조회/편집, GameObject 생성/수정/삭제, Transform/Material/Light/Camera 조작, Play 모드 제어, 에셋 관리, 스크린샷 등 60여 개의 명령을 지원합니다. 사용자가 CLI로 씬을 조작하거나, 오브젝트를 배치하거나, 에디터 상태를 확인하거나, 프리팹을 다루거나, 렌더링 설정을 변경하려 할 때 이 스킬을 사용하세요. rose-cli, ironrose-cli, 씬 조작, 오브젝트 배치, 에디터 제어 등의 키워드가 나오면 트리거합니다."
+description: "IronRose 에디터 CLI 브릿지를 통해 실행 중인 엔진과 상호작용합니다. 씬 조회/편집, GameObject 생성/수정/삭제, Transform/Material/Light/Camera 조작, Play 모드 제어, 에셋 관리, 스프라이트 임포트 설정(9-slice border, pivot, PPU), UI 요소 생성/조작(Canvas, Text, Image, Panel, Button, Toggle, Slider, InputField, LayoutGroup, ScrollView), RectTransform 조작, UI 트리 조회, UI 디버깅, UI 정렬/분배, 스크린샷 등 140여 개의 명령을 지원합니다. 사용자가 CLI로 씬을 조작하거나, 오브젝트를 배치하거나, UI를 구성하거나, RectTransform을 설정하거나, 에디터 상태를 확인하거나, 프리팹을 다루거나, 렌더링 설정을 변경하거나, 텍스처를 스프라이트로 전환하려 할 때 이 스킬을 사용하세요. rose-cli, ironrose-cli, 씬 조작, 오브젝트 배치, 에디터 제어, UI 생성, Canvas, RectTransform, 앵커, 피벗, 스프라이트, 9slice, UI 디버깅 등의 키워드가 나오면 트리거합니다."
 ---
 
 # IronRose CLI 브릿지
@@ -107,6 +107,79 @@ $CLI editor.undo               # 실행취소
 $CLI editor.redo               # 다시실행
 $CLI editor.screenshot /tmp/shot.png  # 스크린샷
 $CLI log.recent                # 최근 로그 조회
+```
+
+### UI 구성
+```bash
+# Canvas 및 UI 요소 생성
+$CLI ui.create_canvas "MainUI"                 # Canvas 생성
+$CLI ui.create_panel <canvasId> 0.2,0.2,0.2,0.9 # 패널 생성 (색상 지정)
+$CLI ui.create_text <parentId> "Hello" 24      # 텍스트 생성 (내용, 폰트크기)
+$CLI ui.create_button <parentId> "OK"          # 버튼 생성 (라벨)
+$CLI ui.create_image <parentId>                # 이미지 생성
+$CLI ui.create_toggle <parentId>               # 토글 생성
+$CLI ui.create_slider <parentId>               # 슬라이더 생성
+$CLI ui.create_input <parentId> "Enter text"   # 입력 필드 생성
+$CLI ui.create_layout <parentId> Vertical      # 레이아웃 그룹 생성
+$CLI ui.create_scroll <parentId>               # 스크롤뷰 생성
+
+# UI 트리 조회
+$CLI ui.tree                                   # 모든 Canvas의 UI 계층 트리
+$CLI ui.tree <canvasId>                        # 특정 Canvas의 트리
+$CLI ui.list                                   # UI 요소 flat 목록
+$CLI ui.find "ButtonOK"                        # UI 요소 이름 검색
+$CLI ui.canvas.list                            # 모든 Canvas 목록
+```
+
+### RectTransform 조작
+```bash
+$CLI ui.rect.get <goId>                          # RectTransform 전체 정보
+$CLI ui.rect.set_preset <goId> MiddleCenter      # 앵커 프리셋 적용
+$CLI ui.rect.set_preset <goId> StretchAll true    # 프리셋 (시각 위치 유지)
+$CLI ui.rect.set_anchors <goId> 0,0 1,1           # anchorMin, anchorMax
+$CLI ui.rect.set_position <goId> 100,50           # anchoredPosition
+$CLI ui.rect.set_size <goId> 200,60               # sizeDelta
+$CLI ui.rect.set_pivot <goId> 0.5,0.5             # pivot
+$CLI ui.rect.set_offsets <goId> 10,10 -10,-10     # offsetMin, offsetMax (stretch)
+```
+
+### UI 컴포넌트 조작
+```bash
+# 텍스트
+$CLI ui.text.set_text <goId> "New text"
+$CLI ui.text.set_font_size <goId> 18
+$CLI ui.text.set_color <goId> 1,1,1,1
+$CLI ui.text.set_alignment <goId> MiddleCenter
+
+# 이미지/패널
+$CLI ui.image.set_sprite <goId> <spriteGuid>
+$CLI ui.image.set_type <goId> Sliced              # 9-slice 모드
+$CLI ui.panel.set_color <goId> 0.1,0.1,0.1,0.9
+
+# 버튼
+$CLI ui.button.set_colors <goId> 1,1,1,1 0.9,0.9,0.9,1 0.7,0.7,0.7,1 0.5,0.5,0.5,0.5
+$CLI ui.button.set_interactable <goId> false
+
+# 슬라이더/토글/인풋
+$CLI ui.slider.set_range <goId> 0 100
+$CLI ui.slider.set_value <goId> 50
+$CLI ui.toggle.set_on <goId> true
+$CLI ui.input.set_placeholder <goId> "Enter name..."
+```
+
+### UI 디버깅 & 유틸
+```bash
+$CLI ui.debug.rects true                          # 모든 Rect 아웃라인 표시
+$CLI ui.debug.overlap                              # 겹치는 UI 요소 검출
+$CLI ui.debug.hit_test 400 300                     # 화면 좌표 hit test
+
+# 정렬/분배
+$CLI ui.align left <id1> <id2> <id3>              # 좌측 정렬
+$CLI ui.distribute horizontal <id1> <id2> <id3>   # 수평 균등 분배
+
+# 테마 일괄 적용
+$CLI ui.theme.apply_color <canvasId> UIText color 1,1,1,1
+$CLI ui.theme.apply_font_size <canvasId> 16
 ```
 
 ## 전체 명령 레퍼런스

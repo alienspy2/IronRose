@@ -1,3 +1,24 @@
+// ------------------------------------------------------------
+// @file    Camera.cs
+// @brief   Unity 호환 Camera 컴포넌트. FOV/클립 플레인 설정, 뷰/프로젝션 매트릭스 생성,
+//          ScreenPointToRay를 통한 화면좌표-월드레이 변환, 기즈모 렌더링을 담당한다.
+// @deps    Component, Transform, Vector3, Matrix4x4, Mathf, Screen, Ray, Color, Gizmos
+// @exports
+//   enum CameraClearFlags { Skybox, SolidColor }
+//   class Camera : Component
+//     fieldOfView: float                                    — 수직 시야각 (도)
+//     nearClipPlane: float                                  — 근거리 클립 평면
+//     farClipPlane: float                                   — 원거리 클립 평면
+//     clearFlags: CameraClearFlags                          — 배경 클리어 모드
+//     backgroundColor: Color                                — SolidColor 모드 배경색
+//     static main: Camera?                                  — 메인 카메라 (자동 등록)
+//     GetViewMatrix(): Matrix4x4                            — 뷰 매트릭스 반환
+//     GetProjectionMatrix(float aspectRatio): Matrix4x4     — 프로젝션 매트릭스 반환
+//     ScreenPointToRay(Vector3 screenPoint): Ray            — 화면 좌표(좌하단 원점)를 월드 레이로 변환
+//     internal static ClearMain(): void                     — main 참조 초기화
+// @note    main은 에디터 내부 오브젝트가 아닌 첫 번째 Camera가 자동 등록된다.
+//          ScreenPointToRay는 Screen.width/height를 사용하므로 Screen이 초기화된 후 호출해야 한다.
+// ------------------------------------------------------------
 using System;
 
 namespace RoseEngine
@@ -47,6 +68,34 @@ namespace RoseEngine
         internal static void ClearMain()
         {
             main = null;
+        }
+
+        /// <summary>
+        /// 화면 좌표를 월드 레이로 변환. Unity 호환 API.
+        /// screenPoint: 화면 좌표 (픽셀, 좌하단 원점 — Unity 컨벤션)
+        /// </summary>
+        public Ray ScreenPointToRay(Vector3 screenPoint)
+        {
+            float screenW = Screen.width;
+            float screenH = Screen.height;
+            float aspect = screenW / screenH;
+
+            // 화면 좌표 (좌하단 원점) → NDC (-1 ~ 1)
+            float ndcX = (screenPoint.x / screenW) * 2f - 1f;
+            float ndcY = (screenPoint.y / screenH) * 2f - 1f;
+
+            // NDC → 뷰 공간 방향
+            float tanHalfFov = MathF.Tan(fieldOfView * 0.5f * Mathf.Deg2Rad);
+            float viewX = ndcX * aspect * tanHalfFov;
+            float viewY = ndcY * tanHalfFov;
+
+            // 뷰 공간 → 월드 공간
+            var forward = transform.forward;
+            var right = transform.right;
+            var up = transform.up;
+
+            var dir = (right * viewX + up * viewY + forward).normalized;
+            return new Ray(transform.position, dir);
         }
 
         // ── Gizmos ──

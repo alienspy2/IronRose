@@ -15,6 +15,24 @@
 - [Asset](#asset)
 - [Editor](#editor)
 - [System](#system)
+- [Sprite](#sprite)
+- [UI 편의 생성](#ui-편의-생성)
+- [UI 트리/조회](#ui-트리조회)
+- [UI RectTransform](#ui-recttransform)
+- [UI Canvas](#ui-canvas)
+- [UI Text](#ui-text)
+- [UI Image](#ui-image)
+- [UI Panel](#ui-panel)
+- [UI Button](#ui-button)
+- [UI Toggle](#ui-toggle)
+- [UI Slider](#ui-slider)
+- [UI InputField](#ui-inputfield)
+- [UI LayoutGroup](#ui-layoutgroup)
+- [UI ScrollView](#ui-scrollview)
+- [UI 디버깅](#ui-디버깅)
+- [UI 정렬/분배](#ui-정렬분배)
+- [UI 테마](#ui-테마)
+- [UI 프리팹](#ui-프리팹)
 
 ---
 
@@ -555,3 +573,687 @@ screen.info
 assembly.info
 ```
 반환: `{ totalAssemblies, assemblies: [{ name, componentCount, components }], liveCodeDemoTypes, liveCodeDemoCount }`
+
+---
+
+## Sprite
+
+### `sprite.info`
+텍스처/스프라이트 에셋의 임포트 설정 조회.
+```
+sprite.info <assetPath|guid>
+```
+반환: `{ path, guid, textureType, isSprite, maxSize, filterMode, wrapMode, srgb, spriteMode, pixelsPerUnit, pivot, border, slices }`
+
+### `sprite.set_type`
+텍스처를 스프라이트로 전환 (또는 반대). 스프라이트 전환 시 기본 설정 자동 적용 (mipmap off, Clamp, Single 모드).
+```
+sprite.set_type <assetPath|guid> <Sprite|Color>
+```
+반환: `{ path, textureType }`
+
+### `sprite.set_border`
+9-slice border 설정 (픽셀 단위).
+```
+sprite.set_border <assetPath|guid> <left,bottom,right,top>
+```
+- 예: `sprite.set_border Assets/UI/panel.png 16,16,16,16`
+반환: `{ path, border }`
+
+### `sprite.set_pivot`
+피벗 설정 (0~1 정규화 좌표).
+```
+sprite.set_pivot <assetPath|guid> <x,y>
+```
+- 예: `sprite.set_pivot Assets/UI/panel.png 0.5,0.5`
+반환: `{ path, pivot }`
+
+### `sprite.set_ppu`
+Pixels Per Unit 설정.
+```
+sprite.set_ppu <assetPath|guid> <value>
+```
+반환: `{ path, pixelsPerUnit }`
+
+### `sprite.set_mode`
+스프라이트 모드 전환.
+```
+sprite.set_mode <assetPath|guid> <Single|Multiple>
+```
+반환: `{ path, spriteMode }`
+
+### `sprite.set_filter`
+텍스처 필터 모드 설정.
+```
+sprite.set_filter <assetPath|guid> <Point|Bilinear|Trilinear>
+```
+- 픽셀아트 스프라이트는 `Point`, 일반 스프라이트는 `Bilinear` 권장
+반환: `{ path, filterMode }`
+
+---
+
+## UI 편의 생성
+
+### `ui.create_canvas`
+Canvas + RectTransform GO 생성.
+```
+ui.create_canvas [name]
+```
+- `name` 생략 시 "Canvas"
+반환: `{ id, name }`
+
+### `ui.create_text`
+부모 하위에 UIText GO 생성 (RectTransform 자동).
+```
+ui.create_text <parentId> [text] [fontSize]
+```
+반환: `{ id, name }`
+
+### `ui.create_image`
+부모 하위에 UIImage GO 생성 (RectTransform 자동).
+```
+ui.create_image <parentId>
+```
+반환: `{ id, name }`
+
+### `ui.create_panel`
+부모 하위에 UIPanel GO 생성. 색상 지정 가능.
+```
+ui.create_panel <parentId> [r,g,b,a]
+```
+반환: `{ id, name }`
+
+### `ui.create_button`
+부모 하위에 UIButton + UIImage + 자식(UIText) GO 복합 생성.
+```
+ui.create_button <parentId> [label]
+```
+반환: `{ id, name, labelId }`
+
+### `ui.create_toggle`
+부모 하위에 UIToggle GO 생성.
+```
+ui.create_toggle <parentId>
+```
+반환: `{ id, name }`
+
+### `ui.create_slider`
+부모 하위에 UISlider GO 생성.
+```
+ui.create_slider <parentId>
+```
+반환: `{ id, name }`
+
+### `ui.create_input`
+부모 하위에 UIInputField GO 생성.
+```
+ui.create_input <parentId> [placeholder]
+```
+반환: `{ id, name }`
+
+### `ui.create_layout`
+부모 하위에 UILayoutGroup GO 생성.
+```
+ui.create_layout <parentId> [Horizontal|Vertical]
+```
+- 기본값: `Vertical`
+반환: `{ id, name }`
+
+### `ui.create_scroll`
+부모 하위에 UIScrollView GO 생성. Content 자식도 함께 생성.
+```
+ui.create_scroll <parentId>
+```
+반환: `{ id, name, contentId }`
+
+---
+
+## UI 트리/조회
+
+### `ui.tree`
+모든 Canvas(또는 특정 Canvas)의 UI 계층 트리 조회. 각 노드에 RectTransform 정보와 UI 컴포넌트 타입 표시.
+```
+ui.tree [canvasId]
+```
+반환: `{ canvases: [{ id, name, renderMode, sortingOrder, tree: { id, name, active, rect, uiComponents, children } }] }`
+
+### `ui.list`
+모든 Canvas(또는 특정 Canvas) 하위의 UI 요소 flat 목록 조회.
+```
+ui.list [canvasId]
+```
+
+### `ui.find`
+UI 컴포넌트가 있는 GO 중 이름으로 검색.
+```
+ui.find <name>
+```
+
+### `ui.canvas.list`
+씬 내 모든 Canvas 목록.
+```
+ui.canvas.list
+```
+반환: `{ canvases: [{ id, name, renderMode, sortingOrder }] }`
+
+---
+
+## UI RectTransform
+
+### `ui.rect.get`
+RectTransform 전체 정보 조회.
+```
+ui.rect.get <goId>
+```
+반환: `{ anchorMin, anchorMax, anchoredPosition, sizeDelta, pivot, offsetMin, offsetMax, rect, lastScreenRect }`
+
+### `ui.rect.set_anchors`
+anchorMin, anchorMax 설정.
+```
+ui.rect.set_anchors <goId> <minX,minY> <maxX,maxY>
+```
+
+### `ui.rect.set_position`
+anchoredPosition 설정.
+```
+ui.rect.set_position <goId> <x,y>
+```
+
+### `ui.rect.set_size`
+sizeDelta 설정.
+```
+ui.rect.set_size <goId> <w,h>
+```
+
+### `ui.rect.set_pivot`
+pivot 설정.
+```
+ui.rect.set_pivot <goId> <x,y>
+```
+
+### `ui.rect.set_offsets`
+offsetMin, offsetMax 설정 (stretch 모드에서 유용).
+```
+ui.rect.set_offsets <goId> <minX,minY> <maxX,maxY>
+```
+
+### `ui.rect.set_preset`
+AnchorPreset 적용.
+```
+ui.rect.set_preset <goId> <preset> [keepVisual]
+```
+- `preset`: TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight, TopStretch, MiddleStretch, BottomStretch, StretchLeft, StretchCenter, StretchRight, StretchAll
+- `keepVisual`: `true`면 시각적 위치 유지 (기본 `false`)
+
+### `ui.rect.get_world_rect`
+마지막 렌더링된 스크린 좌표 Rect 조회.
+```
+ui.rect.get_world_rect <goId>
+```
+
+---
+
+## UI Canvas
+
+### `ui.canvas.info`
+Canvas 컴포넌트 상세 정보 조회.
+```
+ui.canvas.info <goId>
+```
+반환: `{ renderMode, sortingOrder, referenceResolution, scaleMode, matchWidthOrHeight }`
+
+### `ui.canvas.set_render_mode`
+renderMode 변경.
+```
+ui.canvas.set_render_mode <goId> <ScreenSpaceOverlay|ScreenSpaceCamera|WorldSpace>
+```
+
+### `ui.canvas.set_sorting_order`
+sortingOrder 변경.
+```
+ui.canvas.set_sorting_order <goId> <order>
+```
+
+### `ui.canvas.set_reference_resolution`
+referenceResolution 변경.
+```
+ui.canvas.set_reference_resolution <goId> <w,h>
+```
+
+### `ui.canvas.set_scale_mode`
+scaleMode 변경.
+```
+ui.canvas.set_scale_mode <goId> <ConstantPixelSize|ScaleWithScreenSize>
+```
+
+### `ui.canvas.set_match`
+matchWidthOrHeight 변경 (0~1).
+```
+ui.canvas.set_match <goId> <value>
+```
+
+---
+
+## UI Text
+
+### `ui.text.info`
+UIText 컴포넌트 정보 조회.
+```
+ui.text.info <goId>
+```
+반환: `{ text, fontSize, color, alignment, overflow, hasFont }`
+
+### `ui.text.set_text`
+텍스트 내용 변경.
+```
+ui.text.set_text <goId> <text>
+```
+
+### `ui.text.set_font_size`
+fontSize 변경.
+```
+ui.text.set_font_size <goId> <size>
+```
+
+### `ui.text.set_color`
+텍스트 색상 변경.
+```
+ui.text.set_color <goId> <r,g,b,a>
+```
+
+### `ui.text.set_alignment`
+alignment 변경.
+```
+ui.text.set_alignment <goId> <UpperLeft|UpperCenter|UpperRight|MiddleLeft|MiddleCenter|MiddleRight|LowerLeft|LowerCenter|LowerRight>
+```
+
+### `ui.text.set_font`
+폰트 에셋 설정. GUID 또는 에셋 경로로 지정.
+```
+ui.text.set_font <goId> <fontGuid|fontPath>
+```
+
+### `ui.text.set_overflow`
+overflow 변경.
+```
+ui.text.set_overflow <goId> <Wrap|Overflow|Ellipsis>
+```
+
+---
+
+## UI Image
+
+### `ui.image.info`
+UIImage 컴포넌트 정보 조회.
+```
+ui.image.info <goId>
+```
+
+### `ui.image.set_color`
+이미지 틴트 색상 변경.
+```
+ui.image.set_color <goId> <r,g,b,a>
+```
+
+### `ui.image.set_type`
+imageType 변경.
+```
+ui.image.set_type <goId> <Simple|Sliced|Tiled|Filled>
+```
+
+### `ui.image.set_sprite`
+스프라이트 변경.
+```
+ui.image.set_sprite <goId> <spriteGuid|spritePath>
+```
+
+### `ui.image.set_preserve_aspect`
+preserveAspect 변경.
+```
+ui.image.set_preserve_aspect <goId> <true|false>
+```
+
+---
+
+## UI Panel
+
+### `ui.panel.info`
+UIPanel 컴포넌트 정보 조회.
+```
+ui.panel.info <goId>
+```
+
+### `ui.panel.set_color`
+패널 배경 색상 변경.
+```
+ui.panel.set_color <goId> <r,g,b,a>
+```
+
+### `ui.panel.set_sprite`
+패널 배경 스프라이트 변경.
+```
+ui.panel.set_sprite <goId> <spriteGuid|spritePath>
+```
+
+### `ui.panel.set_type`
+imageType 변경.
+```
+ui.panel.set_type <goId> <Simple|Sliced>
+```
+
+---
+
+## UI Button
+
+### `ui.button.info`
+UIButton 컴포넌트 정보 조회.
+```
+ui.button.info <goId>
+```
+반환: `{ interactable, normalColor, hoverColor, pressedColor, disabledColor, transition }`
+
+### `ui.button.set_interactable`
+interactable 변경.
+```
+ui.button.set_interactable <goId> <true|false>
+```
+
+### `ui.button.set_colors`
+4가지 상태 색상 일괄 설정.
+```
+ui.button.set_colors <goId> <normal> <hover> <pressed> <disabled>
+```
+- 각 색상은 `r,g,b,a` 형식
+- 예: `ui.button.set_colors 44 1,1,1,1 0.9,0.9,0.9,1 0.7,0.7,0.7,1 0.5,0.5,0.5,0.5`
+
+### `ui.button.set_transition`
+transition 변경.
+```
+ui.button.set_transition <goId> <ColorTint|SpriteSwap>
+```
+
+---
+
+## UI Toggle
+
+### `ui.toggle.info`
+UIToggle 컴포넌트 정보 조회.
+```
+ui.toggle.info <goId>
+```
+
+### `ui.toggle.set_on`
+isOn 변경.
+```
+ui.toggle.set_on <goId> <true|false>
+```
+
+### `ui.toggle.set_interactable`
+interactable 변경.
+```
+ui.toggle.set_interactable <goId> <true|false>
+```
+
+### `ui.toggle.set_colors`
+배경/체크마크 색상 설정.
+```
+ui.toggle.set_colors <goId> <bgColor> <checkColor>
+```
+
+---
+
+## UI Slider
+
+### `ui.slider.info`
+UISlider 컴포넌트 정보 조회.
+```
+ui.slider.info <goId>
+```
+반환: `{ value, minValue, maxValue, wholeNumbers, direction, interactable, backgroundColor, fillColor, handleColor }`
+
+### `ui.slider.set_value`
+value 변경.
+```
+ui.slider.set_value <goId> <value>
+```
+
+### `ui.slider.set_range`
+minValue, maxValue 설정.
+```
+ui.slider.set_range <goId> <min> <max>
+```
+
+### `ui.slider.set_direction`
+direction 변경.
+```
+ui.slider.set_direction <goId> <LeftToRight|RightToLeft|BottomToTop|TopToBottom>
+```
+
+### `ui.slider.set_whole_numbers`
+wholeNumbers 변경.
+```
+ui.slider.set_whole_numbers <goId> <true|false>
+```
+
+### `ui.slider.set_interactable`
+interactable 변경.
+```
+ui.slider.set_interactable <goId> <true|false>
+```
+
+### `ui.slider.set_colors`
+3가지 색상 일괄 설정.
+```
+ui.slider.set_colors <goId> <bgColor> <fillColor> <handleColor>
+```
+
+---
+
+## UI InputField
+
+### `ui.input.info`
+UIInputField 컴포넌트 정보 조회.
+```
+ui.input.info <goId>
+```
+
+### `ui.input.set_text`
+text 변경.
+```
+ui.input.set_text <goId> <text>
+```
+
+### `ui.input.set_placeholder`
+placeholder 변경.
+```
+ui.input.set_placeholder <goId> <text>
+```
+
+### `ui.input.set_font_size`
+fontSize 변경.
+```
+ui.input.set_font_size <goId> <size>
+```
+
+### `ui.input.set_max_length`
+maxLength 변경.
+```
+ui.input.set_max_length <goId> <length>
+```
+
+### `ui.input.set_content_type`
+contentType 변경.
+```
+ui.input.set_content_type <goId> <Standard|IntegerNumber|DecimalNumber|Alphanumeric|Password>
+```
+
+### `ui.input.set_interactable`
+interactable 변경.
+```
+ui.input.set_interactable <goId> <true|false>
+```
+
+### `ui.input.set_read_only`
+readOnly 변경.
+```
+ui.input.set_read_only <goId> <true|false>
+```
+
+---
+
+## UI LayoutGroup
+
+### `ui.layout.info`
+UILayoutGroup 컴포넌트 정보 조회.
+```
+ui.layout.info <goId>
+```
+반환: `{ direction, spacing, padding, childAlignment, childForceExpandWidth, childForceExpandHeight }`
+
+### `ui.layout.set_direction`
+direction 변경.
+```
+ui.layout.set_direction <goId> <Horizontal|Vertical>
+```
+
+### `ui.layout.set_spacing`
+spacing 변경.
+```
+ui.layout.set_spacing <goId> <value>
+```
+
+### `ui.layout.set_padding`
+padding 변경 (Vector4 형식).
+```
+ui.layout.set_padding <goId> <left,bottom,right,top>
+```
+
+### `ui.layout.set_child_alignment`
+childAlignment 변경.
+```
+ui.layout.set_child_alignment <goId> <alignment>
+```
+
+### `ui.layout.set_force_expand`
+childForceExpandWidth, childForceExpandHeight 설정.
+```
+ui.layout.set_force_expand <goId> <width:true|false> <height:true|false>
+```
+
+---
+
+## UI ScrollView
+
+### `ui.scroll.info`
+UIScrollView 컴포넌트 정보 조회.
+```
+ui.scroll.info <goId>
+```
+
+### `ui.scroll.set_scroll_position`
+scrollPosition 변경.
+```
+ui.scroll.set_scroll_position <goId> <x,y>
+```
+
+### `ui.scroll.set_content_size`
+contentSize 변경.
+```
+ui.scroll.set_content_size <goId> <w,h>
+```
+
+### `ui.scroll.set_direction`
+horizontal, vertical 설정.
+```
+ui.scroll.set_direction <goId> <horizontal:true|false> <vertical:true|false>
+```
+
+### `ui.scroll.set_sensitivity`
+scrollSensitivity 변경.
+```
+ui.scroll.set_sensitivity <goId> <value>
+```
+
+---
+
+## UI 디버깅
+
+### `ui.debug.rects`
+CanvasRenderer.DebugDrawRects 토글. 모든 RectTransform의 아웃라인을 게임 뷰에 표시.
+```
+ui.debug.rects <true|false>
+```
+
+### `ui.debug.overlap`
+겹치는 UI 요소 쌍을 검출하여 목록 반환.
+```
+ui.debug.overlap [canvasId]
+```
+반환: `{ overlaps: [{ a: { id, name }, b: { id, name }, intersection }], count }`
+
+### `ui.debug.hit_test`
+지정 스크린 좌표에서 hit test 수행. 최상위 UI GO 반환.
+```
+ui.debug.hit_test <screenX> <screenY>
+```
+
+---
+
+## UI 정렬/분배
+
+### `ui.align`
+여러 UI 요소를 지정 방향으로 정렬. 첫 번째 GO의 edge를 기준으로 나머지를 맞춤.
+```
+ui.align <edge> <goId1> <goId2> [goId3...]
+```
+- `edge`: `left`, `right`, `top`, `bottom`, `center_h`, `center_v`
+- 최소 2개의 GO ID 필요
+반환: `{ ok: true, aligned: <count> }`
+
+### `ui.distribute`
+여러 UI 요소를 균등 분배. 첫 번째와 마지막 요소 사이를 균등 배분.
+```
+ui.distribute <axis> <goId1> <goId2> [goId3...]
+```
+- `axis`: `horizontal`, `vertical`
+- 최소 3개의 GO ID 필요
+반환: `{ ok: true, distributed: <count> }`
+
+---
+
+## UI 테마
+
+### `ui.theme.apply_color`
+Canvas 하위의 모든 지정 컴포넌트 타입의 지정 색상 필드를 일괄 변경.
+```
+ui.theme.apply_color <canvasId> <componentType> <field> <r,g,b,a>
+```
+- `componentType`: `UIText`, `UIImage`, `UIPanel`, `UIButton` 등
+- `field`: `color`, `textColor`, `backgroundColor`, `normalColor` 등
+- 예: `ui.theme.apply_color 42 UIText color 1,1,1,1`
+반환: `{ ok: true, affected: <count> }`
+
+### `ui.theme.apply_font_size`
+Canvas 하위의 모든 UIText의 fontSize를 일괄 변경.
+```
+ui.theme.apply_font_size <canvasId> <size>
+```
+반환: `{ ok: true, affected: <count> }`
+
+---
+
+## UI 프리팹
+
+### `ui.prefab.save`
+UI GO 서브트리를 프리팹으로 저장.
+```
+ui.prefab.save <goId> <path>
+```
+반환: `{ saved: true, path, guid }`
+
+### `ui.prefab.instantiate`
+UI 프리팹을 특정 부모 하위에 인스턴스화. 일반 `prefab.instantiate`와 달리 부모를 즉시 설정.
+```
+ui.prefab.instantiate <guid> <parentId>
+```
+반환: `{ id, name }`
