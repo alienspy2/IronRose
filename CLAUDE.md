@@ -22,6 +22,14 @@
 
 ---
 
+## 에디터 실행
+
+```bash
+dotnet run --project src/IronRose.RoseEditor
+```
+
+---
+
 ## 필수 규칙
 
 - **코드 작성/수정 전** 반드시 `doc/CodingGuide.md`를 Read 할 것.
