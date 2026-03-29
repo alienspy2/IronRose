@@ -2,7 +2,7 @@
 // @file    MaterialImporter.cs
 // @brief   .mat (TOML) 파일을 Material로 임포트하고, Material을 TOML로 직렬화한다.
 //          색상은 [color], [emission] 서브테이블 구조로 저장한다.
-// @deps    IronRose.Engine/TomlConfig, RoseEngine (Material, Color, Texture2D, Vector2),
+// @deps    IronRose.Engine/TomlConfig, RoseEngine (Material, Color, Texture2D, Vector2, BlendMode),
 //          AssetPipeline/IAssetDatabase, AssetPipeline/RoseMetadata
 // @exports
 //   class MaterialImporter
@@ -42,6 +42,11 @@ namespace IronRose.AssetPipeline
             mat.occlusion = config.GetFloat("occlusion", mat.occlusion);
             mat.normalMapStrength = config.GetFloat("normalMapStrength", mat.normalMapStrength);
 
+            // Blend mode
+            var blendModeStr = config.GetString("blendMode", "");
+            if (!string.IsNullOrEmpty(blendModeStr) && Enum.TryParse<BlendMode>(blendModeStr, true, out var bm))
+                mat.blendMode = bm;
+
             // Texture transform
             float sx = config.GetFloat("textureScaleX", 1f);
             float sy = config.GetFloat("textureScaleY", 1f);
@@ -71,6 +76,7 @@ namespace IronRose.AssetPipeline
         public static void WriteDefault(string path)
         {
             var config = BuildConfig(Color.white, Color.black, 0f, 0.5f, 1f, 1f,
+                BlendMode.Opaque,
                 RoseEngine.Vector2.one, RoseEngine.Vector2.zero, null, null, null);
             config.SaveToFile(path);
         }
@@ -81,6 +87,7 @@ namespace IronRose.AssetPipeline
         {
             var config = BuildConfig(mat.color, mat.emission,
                 mat.metallic, mat.roughness, mat.occlusion, mat.normalMapStrength,
+                mat.blendMode,
                 mat.textureScale, mat.textureOffset,
                 mainTexGuid, normalMapGuid, mroMapGuid);
             config.SaveToFile(path);
@@ -88,6 +95,7 @@ namespace IronRose.AssetPipeline
 
         private static TomlConfig BuildConfig(Color color, Color emission,
             float metallic, float roughness, float occlusion, float normalMapStrength,
+            BlendMode blendMode,
             RoseEngine.Vector2 textureScale, RoseEngine.Vector2 textureOffset,
             string? mainTexGuid, string? normalMapGuid, string? mroMapGuid)
         {
@@ -111,6 +119,9 @@ namespace IronRose.AssetPipeline
             config.SetValue("roughness", (double)roughness);
             config.SetValue("occlusion", (double)occlusion);
             config.SetValue("normalMapStrength", (double)normalMapStrength);
+
+            if (blendMode != BlendMode.Opaque)
+                config.SetValue("blendMode", blendMode.ToString());
 
             if (textureScale.x != 1f || textureScale.y != 1f)
             {
