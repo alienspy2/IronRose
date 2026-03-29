@@ -38,6 +38,23 @@ namespace RoseEngine
         /// <summary>활성 씬 설정.</summary>
         public static void SetActiveScene(Scene scene) => _activeScene = scene;
 
+        /// <summary>
+        /// 씬 로드 델리게이트. 엔진 초기화 시 SceneSerializer.Load로 설정된다.
+        /// Scripts에서 SceneSerializer에 직접 접근할 수 없으므로 이 델리게이트를 통해 호출.
+        /// </summary>
+        internal static Action<string>? _loadSceneDelegate;
+
+        /// <summary>런타임에서 씬 파일 경로로 씬을 로드한다.</summary>
+        public static void LoadScene(string scenePath)
+        {
+            if (_loadSceneDelegate == null)
+            {
+                Debug.LogError("[SceneManager] LoadScene delegate not set.");
+                return;
+            }
+            _loadSceneDelegate(scenePath);
+        }
+
         // --- Core registries ---
         private static readonly List<MonoBehaviour> _behaviours = new();
         private static readonly List<MonoBehaviour> _pendingStart = new();

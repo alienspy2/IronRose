@@ -205,6 +205,9 @@ namespace IronRose.Engine
             _cliPipeServer = new CliPipeServer();
             _cliPipeServer.Start(_cliDispatcher);
 
+            // 런타임 SceneManager.LoadScene 델리게이트 설정
+            RoseEngine.SceneManager._loadSceneDelegate = SceneSerializer.Load;
+
             // 자동화 테스트 명령 파일 로드
             _testCommandRunner = TestCommandRunner.TryLoad();
 

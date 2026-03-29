@@ -1562,6 +1562,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             foreach (var prop in compType.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
                 if (!prop.CanRead) continue;
+                if (SkipPropertyNames.Contains(prop.Name)) continue;
                 if (!AssetNameExtractors.TryGetValue(prop.PropertyType, out var extractor)) continue;
                 DrawMultiPingableAsset(components, prop.Name, prop.PropertyType, extractor,
                     c => prop.GetValue(c),
@@ -3326,7 +3327,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             if (memberType == null) return "";
             if (memberType == typeof(Material)) return "material";
             if (memberType == typeof(Mesh) || memberType == typeof(MipMesh)) return "mesh";
-            if (memberType == typeof(Texture2D) || memberType == typeof(Sprite)) return "texture";
+            if (memberType == typeof(Texture2D)) return "texture";
+            if (memberType == typeof(Sprite)) return "sprite";
             if (memberType == typeof(Font)) return "font";
             if (memberType == typeof(AnimationClip)) return "anim";
             if (memberType == typeof(PostProcessProfile)) return "ppprofile";
@@ -3372,6 +3374,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     "anim"       => ext is ".anim",
                     "ppprofile"  => ext is ".ppprofile",
                     "renderer"   => ext is ".renderer",
+                    "sprite"     => false, // sprites are sub-assets only
                     _            => false,
                 };
 
@@ -3393,6 +3396,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                         "mesh"     => sub.type == "Mesh",
                         "material" => sub.type == "Material",
                         "texture"  => sub.type is "Sprite" or "Texture2D",
+                        "sprite"   => sub.type == "Sprite",
                         _          => false,
                     };
 
@@ -4220,6 +4224,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
                 if (!prop.CanRead) continue;
+                if (SkipPropertyNames.Contains(prop.Name)) continue;
                 if (AssetNameExtractors.TryGetValue(prop.PropertyType, out var extractor))
                 {
                     var val = prop.GetValue(comp);

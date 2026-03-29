@@ -14,6 +14,9 @@ namespace RoseEngine
         /// <summary>디버그 Rect 아웃라인 표시 (에디터용).</summary>
         public static bool DebugDrawRects;
 
+        /// <summary>현재 렌더링 중인 Canvas의 scale factor. RenderNode 순회 중에만 유효.</summary>
+        internal static float CurrentCanvasScale { get; private set; } = 1f;
+
         private static readonly List<Canvas> _sorted = new();
         private static readonly Dictionary<Texture2D, IntPtr> _textureBindings = new();
 
@@ -69,9 +72,11 @@ namespace RoseEngine
 
                 var rootRect = new Rect(0, 0, logicalW, logicalH);
 
+                CurrentCanvasScale = scaleFactor;
                 RenderNode(drawList, canvas.gameObject, rootRect, screenX, screenY, scaleFactor);
             }
 
+            CurrentCanvasScale = 1f;
             drawList.PopClipRect();
         }
 

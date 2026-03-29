@@ -136,6 +136,43 @@ namespace RoseEngine
             return results.ToArray();
         }
 
+        public T? GetComponentInChildren<T>(bool includeInactive = false) where T : Component
+        {
+            // 자기 자신 먼저
+            var self = GetComponent<T>();
+            if (self != null) return self;
+
+            for (int i = 0; i < transform.childCount; i++)
+            {
+                var child = transform.GetChild(i).gameObject;
+                if (!includeInactive && !child.activeSelf) continue;
+                var found = child.GetComponentInChildren<T>(includeInactive);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        public T[] GetComponentsInChildren<T>(bool includeInactive = false) where T : Component
+        {
+            var results = new List<T>();
+            GetComponentsInChildrenInternal<T>(results, includeInactive);
+            return results.ToArray();
+        }
+
+        private void GetComponentsInChildrenInternal<T>(List<T> results, bool includeInactive) where T : Component
+        {
+            foreach (var c in _components)
+            {
+                if (c is T typed && !c._isDestroyed) results.Add(typed);
+            }
+            for (int i = 0; i < transform.childCount; i++)
+            {
+                var child = transform.GetChild(i).gameObject;
+                if (!includeInactive && !child.activeSelf) continue;
+                child.GetComponentsInChildrenInternal<T>(results, includeInactive);
+            }
+        }
+
         public static GameObject CreatePrimitive(PrimitiveType type)
         {
             var go = new GameObject(type.ToString());

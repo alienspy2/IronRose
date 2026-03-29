@@ -31,6 +31,8 @@ namespace IronRose.AssetPipeline
         string? FindGuidForSprite(Sprite sprite);
         /// <summary>프리팹 템플릿 GameObject로부터 에셋 GUID 역검색.</summary>
         string? FindGuidForPrefab(GameObject prefab);
+        /// <summary>TextAsset 인스턴스로부터 에셋 GUID 역검색.</summary>
+        string? FindGuidForTextAsset(TextAsset textAsset);
         /// <summary>파일 경로에 대한 sub-asset 목록 반환.</summary>
         IReadOnlyList<SubAssetEntry> GetSubAssets(string filePath);
         /// <summary>지정 경로의 다음 파일 변경 이벤트를 무시 (자체 쓰기 보호).</summary>

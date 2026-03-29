@@ -22,6 +22,7 @@ namespace IronRose.AssetPipeline
         private readonly Dictionary<AnimationClip, string> _animClipToGuid = new();
         private readonly Dictionary<RendererProfile, string> _rendererProfileToGuid = new();
         private readonly Dictionary<PostProcessProfile, string> _ppProfileToGuid = new();
+        private readonly Dictionary<TextAsset, string> _textAssetToGuid = new();
         private readonly MeshImporter _meshImporter = new();
         private readonly GltfMeshImporter _gltfMeshImporter = new();
         private readonly TextureImporter _textureImporter = new();
@@ -30,6 +31,7 @@ namespace IronRose.AssetPipeline
         private readonly AnimationClipImporter _animClipImporter = new();
         private readonly RendererProfileImporter _rendererProfileImporter = new();
         private readonly PostProcessProfileImporter _ppProfileImporter = new();
+        private readonly TextAssetImporter _textAssetImporter = new();
         private readonly RoseCache _roseCache = new(ProjectContext.CachePath);
         private PrefabImporter? _prefabImporter;
 
@@ -70,6 +72,7 @@ namespace IronRose.AssetPipeline
             ".anim",
             ".renderer",
             ".ppprofile",
+            ".txt", ".json", ".xml", ".csv",
             ".html", ".css"
         };
 
@@ -253,6 +256,10 @@ namespace IronRose.AssetPipeline
                 case "PostProcessProfileImporter":
                     asset = _ppProfileImporter.Import(path, meta);
                     break;
+
+                case "TextAssetImporter":
+                    asset = _textAssetImporter.Import(path, meta);
+                    break;
             }
 
             // 3. 메모리 캐시에 저장 + sub-asset 등록
@@ -290,6 +297,10 @@ namespace IronRose.AssetPipeline
                 else if (asset is PostProcessProfile pp && !string.IsNullOrEmpty(meta.guid))
                 {
                     _ppProfileToGuid[pp] = meta.guid;
+                }
+                else if (asset is TextAsset textAsset && !string.IsNullOrEmpty(meta.guid))
+                {
+                    _textAssetToGuid[textAsset] = meta.guid;
                 }
             }
             else
@@ -360,6 +371,12 @@ namespace IronRose.AssetPipeline
         {
             if (profile == null) return null;
             return _ppProfileToGuid.TryGetValue(profile, out var guid) ? guid : null;
+        }
+
+        public string? FindGuidForTextAsset(TextAsset textAsset)
+        {
+            if (textAsset == null) return null;
+            return _textAssetToGuid.TryGetValue(textAsset, out var guid) ? guid : null;
         }
 
         /// <summary>
@@ -647,6 +664,8 @@ namespace IronRose.AssetPipeline
                             RegisterSpriteSubAssets(path, sr, meta);
                             _loadedAssets[path] = sr;
                             CacheSpriteSubAssets(path, sr, meta);
+                            var oldSprResult = oldAsset as SpriteImportResult;
+                            ReplaceSpriteInScene(oldSprResult, sr);
                         }
                         else
                         {
@@ -720,6 +739,26 @@ namespace IronRose.AssetPipeline
                         {
                             if (vol.profileGuid == meta.guid)
                                 vol.profile = newPp;
+                        }
+                    }
+                    break;
+                }
+                case "TextAssetImporter":
+                {
+                    var newTa = _textAssetImporter.Import(path, meta);
+                    if (newTa != null)
+                    {
+                        // 기존 인스턴스가 있으면 내용만 갱신 (씬 참조 유지)
+                        if (oldAsset is TextAsset oldTa)
+                        {
+                            oldTa.text = newTa.text;
+                            oldTa.bytes = newTa.bytes;
+                        }
+                        else
+                        {
+                            _loadedAssets[path] = newTa;
+                            if (!string.IsNullOrEmpty(meta.guid))
+                                _textAssetToGuid[newTa] = meta.guid;
                         }
                     }
                     break;
@@ -910,6 +949,8 @@ namespace IronRose.AssetPipeline
                         {
                             _loadedAssets[path] = _reimportSpriteResult;
                             CacheSpriteSubAssets(path, _reimportSpriteResult, _reimportMeta!);
+                            var oldSprResult = _reimportOldAsset as SpriteImportResult;
+                            ReplaceSpriteInScene(oldSprResult, _reimportSpriteResult);
                         }
                         else
                         {
@@ -1265,7 +1306,10 @@ namespace IronRose.AssetPipeline
 
                 var subEntry = meta.subAssets.FirstOrDefault(s => s.type == "Sprite" && s.index == i);
                 if (subEntry != null)
+                {
                     _spriteToGuid[result.Sprites[i]] = subEntry.guid;
+                    result.Sprites[i].guid = subEntry.guid;
+                }
             }
         }
 
@@ -1540,9 +1584,20 @@ namespace IronRose.AssetPipeline
                             UnregisterAsset(evt.FullPath);
                             break;
                         case AssetChangeType.Renamed:
-                            if (evt.OldFullPath != null)
+                            if (evt.OldFullPath != null && evt.OldFullPath != evt.FullPath)
                                 UnregisterAsset(evt.OldFullPath);
-                            RegisterNewAsset(evt.FullPath);
+                            // 원자적 쓰기(rename)로 같은 경로가 오면 Changed와 동일하게 처리
+                            if (GetGuidFromPath(evt.FullPath) != null)
+                            {
+                                if (_loadedAssets.ContainsKey(evt.FullPath))
+                                    Reimport(evt.FullPath);
+                                else
+                                    _roseCache.InvalidateCache(evt.FullPath);
+                            }
+                            else
+                            {
+                                RegisterNewAsset(evt.FullPath);
+                            }
                             break;
                     }
                 }
@@ -1886,6 +1941,63 @@ namespace IronRose.AssetPipeline
                 {
                     sr.sprite.ReplaceTexture(newTex);
                     sr._cachedMesh = null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Reimport로 새 SpriteImportResult가 생성되었을 때,
+        /// 씬의 모든 컴포넌트가 참조하는 이전 Sprite를 새 Sprite로 교체한다.
+        /// guid 기반 매칭으로 정확한 Sprite 인스턴스를 찾아 교체하며,
+        /// PPU, border, rect, UV 등 모든 속성이 새 값으로 반영된다.
+        /// </summary>
+        private static void ReplaceSpriteInScene(SpriteImportResult? oldResult, SpriteImportResult newResult)
+        {
+            if (oldResult == null || oldResult.Sprites.Length == 0) return;
+
+            // Build old guid → new sprite mapping
+            var guidToNewSprite = new Dictionary<string, Sprite>();
+            foreach (var newSprite in newResult.Sprites)
+            {
+                if (!string.IsNullOrEmpty(newSprite.guid))
+                    guidToNewSprite[newSprite.guid] = newSprite;
+            }
+
+            // Also build old instance → new sprite mapping for direct reference matching
+            var oldToNew = new Dictionary<Sprite, Sprite>();
+            foreach (var oldSprite in oldResult.Sprites)
+            {
+                if (!string.IsNullOrEmpty(oldSprite.guid) && guidToNewSprite.TryGetValue(oldSprite.guid, out var mapped))
+                    oldToNew[oldSprite] = mapped;
+            }
+
+            if (oldToNew.Count == 0) return;
+
+            // Replace in SpriteRenderers
+            foreach (var sr in SpriteRenderer._allSpriteRenderers)
+            {
+                if (sr.sprite != null && oldToNew.TryGetValue(sr.sprite, out var newSprite))
+                {
+                    sr.sprite = newSprite;
+                    sr._cachedMesh = null;
+                }
+            }
+
+            // Replace in UIImage / UIPanel via scene traversal
+            foreach (var go in SceneManager.AllGameObjects)
+            {
+                foreach (var comp in go.InternalComponents)
+                {
+                    if (comp is UIImage uiImage && uiImage.sprite != null
+                        && oldToNew.TryGetValue(uiImage.sprite, out var newImgSprite))
+                    {
+                        uiImage.sprite = newImgSprite;
+                    }
+                    else if (comp is UIPanel uiPanel && uiPanel.sprite != null
+                        && oldToNew.TryGetValue(uiPanel.sprite, out var newPanelSprite))
+                    {
+                        uiPanel.sprite = newPanelSprite;
+                    }
                 }
             }
         }

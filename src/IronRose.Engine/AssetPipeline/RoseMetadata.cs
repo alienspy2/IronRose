@@ -176,6 +176,10 @@ namespace IronRose.AssetPipeline
                 {
                     ["type"] = "PostProcessProfileImporter",
                 },
+                ".txt" or ".json" or ".xml" or ".csv" => new TomlTable
+                {
+                    ["type"] = "TextAssetImporter",
+                },
                 _ => new TomlTable { ["type"] = "DefaultImporter" },
             };
         }

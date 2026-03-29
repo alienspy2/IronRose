@@ -62,7 +62,15 @@ namespace RoseEngine
                 return;
             }
 
-            float bL = border.x, bB = border.y, bR = border.z, bT = border.w;
+            // border를 sprite pixels → screen pixels로 변환
+            // Unity 공식: border * (referencePixelsPerUnit / spritePPU) * canvasScale
+            const float REFERENCE_PPU = 100f;
+            float ppu = sprite.pixelsPerUnit;
+            float scale = CanvasRenderer.CurrentCanvasScale;
+            float borderScale = ppu > 0 ? REFERENCE_PPU / ppu * scale : scale;
+
+            float bL = border.x * borderScale, bB = border.y * borderScale;
+            float bR = border.z * borderScale, bT = border.w * borderScale;
 
             float sL = MathF.Min(bL, r.width * 0.5f);
             float sR = MathF.Min(bR, r.width * 0.5f);

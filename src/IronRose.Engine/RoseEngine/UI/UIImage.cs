@@ -65,11 +65,19 @@ namespace RoseEngine
                 return;
             }
 
-            // border = (left, bottom, right, top) in pixels
-            float bL = border.x;
-            float bB = border.y;
-            float bR = border.z;
-            float bT = border.w;
+            // border = (left, bottom, right, top) in sprite pixels.
+            // Unity 공식: border * (referencePixelsPerUnit / spritePPU) * canvasScale
+            // referencePixelsPerUnit 기본값 = 100 (Unity 동일)
+            // PPU=100이면 factor=1 (기존 동작), PPU=200이면 factor=0.5 (border 절반)
+            const float REFERENCE_PPU = 100f;
+            float ppu = sprite.pixelsPerUnit;
+            float scale = CanvasRenderer.CurrentCanvasScale;
+            float borderScale = ppu > 0 ? REFERENCE_PPU / ppu * scale : scale;
+
+            float bL = border.x * borderScale;
+            float bB = border.y * borderScale;
+            float bR = border.z * borderScale;
+            float bT = border.w * borderScale;
 
             // Screen-space border sizes (clamped to rect size)
             float sL = MathF.Min(bL, r.width * 0.5f);
