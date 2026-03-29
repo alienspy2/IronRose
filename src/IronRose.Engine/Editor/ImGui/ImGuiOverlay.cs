@@ -743,6 +743,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             // ── Alert popups (component migration notices, etc.) ──
             EditorModal.DrawAlertPopups();
 
+            // ── Script build progress modal ──
+            DrawBuildProgressModal();
+
             // ── Auto-save ──
             SyncPanelStatesToEditorState();
             _layoutManager.UpdateAutoSave(deltaTime);
@@ -908,6 +911,47 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             {
                 Debug.LogError($"[ImGui] About image load failed: {ex.Message}");
             }
+        }
+
+        private void DrawBuildProgressModal()
+        {
+            if (!EditorBridge.ShouldShowBuildModal) return;
+
+            var viewport = ImGui.GetMainViewport();
+            float modalW = 360;
+            float modalH = 80;
+            var center = viewport.GetCenter();
+            ImGui.SetNextWindowPos(center, ImGuiCond.Always, new Vector2(0.5f, 0.5f));
+            ImGui.SetNextWindowSize(new Vector2(modalW, modalH));
+
+            var flags = ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoMove
+                      | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoNav
+                      | ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoScrollbar;
+
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 8f);
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(24, 16));
+            ImGui.PushStyleColor(ImGuiCol.WindowBg, new Vector4(0.16f, 0.16f, 0.21f, 1f));
+
+            if (ImGui.Begin("##BuildProgressModal", flags))
+            {
+                ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1f, 0.85f, 0.5f, 1f));
+                ImGui.Text("Compiling Scripts...");
+                ImGui.PopStyleColor();
+
+                ImGui.Spacing();
+
+                float elapsed = EditorBridge.BuildElapsed;
+                // indeterminate spinner: animated progress bar
+                float t = (elapsed * 2f) % 1f;
+                ImGui.PushStyleColor(ImGuiCol.PlotHistogram, new Vector4(0.4f, 0.65f, 1f, 1f));
+                ImGui.ProgressBar(t, new Vector2(-1, 16), $"{elapsed:F1}s");
+                ImGui.PopStyleColor();
+
+                ImGui.End();
+            }
+
+            ImGui.PopStyleColor();
+            ImGui.PopStyleVar(2);
         }
 
         private void DrawAboutPopup()

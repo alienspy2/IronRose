@@ -11,6 +11,7 @@
 //     InstantiatePrefab(string): GameObject?                           — GUID로 인스턴스화
 //     InstantiatePrefab(string, Vector3, Quaternion): GameObject?      — 위치/회전 지정 인스턴스화
 //     InstantiatePrefab(string, Transform): GameObject?                — 부모 지정 인스턴스화
+//     InstantiatePrefab(GameObject, Vector3, Quaternion): GameObject?  — 템플릿 GO로 인스턴스화
 //     InstantiatePrefabByPath(string, Vector3, Quaternion): GameObject? — 경로로 인스턴스화
 //     CreateVariant(string, string): string?                           — Variant 프리팹 생성
 //     IsVariant(string): bool                                          — Variant 여부 확인
@@ -99,6 +100,31 @@ namespace RoseEngine
             {
                 inst = go.AddComponent<PrefabInstance>();
                 inst.prefabGuid = prefabGuid;
+            }
+
+            return go;
+        }
+
+        /// <summary>
+        /// 프리팹 템플릿 GameObject로 씬에 인스턴스화 (위치/회전 지정).
+        /// 스크립트의 public GameObject 필드에 링크된 프리팹을 인스턴스화할 때 사용.
+        /// </summary>
+        public static GameObject? InstantiatePrefab(GameObject prefabTemplate, Vector3 position, Quaternion rotation)
+        {
+            if (prefabTemplate == null) return null;
+
+            var go = Object.Instantiate(prefabTemplate, position, rotation);
+
+            // 템플릿에서 프리팹 GUID 추출하여 PrefabInstance 부착
+            var inst = go.GetComponent<PrefabInstance>();
+            if (inst == null)
+            {
+                var sourceInst = prefabTemplate.GetComponent<PrefabInstance>();
+                if (sourceInst != null)
+                {
+                    inst = go.AddComponent<PrefabInstance>();
+                    inst.prefabGuid = sourceInst.prefabGuid;
+                }
             }
 
             return go;

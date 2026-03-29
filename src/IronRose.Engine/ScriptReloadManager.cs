@@ -122,6 +122,18 @@ namespace IronRose.Engine
                 return;
             }
 
+            try
+            {
+                BuildScriptsCore();
+            }
+            finally
+            {
+                Editor.EditorBridge.NotifyBuildFinished();
+            }
+        }
+
+        private void BuildScriptsCore()
+        {
             RoseEngine.EditorDebug.Log("[Scripting] BuildScripts: running dotnet build...", force: true);
             var buildStart = DateTime.Now;
 
@@ -167,7 +179,22 @@ namespace IronRose.Engine
                     {
                         var trimmed = line.Trim();
                         if (trimmed.Length > 0)
-                            RoseEngine.EditorDebug.LogError($"[Scripting]   {trimmed}");
+                        {
+                            // dotnet build 출력에서 파일 경로와 라인 번호 추출
+                            // 형식: /path/to/File.cs(32,23): error CS1234: ...
+                            var buildMatch = System.Text.RegularExpressions.Regex.Match(
+                                trimmed, @"^(.+?)\((\d+),\d+\):\s+(warning|error)\s+");
+                            if (buildMatch.Success)
+                            {
+                                string srcFile = buildMatch.Groups[1].Value;
+                                int.TryParse(buildMatch.Groups[2].Value, out int srcLine);
+                                RoseEngine.EditorDebug.LogBuildError($"[Scripting]   {trimmed}", srcFile, srcLine);
+                            }
+                            else
+                            {
+                                RoseEngine.EditorDebug.LogError($"[Scripting]   {trimmed}");
+                            }
+                        }
                     }
                 }
                 return;
@@ -228,7 +255,8 @@ namespace IronRose.Engine
             if (HasSourceChangedSinceBuild())
             {
                 RoseEngine.EditorDebug.Log("[Scripting] Source changes detected during play mode -- rebuilding", force: true);
-                ExecuteReload();
+                Editor.EditorBridge.NotifyBuildStarted();
+                _reloadDelayFrames = 2;
             }
         }
 
@@ -254,12 +282,28 @@ namespace IronRose.Engine
             });
         }
 
+        // 빌드 모달이 렌더링될 수 있도록 ExecuteReload를 2프레임 지연
+        private int _reloadDelayFrames = -1;
+
         /// <summary>
         /// 메인 스레드에서 매 프레임 호출. 리로드 요청이 있으면 처리합니다.
         /// Trailing edge debounce: 마지막 파일 변경 후 DEBOUNCE_SECONDS가 경과해야 리로드를 실행합니다.
         /// </summary>
         public void ProcessReload()
         {
+            // 지연 카운트다운 중이면 프레임 소진 후 실행
+            if (_reloadDelayFrames > 0)
+            {
+                _reloadDelayFrames--;
+                return;
+            }
+            if (_reloadDelayFrames == 0)
+            {
+                _reloadDelayFrames = -1;
+                ExecuteReload();
+                return;
+            }
+
             if (!_reloadRequested) return;
 
             // Play mode 중에는 리로드하지 않음 — 실행 중인 컴포넌트 교체로 상태 손실 위험
@@ -269,7 +313,9 @@ namespace IronRose.Engine
             if (elapsed < DEBOUNCE_SECONDS) return;
 
             _reloadRequested = false;
-            ExecuteReload();
+            // 모달 표시를 위해 2프레임 지연 (NotifyBuildStarted → 모달 렌더 → 빌드 실행)
+            Editor.EditorBridge.NotifyBuildStarted();
+            _reloadDelayFrames = 2;
         }
 
         private void ExecuteReload()

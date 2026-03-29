@@ -40,6 +40,14 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         {
             if (!IsOpen) return;
 
+            // 빌드 시작 시 콘솔 전체 클리어 (빌드 에러 포함)
+            if (EditorBridge.ConsumeBuildStarted())
+            {
+                _entries.Clear();
+                _selectionAnchor = -1;
+                _selectionEnd = -1;
+            }
+
             // Drain new logs from EditorBridge
             _drainBuffer.Clear();
             EditorBridge.DrainLogs(_drainBuffer);

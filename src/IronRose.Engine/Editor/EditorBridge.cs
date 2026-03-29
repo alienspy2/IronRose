@@ -69,6 +69,35 @@ namespace IronRose.Engine.Editor
 
         public static void EnqueueCommand(EditorCommand cmd) => _commands.Enqueue(cmd);
 
+        // ── Script Build 상태 ──
+        private static volatile bool _buildStarted;
+        private static volatile bool _buildInProgress;
+        private static readonly System.Diagnostics.Stopwatch _buildStopwatch = new();
+        private const float BUILD_MODAL_MIN_DURATION = 0.5f;
+
+        public static void NotifyBuildStarted()
+        {
+            _buildStarted = true;
+            _buildInProgress = true;
+            _buildStopwatch.Restart();
+        }
+
+        public static void NotifyBuildFinished() => _buildInProgress = false;
+
+        public static bool ConsumeBuildStarted()
+        {
+            if (!_buildStarted) return false;
+            _buildStarted = false;
+            return true;
+        }
+
+        /// <summary>빌드 모달을 표시해야 하는지 여부. 빌드 중이거나 최소 표시 시간이 지나지 않았으면 true.</summary>
+        public static bool ShouldShowBuildModal =>
+            _buildInProgress ||
+            (_buildStopwatch.IsRunning && _buildStopwatch.Elapsed.TotalSeconds < BUILD_MODAL_MIN_DURATION);
+
+        public static float BuildElapsed => (float)_buildStopwatch.Elapsed.TotalSeconds;
+
         public static void DrainLogs(List<LogEntry> buffer)
         {
             while (_logs.TryDequeue(out var entry))
