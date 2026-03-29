@@ -362,40 +362,40 @@ namespace IronRose.Physics
             float width, float height, float length, float mass)
         {
             var shape = new Box(width, height, length);
-            return _simulation.Bodies.Add(
-                BodyDescription.CreateConvexDynamic(
-                    new RigidPose(position, rotation), mass, _simulation.Shapes, shape)
-            );
+            var desc = BodyDescription.CreateConvexDynamic(
+                new RigidPose(position, rotation), mass, _simulation.Shapes, shape);
+            desc.Activity = new BodyActivityDescription(-1);
+            return _simulation.Bodies.Add(desc);
         }
 
         public BodyHandle AddDynamicSphere(Vector3 position, Quaternion rotation,
             float radius, float mass)
         {
             var shape = new Sphere(radius);
-            return _simulation.Bodies.Add(
-                BodyDescription.CreateConvexDynamic(
-                    new RigidPose(position, rotation), mass, _simulation.Shapes, shape)
-            );
+            var desc = BodyDescription.CreateConvexDynamic(
+                new RigidPose(position, rotation), mass, _simulation.Shapes, shape);
+            desc.Activity = new BodyActivityDescription(-1);
+            return _simulation.Bodies.Add(desc);
         }
 
         public BodyHandle AddDynamicCapsule(Vector3 position, Quaternion rotation,
             float radius, float length, float mass)
         {
             var shape = new Capsule(radius, length);
-            return _simulation.Bodies.Add(
-                BodyDescription.CreateConvexDynamic(
-                    new RigidPose(position, rotation), mass, _simulation.Shapes, shape)
-            );
+            var desc = BodyDescription.CreateConvexDynamic(
+                new RigidPose(position, rotation), mass, _simulation.Shapes, shape);
+            desc.Activity = new BodyActivityDescription(-1);
+            return _simulation.Bodies.Add(desc);
         }
 
         public BodyHandle AddDynamicCylinder(Vector3 position, Quaternion rotation,
             float radius, float height, float mass)
         {
             var shape = new Cylinder(radius, height);
-            return _simulation.Bodies.Add(
-                BodyDescription.CreateConvexDynamic(
-                    new RigidPose(position, rotation), mass, _simulation.Shapes, shape)
-            );
+            var desc = BodyDescription.CreateConvexDynamic(
+                new RigidPose(position, rotation), mass, _simulation.Shapes, shape);
+            desc.Activity = new BodyActivityDescription(-1);
+            return _simulation.Bodies.Add(desc);
         }
 
         // --- Static Body ---
@@ -554,6 +554,28 @@ namespace IronRose.Physics
                 _noGravityBodies.Remove(handle.Value);
             else
                 _noGravityBodies.Add(handle.Value);
+        }
+
+        /// <summary>body의 sleep 허용 여부를 설정합니다. allowSleep=false이면 SleepThreshold를 음수로 설정하여 자동 sleep을 방지합니다.</summary>
+        public void SetBodyAllowSleep(BodyHandle handle, bool allowSleep)
+        {
+            if (!_simulation.Bodies.BodyExists(handle))
+            {
+                EditorDebug.LogWarning($"[Physics3D] SetBodyAllowSleep: body handle {handle.Value} does not exist");
+                return;
+            }
+            var bodyRef = _simulation.Bodies[handle];
+            if (allowSleep)
+            {
+                // 기본 sleep threshold 복원 (BepuPhysics 기본값: 0.01)
+                if (bodyRef.Activity.SleepThreshold < 0)
+                    bodyRef.Activity.SleepThreshold = 0.01f;
+            }
+            else
+            {
+                // 음수로 설정하면 자동 sleep이 불가능해짐
+                bodyRef.Activity.SleepThreshold = -1f;
+            }
         }
 
         // --- Static Pose 설정 ---

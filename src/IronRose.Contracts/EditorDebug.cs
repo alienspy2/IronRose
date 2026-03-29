@@ -94,8 +94,11 @@ namespace RoseEngine
         }
         public static void LogWarning(object message) => Write("WARNING", message);
         public static void LogError(object message) => Write("ERROR", message);
+        public static void LogBuildError(object message, string? sourceFile = null, int sourceLine = 0)
+            => Write("ERROR", message, isBuildError: true, sourceFile: sourceFile, sourceLine: sourceLine);
 
-        private static void Write(string level, object message)
+        private static void Write(string level, object message, bool isBuildError = false,
+            string? sourceFile = null, int sourceLine = 0)
         {
             if (!Enabled) return;
 
@@ -125,9 +128,21 @@ namespace RoseEngine
             if (logLevel >= LogLevel.Warning)
             {
                 var st = new StackTrace(1, true);
-                var (callerFile, callerLine) = StackTraceHelper.ResolveCallerFrame(st);
+                // 빌드 에러에 소스 파일 정보가 명시적으로 전달된 경우 그것을 사용,
+                // 그렇지 않으면 StackTrace에서 호출자 위치를 추출
+                string? callerFile;
+                int callerLineNum;
+                if (isBuildError && !string.IsNullOrEmpty(sourceFile))
+                {
+                    callerFile = sourceFile;
+                    callerLineNum = sourceLine;
+                }
+                else
+                {
+                    (callerFile, callerLineNum) = StackTraceHelper.ResolveCallerFrame(st);
+                }
                 LogSink?.Invoke(new LogEntry(logLevel, LogSource.Editor, message?.ToString() ?? "null", DateTime.Now,
-                    st.ToString(), callerFile, callerLine));
+                    st.ToString(), callerFile, callerLineNum, isBuildError));
             }
         }
     }

@@ -76,7 +76,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 // Toolbar
                 if (ImGui.Button("Clear"))
                 {
-                    _entries.Clear();
+                    _entries.RemoveAll(e => !e.IsBuildError);
                     _selectionAnchor = -1;
                     _selectionEnd = -1;
                 }

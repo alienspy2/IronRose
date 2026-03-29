@@ -42,6 +42,9 @@ namespace IronRose.Scripting
             var runtimeAssembly = Assembly.Load("System.Runtime");
             AddReference(runtimeAssembly.Location);
 
+            var collectionsAssembly = Assembly.Load("System.Collections");
+            AddReference(collectionsAssembly.Location);
+
             EditorDebug.Log("[Scripting] Added base references");
 
             // IronRose.Engine 참조 추가 (나중에)
@@ -68,23 +71,46 @@ namespace IronRose.Scripting
 
         public CompilationResult CompileFromFiles(string[] filePaths, string assemblyName = "DynamicScript")
         {
-            EditorDebug.Log($"[Scripting] Compiling {filePaths.Length} files: {assemblyName}");
+            EditorDebug.Log($"[Scripting] CompileFromFiles: {filePaths.Length} files, assemblyName={assemblyName}", force: true);
 
             var syntaxTrees = new List<SyntaxTree>();
+            int skippedNotFound = 0;
+            int skippedIOError = 0;
             foreach (var f in filePaths)
             {
                 try
                 {
-                    if (!File.Exists(f)) continue;
+                    if (!File.Exists(f))
+                    {
+                        skippedNotFound++;
+                        EditorDebug.LogWarning($"[Scripting] CompileFromFiles: file not found, skipping: {f}");
+                        continue;
+                    }
                     var source = File.ReadAllText(f);
-                    syntaxTrees.Add(CSharpSyntaxTree.ParseText(source, path: f,
-                        encoding: System.Text.Encoding.UTF8));
+                    var tree = CSharpSyntaxTree.ParseText(source, path: f,
+                        encoding: System.Text.Encoding.UTF8);
+
+                    // SyntaxTree 파싱 에러 체크
+                    var parseDiags = tree.GetDiagnostics();
+                    var parseErrors = parseDiags.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+                    if (parseErrors.Count > 0)
+                    {
+                        EditorDebug.LogWarning($"[Scripting] CompileFromFiles: parse errors in {Path.GetFileName(f)} ({parseErrors.Count} errors)");
+                        foreach (var pe in parseErrors)
+                            EditorDebug.LogWarning($"[Scripting]   parse error: {pe.Id}: {pe.GetMessage()} at {pe.Location}");
+                    }
+
+                    syntaxTrees.Add(tree);
+                    EditorDebug.Log($"[Scripting] CompileFromFiles: parsed {Path.GetFileName(f)} ({source.Length} chars)", force: true);
                 }
                 catch (IOException ex)
                 {
-                    EditorDebug.LogWarning($"[Scripting] Skipping file {f}: {ex.Message}");
+                    skippedIOError++;
+                    EditorDebug.LogWarning($"[Scripting] CompileFromFiles: IOException skipping {f}: {ex.Message}");
                 }
             }
+
+            EditorDebug.Log($"[Scripting] CompileFromFiles: {syntaxTrees.Count} syntax trees ready (skippedNotFound={skippedNotFound}, skippedIOError={skippedIOError})", force: true);
 
             return CompileFromSyntaxTrees(syntaxTrees.ToArray(), assemblyName);
         }
@@ -101,6 +127,12 @@ namespace IronRose.Scripting
 
         private CompilationResult CompileFromSyntaxTrees(SyntaxTree[] syntaxTrees, string assemblyName)
         {
+            EditorDebug.Log($"[Scripting] CompileFromSyntaxTrees: {syntaxTrees.Length} trees, assemblyName={assemblyName}, {_references.Count} references", force: true);
+            foreach (var r in _references)
+            {
+                EditorDebug.Log($"[Scripting]   reference: {r.Display}", force: true);
+            }
+
             var compilation = CSharpCompilation.Create(
                 assemblyName,
                 syntaxTrees,
@@ -114,17 +146,46 @@ namespace IronRose.Scripting
             using var pdbStream = new MemoryStream();
             EmitResult result = compilation.Emit(ms, pdbStream);
 
+            // Warning 로그 (성공/실패 관계없이)
+            var warnings = result.Diagnostics
+                .Where(d => d.Severity == DiagnosticSeverity.Warning)
+                .ToList();
+            if (warnings.Count > 0)
+            {
+                EditorDebug.Log($"[Scripting] Compilation warnings: {warnings.Count}", force: true);
+                foreach (var w in warnings)
+                {
+                    EditorDebug.Log($"[Scripting]   warning: {w.Id}: {w.GetMessage()} at {w.Location}", force: true);
+                }
+            }
+
             if (!result.Success)
             {
-                var errors = result.Diagnostics
+                var errorDiagnostics = result.Diagnostics
                     .Where(d => d.Severity == DiagnosticSeverity.Error)
-                    .Select(d => $"{d.Id}: {d.GetMessage()}")
                     .ToList();
 
-                EditorDebug.LogError($"[Scripting] Compilation FAILED with {errors.Count} errors");
+                var errors = new List<CompilationError>();
+                foreach (var d in errorDiagnostics)
+                {
+                    var lineSpan = d.Location.GetMappedLineSpan();
+                    string? errorFile = lineSpan.HasMappedPath ? lineSpan.Path : null;
+                    // Roslyn LinePosition is 0-based, editor expects 1-based line numbers
+                    int errorLine = lineSpan.IsValid ? lineSpan.StartLinePosition.Line + 1 : 0;
+
+                    errors.Add(new CompilationError
+                    {
+                        Message = $"{d.Id}: {d.GetMessage()} at {d.Location}",
+                        FilePath = errorFile,
+                        Line = errorLine,
+                    });
+                }
+
+                EditorDebug.LogBuildError($"[Scripting] Compilation FAILED with {errors.Count} errors");
                 foreach (var error in errors)
                 {
-                    EditorDebug.LogError($"[Scripting]   - {error}");
+                    EditorDebug.LogBuildError($"[Scripting]   - {error.Message}",
+                        sourceFile: error.FilePath, sourceLine: error.Line);
                 }
 
                 return new CompilationResult
@@ -139,7 +200,7 @@ namespace IronRose.Scripting
             byte[] assemblyBytes = ms.ToArray();
             byte[] pdbBytes = pdbStream.ToArray();
 
-            EditorDebug.Log($"[Scripting] Compilation SUCCESS ({assemblyBytes.Length} bytes, PDB {pdbBytes.Length} bytes)");
+            EditorDebug.Log($"[Scripting] Compilation SUCCESS ({assemblyBytes.Length} bytes, PDB {pdbBytes.Length} bytes)", force: true);
 
             return new CompilationResult
             {
@@ -158,7 +219,10 @@ namespace IronRose.Scripting
                 return new CompilationResult
                 {
                     Success = false,
-                    Errors = new List<string> { $"File not found: {csFilePath}" }
+                    Errors = new List<CompilationError>
+                    {
+                        new CompilationError { Message = $"File not found: {csFilePath}" }
+                    }
                 };
             }
 
@@ -167,11 +231,23 @@ namespace IronRose.Scripting
         }
     }
 
+    /// <summary>
+    /// 컴파일 에러 하나를 나타내는 구조체. 에러 메시지와 소스 파일 위치 정보를 포함한다.
+    /// </summary>
+    public readonly struct CompilationError
+    {
+        public string Message { get; init; }
+        public string? FilePath { get; init; }
+        public int Line { get; init; }
+
+        public override string ToString() => Message;
+    }
+
     public class CompilationResult
     {
         public bool Success { get; set; }
         public byte[]? AssemblyBytes { get; set; }
         public byte[]? PdbBytes { get; set; }
-        public List<string> Errors { get; set; } = new();
+        public List<CompilationError> Errors { get; set; } = new();
     }
 }

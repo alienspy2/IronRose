@@ -2790,7 +2790,7 @@ namespace IronRose.Engine.Cli
                 if (!int.TryParse(args[0], out var id))
                     return JsonError($"Invalid GameObject ID: {args[0]}");
 
-                var path = args[1];
+                var path = ResolveProjectPath(args[1]);
                 return ExecuteOnMainThread(() =>
                 {
                     var go = FindGameObjectById(id);

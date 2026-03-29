@@ -118,6 +118,8 @@ namespace RoseEngine
         /// </summary>
         internal static void UnregisterBehaviour(MonoBehaviour behaviour)
         {
+            CoroutineScheduler.StopAllCoroutines(behaviour);
+            InvokeScheduler.CancelAll(behaviour);
             _behaviours.Remove(behaviour);
             _pendingStart.Remove(behaviour);
         }

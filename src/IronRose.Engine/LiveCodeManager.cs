@@ -43,7 +43,8 @@ namespace IronRose.Engine
         private readonly List<FileSystemWatcher> _liveCodeWatchers = new();
         private bool _reloadRequested;
         private bool _pendingReloadAfterPlayStop;
-        private DateTime _lastReloadTime = DateTime.MinValue;
+        private DateTime _lastFileChangeTime = DateTime.MinValue;
+        private const double DEBOUNCE_SECONDS = 0.5;
         private readonly Dictionary<string, string> _savedHotReloadStates = new();
 
         /// <summary>
@@ -81,14 +82,26 @@ namespace IronRose.Engine
             }
 
             _compiler = new ScriptCompiler();
+            RoseEngine.EditorDebug.Log("[Scripting] Adding references for LiveCode compilation:", force: true);
             _compiler.AddReference(typeof(IronRose.API.Screen));
+            RoseEngine.EditorDebug.Log($"[Scripting]   ref: IronRose.API.Screen -> {typeof(IronRose.API.Screen).Assembly.Location}", force: true);
             _compiler.AddReference(typeof(EngineCore).Assembly.Location);
+            RoseEngine.EditorDebug.Log($"[Scripting]   ref: EngineCore -> {typeof(EngineCore).Assembly.Location}", force: true);
             _compiler.AddReference(typeof(PostProcessStack).Assembly.Location);
+            RoseEngine.EditorDebug.Log($"[Scripting]   ref: PostProcessStack -> {typeof(PostProcessStack).Assembly.Location}", force: true);
             _compiler.AddReference(typeof(IHotReloadable).Assembly.Location);
+            RoseEngine.EditorDebug.Log($"[Scripting]   ref: IHotReloadable -> {typeof(IHotReloadable).Assembly.Location}", force: true);
 
             var entryAsm = System.Reflection.Assembly.GetEntryAssembly();
             if (entryAsm != null && !string.IsNullOrEmpty(entryAsm.Location))
+            {
                 _compiler.AddReference(entryAsm.Location);
+                RoseEngine.EditorDebug.Log($"[Scripting]   ref: EntryAssembly -> {entryAsm.Location}", force: true);
+            }
+            else
+            {
+                RoseEngine.EditorDebug.LogWarning($"[Scripting]   ref: EntryAssembly not available (entryAsm={(entryAsm == null ? "null" : "no location")})");
+            }
             _scriptDomain = new ScriptDomain();
 
             var monoBehaviourType = typeof(MonoBehaviour);
@@ -115,23 +128,35 @@ namespace IronRose.Engine
 
         /// <summary>
         /// 메인 스레드에서 매 프레임 호출. 리로드 요청이 있으면 처리합니다.
+        /// Trailing edge debounce: 마지막 파일 변경 후 DEBOUNCE_SECONDS가 경과해야 리로드를 실행합니다.
+        /// 이렇게 하면 여러 파일이 거의 동시에 변경될 때 모든 파일이 기록 완료된 후 한 번만 컴파일됩니다.
         /// 플레이모드 중에는 리로드를 보류하고, 플레이모드 종료 시 수행합니다.
         /// </summary>
         public void ProcessReload()
         {
             if (!_reloadRequested) return;
-            _reloadRequested = false;
 
-            RoseEngine.EditorDebug.LogWarning($"[HotReload:DIAG] ProcessReload triggered. IsInPlaySession={EditorPlayMode.IsInPlaySession}, pendingReload={_pendingReloadAfterPlayStop}");
+            // Trailing edge debounce: 마지막 파일 변경 후 충분한 시간이 지나야 리로드 실행
+            var elapsed = (DateTime.Now - _lastFileChangeTime).TotalSeconds;
+            if (elapsed < DEBOUNCE_SECONDS)
+            {
+                // 디바운스 대기 중 로그는 매 프레임 출력되므로 Verbose에만 기록
+                RoseEngine.EditorDebug.Log($"[Scripting] ProcessReload debounce waiting: elapsed={elapsed:F3}s < {DEBOUNCE_SECONDS}s");
+                return; // 아직 디바운스 대기 중 — 추가 변경이 올 수 있으므로 대기
+            }
+
+            _reloadRequested = false;
+            RoseEngine.EditorDebug.Log($"[Scripting] ProcessReload debounce passed: elapsed={elapsed:F3}s — proceeding to reload", force: true);
 
             // 플레이모드 중에는 리로드를 보류
             if (EditorPlayMode.IsInPlaySession)
             {
                 _pendingReloadAfterPlayStop = true;
-                RoseEngine.EditorDebug.Log("[Engine] LiveCode change detected during Play mode — reload deferred until Play stops");
+                RoseEngine.EditorDebug.Log("[Engine] LiveCode change detected during Play mode — reload deferred until Play stops", force: true);
                 return;
             }
 
+            RoseEngine.EditorDebug.Log("[Scripting] ProcessReload: not in play session, executing reload now", force: true);
             ExecuteReload();
         }
 
@@ -141,17 +166,21 @@ namespace IronRose.Engine
         /// </summary>
         public void FlushPendingReload()
         {
-            RoseEngine.EditorDebug.LogWarning($"[HotReload:DIAG] FlushPendingReload called. pending={_pendingReloadAfterPlayStop}");
-            if (!_pendingReloadAfterPlayStop) return;
+            if (!_pendingReloadAfterPlayStop)
+            {
+                RoseEngine.EditorDebug.Log("[Scripting] FlushPendingReload called but no pending reload", force: true);
+                return;
+            }
             _pendingReloadAfterPlayStop = false;
 
-            RoseEngine.EditorDebug.Log("[Engine] Flushing deferred LiveCode reload after Play stop");
+            RoseEngine.EditorDebug.Log("[Scripting] FlushPendingReload: executing deferred LiveCode reload after Play stop", force: true);
             ExecuteReload();
         }
 
         private void ExecuteReload()
         {
-            RoseEngine.EditorDebug.LogWarning($"[HotReload:DIAG] ExecuteReload starting. PlayState={EditorPlayMode.State}");
+            RoseEngine.EditorDebug.Log("[Scripting] === ExecuteReload START ===", force: true);
+            var reloadStart = DateTime.Now;
 
             CompileAllLiveCode();
 
@@ -160,6 +189,9 @@ namespace IronRose.Engine
 
             // 모든 외부 참조(씬 컴포넌트, 타입 캐시)가 해제된 후 ALC 수거 검증
             _scriptDomain?.VerifyPreviousContextUnloaded();
+
+            var reloadElapsed = (DateTime.Now - reloadStart).TotalMilliseconds;
+            RoseEngine.EditorDebug.Log($"[Scripting] === ExecuteReload END === (took {reloadElapsed:F1}ms)", force: true);
         }
 
         public void UpdateScripts()
@@ -215,6 +247,13 @@ namespace IronRose.Engine
 
         private void CompileAllLiveCode()
         {
+            RoseEngine.EditorDebug.Log("[Scripting] CompileAllLiveCode: scanning directories...", force: true);
+            foreach (var dir in _liveCodePaths)
+            {
+                bool exists = Directory.Exists(dir);
+                RoseEngine.EditorDebug.Log($"[Scripting]   LiveCode dir: {dir} (exists={exists})", force: true);
+            }
+
             var csFiles = _liveCodePaths
                 .Where(Directory.Exists)
                 .SelectMany(p => Directory.GetFiles(p, "*.cs", SearchOption.AllDirectories))
@@ -229,28 +268,50 @@ namespace IronRose.Engine
                 .ToArray();
 
             if (csFiles.Length == 0)
+            {
+                RoseEngine.EditorDebug.LogWarning("[Scripting] CompileAllLiveCode: no .cs files found — skipping compilation");
                 return;
+            }
 
-            RoseEngine.EditorDebug.Log($"[Engine] Compiling {csFiles.Length} LiveCode files from {_liveCodePaths.Count} directories...");
+            RoseEngine.EditorDebug.Log($"[Scripting] CompileAllLiveCode: found {csFiles.Length} .cs files from {_liveCodePaths.Count} directories", force: true);
+            foreach (var f in csFiles)
+            {
+                var fileInfo = new FileInfo(f);
+                RoseEngine.EditorDebug.Log($"[Scripting]   file: {f} (size={fileInfo.Length}bytes, lastWrite={fileInfo.LastWriteTime:HH:mm:ss.fff})", force: true);
+            }
 
+            var compileStart = DateTime.Now;
             var result = _compiler!.CompileFromFiles(csFiles, "LiveCode");
+            var compileElapsed = (DateTime.Now - compileStart).TotalMilliseconds;
+
             if (result.Success && result.AssemblyBytes != null)
             {
-                if (_scriptDomain!.IsLoaded)
+                RoseEngine.EditorDebug.Log($"[Scripting] CompileAllLiveCode: compilation SUCCESS in {compileElapsed:F1}ms — assembly={result.AssemblyBytes.Length}bytes, pdb={result.PdbBytes?.Length ?? 0}bytes", force: true);
+
+                bool wasLoaded = _scriptDomain!.IsLoaded;
+                RoseEngine.EditorDebug.Log($"[Scripting] CompileAllLiveCode: ScriptDomain.IsLoaded={wasLoaded} — will {(wasLoaded ? "Reload" : "LoadScripts")}", force: true);
+
+                if (wasLoaded)
                 {
                     // 이전 ALC Type 참조를 해제하여 GC가 이전 ALC를 수거할 수 있도록 한다
                     MonoBehaviour.ClearMethodCache();
+                    RoseEngine.EditorDebug.Log("[Scripting] CompileAllLiveCode: MonoBehaviour.ClearMethodCache() called", force: true);
                     _scriptDomain.Reload(result.AssemblyBytes, result.PdbBytes);
                 }
                 else
                     _scriptDomain.LoadScripts(result.AssemblyBytes, result.PdbBytes);
 
                 RegisterLiveCodeBehaviours();
-                RoseEngine.EditorDebug.Log("[Engine] LiveCode loaded!");
+                RoseEngine.EditorDebug.Log("[Engine] LiveCode loaded!", force: true);
             }
             else
             {
-                RoseEngine.EditorDebug.LogError("[Engine] LiveCode compilation failed");
+                RoseEngine.EditorDebug.LogBuildError($"[Scripting] CompileAllLiveCode: compilation FAILED in {compileElapsed:F1}ms — {result.Errors.Count} errors");
+                foreach (var err in result.Errors)
+                {
+                    RoseEngine.EditorDebug.LogBuildError($"[Scripting]   compile error: {err.Message}",
+                        sourceFile: err.FilePath, sourceLine: err.Line);
+                }
             }
         }
 
@@ -258,24 +319,31 @@ namespace IronRose.Engine
         {
             var monoBehaviourType = typeof(MonoBehaviour);
             var types = _scriptDomain!.GetLoadedTypes();
+            RoseEngine.EditorDebug.Log($"[Scripting] RegisterLiveCodeBehaviours: {types.Length} types loaded from assembly", force: true);
+
             var demoTypes = new List<Type>();
 
             foreach (var type in types)
             {
-                if (type.IsAbstract || type.IsInterface) continue;
-                if (!monoBehaviourType.IsAssignableFrom(type)) continue;
+                bool isAbstract = type.IsAbstract || type.IsInterface;
+                bool isMono = monoBehaviourType.IsAssignableFrom(type);
+                RoseEngine.EditorDebug.Log($"[Scripting]   type: {type.FullName} (isAbstract={isAbstract}, isMonoBehaviour={isMono}, baseType={type.BaseType?.Name ?? "null"})", force: true);
+
+                if (isAbstract) continue;
+                if (!isMono) continue;
 
                 demoTypes.Add(type);
-                RoseEngine.EditorDebug.Log($"[Engine] LiveCode demo detected: {type.Name}");
+                RoseEngine.EditorDebug.Log($"[Scripting]   -> registered as LiveCode MonoBehaviour: {type.Name}", force: true);
             }
 
             LiveCodeDemoTypes = demoTypes.ToArray();
-            RoseEngine.EditorDebug.Log($"[Engine] LiveCode demos available: {LiveCodeDemoTypes.Length}");
+            RoseEngine.EditorDebug.Log($"[Scripting] RegisterLiveCodeBehaviours: total {LiveCodeDemoTypes.Length} MonoBehaviour types registered", force: true);
 
             // 에디터 캐시 무효화: 새 타입이 Add Component 메뉴 및 씬 역직렬화에 반영
             ImGuiInspectorPanel.InvalidateComponentTypeCache();
             ImGuiHierarchyPanel.InvalidateComponentTypeCache();
             SceneSerializer.InvalidateComponentTypeCache();
+            RoseEngine.EditorDebug.Log("[Scripting] RegisterLiveCodeBehaviours: editor type caches invalidated", force: true);
         }
 
         private void SaveHotReloadableState()
@@ -337,24 +405,53 @@ namespace IronRose.Engine
         /// </summary>
         private void MigrateEditorComponents()
         {
-            if (_scriptDomain == null || LiveCodeDemoTypes.Length == 0) return;
+            if (_scriptDomain == null || LiveCodeDemoTypes.Length == 0)
+            {
+                RoseEngine.EditorDebug.Log($"[Scripting] MigrateEditorComponents: skipped (scriptDomain={((_scriptDomain == null) ? "null" : "ok")}, demoTypes={LiveCodeDemoTypes.Length})", force: true);
+                return;
+            }
+
+            RoseEngine.EditorDebug.Log("[Scripting] MigrateEditorComponents: building new type map...", force: true);
 
             // 새 어셈블리의 타입을 이름으로 매핑
             var newTypeMap = new Dictionary<string, Type>();
             foreach (var t in _scriptDomain.GetLoadedTypes())
+            {
                 newTypeMap[t.Name] = t;
+                RoseEngine.EditorDebug.Log($"[Scripting]   newTypeMap: {t.Name} -> {t.AssemblyQualifiedName}", force: true);
+            }
+
+            int totalGOs = 0;
+            int totalComponents = 0;
+            int migratedCount = 0;
+            int skippedSameType = 0;
+            int skippedNoMatch = 0;
+            int failedCreation = 0;
 
             foreach (var go in SceneManager.AllGameObjects)
             {
+                totalGOs++;
                 for (int i = 0; i < go._components.Count; i++)
                 {
                     var old = go._components[i];
                     if (old is Transform) continue;
 
+                    totalComponents++;
                     var oldType = old.GetType();
                     // 이미 최신 어셈블리 타입이면 스킵
-                    if (!newTypeMap.TryGetValue(oldType.Name, out var newType)) continue;
-                    if (oldType == newType) continue;
+                    if (!newTypeMap.TryGetValue(oldType.Name, out var newType))
+                    {
+                        skippedNoMatch++;
+                        continue;
+                    }
+                    if (oldType == newType)
+                    {
+                        skippedSameType++;
+                        RoseEngine.EditorDebug.Log($"[Scripting]   skip (same type): {oldType.Name} on GO '{go.name}' — assembly={oldType.Assembly.GetName().Name}", force: true);
+                        continue;
+                    }
+
+                    RoseEngine.EditorDebug.Log($"[Scripting]   migrating: {oldType.Name} on GO '{go.name}' — old asm={oldType.Assembly.GetName().Name}, new asm={newType.Assembly.GetName().Name}", force: true);
 
                     // 새 인스턴스 생성
                     Component? newComp;
@@ -362,8 +459,10 @@ namespace IronRose.Engine
                     {
                         newComp = (Component)Activator.CreateInstance(newType)!;
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        failedCreation++;
+                        RoseEngine.EditorDebug.LogError($"[Scripting]   FAILED to create instance of {newType.Name}: {ex.Message}");
                         continue;
                     }
 
@@ -379,9 +478,12 @@ namespace IronRose.Engine
                     if (newComp is MonoBehaviour newMb)
                         SceneManager.RegisterBehaviour(newMb);
 
-                    RoseEngine.EditorDebug.Log($"[Engine] Migrated component: {oldType.Name} on {go.name}");
+                    migratedCount++;
+                    RoseEngine.EditorDebug.Log($"[Scripting]   migrated OK: {oldType.Name} on GO '{go.name}'", force: true);
                 }
             }
+
+            RoseEngine.EditorDebug.Log($"[Scripting] MigrateEditorComponents: done — scanned {totalGOs} GOs, {totalComponents} components, migrated={migratedCount}, skippedSameType={skippedSameType}, skippedNoMatch={skippedNoMatch}, failedCreation={failedCreation}", force: true);
         }
 
         private static void CopyFieldValues(Type oldType, object oldObj, Type newType, object newObj)
@@ -395,32 +497,51 @@ namespace IronRose.Engine
                 try
                 {
                     var val = of.GetValue(oldObj);
-                    // 타입 호환성 체크 (같은 이름이더라도 타입이 다를 수 있음)
-                    if (val != null && nf.FieldType.IsAssignableFrom(val.GetType()))
+                    if (val == null)
+                    {
+                        if (!nf.FieldType.IsValueType)
+                            nf.SetValue(newObj, null);
+                        continue;
+                    }
+
+                    // 엔진 타입(non-LiveCode) 필드는 ALC 경계와 무관하므로 직접 할당.
+                    // LiveCode 타입 필드는 IsAssignableFrom 체크 후 할당.
+                    var valType = val.GetType();
+                    if (nf.FieldType.IsAssignableFrom(valType))
+                    {
                         nf.SetValue(newObj, val);
-                    else if (val == null && !nf.FieldType.IsValueType)
-                        nf.SetValue(newObj, null);
+                    }
+                    else
+                    {
+                        // IsAssignableFrom 실패 시 — 같은 이름의 엔진 타입이면 직접 할당 시도
+                        // (ALC 경계에서 Type identity가 달라지는 엣지 케이스 방어)
+                        try
+                        {
+                            nf.SetValue(newObj, val);
+                            RoseEngine.EditorDebug.Log($"[Scripting] CopyFieldValues: fallback SetValue succeeded for '{nf.Name}' (fieldType={nf.FieldType.Name}, valType={valType.Name})", force: true);
+                        }
+                        catch (ArgumentException)
+                        {
+                            RoseEngine.EditorDebug.Log($"[Scripting] CopyFieldValues: skipped '{nf.Name}' — type mismatch (fieldType={nf.FieldType.FullName} [{nf.FieldType.Assembly.GetName().Name}], valType={valType.FullName} [{valType.Assembly.GetName().Name}])", force: true);
+                        }
+                    }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // 필드 복사 실패는 무시 (새 기본값 유지)
+                    RoseEngine.EditorDebug.LogWarning($"[Scripting] CopyFieldValues: failed to copy '{nf.Name}' on {newType.Name}: {ex.Message}");
                 }
             }
         }
 
         private void OnLiveCodeChanged(object sender, FileSystemEventArgs e)
         {
-            var now = DateTime.Now;
-            var elapsed = (now - _lastReloadTime).TotalSeconds;
-            if (elapsed < 1.0)
-            {
-                RoseEngine.EditorDebug.LogWarning($"[HotReload:DIAG] FileWatcher debounced: {e.Name} (elapsed={elapsed:F2}s < 1.0s)");
-                return;
-            }
-
-            _lastReloadTime = now;
+            // Trailing edge debounce: 파일 변경이 감지될 때마다 타이머를 리셋.
+            // ProcessReload()에서 마지막 변경 후 DEBOUNCE_SECONDS가 경과한 뒤에 리로드를 실행한다.
+            // 이렇게 하면 여러 파일이 거의 동시에 변경되어도, 모든 파일이 기록 완료된 후에
+            // 한 번만 컴파일이 수행된다.
+            _lastFileChangeTime = DateTime.Now;
             _reloadRequested = true;
-            RoseEngine.EditorDebug.LogWarning($"[HotReload:DIAG] FileWatcher fired: {e.Name}, changeType={e.ChangeType} -> _reloadRequested=true");
+            RoseEngine.EditorDebug.Log($"[Scripting] File change detected: {e.Name} ({e.ChangeType}) — debounce timer reset, _reloadRequested=true, time={_lastFileChangeTime:HH:mm:ss.fff}", force: true);
         }
     }
 }

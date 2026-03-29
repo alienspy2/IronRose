@@ -768,9 +768,10 @@ namespace IronRose.Engine
             }
             else
             {
-                RoseEngine.EditorDebug.LogError("[Engine] FrozenCode compilation failed:");
+                RoseEngine.EditorDebug.LogBuildError("[Engine] FrozenCode compilation failed:");
                 foreach (var err in result.Errors)
-                    RoseEngine.EditorDebug.LogError($"  {err}");
+                    RoseEngine.EditorDebug.LogBuildError($"  {err.Message}",
+                        sourceFile: err.FilePath, sourceLine: err.Line);
             }
         }
 

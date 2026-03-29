@@ -1378,6 +1378,7 @@ namespace IronRose.Engine.Editor
         private static readonly HashSet<Type> AssetReferenceTypes = new()
         {
             typeof(Mesh), typeof(Material), typeof(Texture2D), typeof(Font), typeof(Sprite), typeof(AnimationClip),
+            typeof(GameObject),
         };
 
         // ── 필터링 ──
@@ -1633,6 +1634,8 @@ namespace IronRose.Engine.Editor
                 guid = FindGuidByName(db, font.name);
             else if (assetType == typeof(AnimationClip) && value is AnimationClip animClip)
                 guid = db.FindGuidForAnimationClip(animClip);
+            else if (assetType == typeof(GameObject) && value is GameObject go)
+                guid = db.FindGuidForPrefab(go);
             else if (assetType == typeof(Sprite) && value is Sprite sprite)
             {
                 // 서브 에셋 GUID 우선
@@ -1936,6 +1939,7 @@ namespace IronRose.Engine.Editor
             if (targetType == typeof(Texture2D)) return db.LoadByGuid<Texture2D>(guid);
             if (targetType == typeof(Font)) return db.LoadByGuid<Font>(guid);
             if (targetType == typeof(AnimationClip)) return db.LoadByGuid<AnimationClip>(guid);
+            if (targetType == typeof(GameObject)) return db.LoadByGuid<GameObject>(guid);
             if (targetType == typeof(Sprite))
             {
                 // 서브 에셋 GUID로 직접 로드 시도

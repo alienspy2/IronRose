@@ -329,6 +329,22 @@ namespace IronRose.AssetPipeline
             return _animClipToGuid.TryGetValue(clip, out var guid) ? guid : null;
         }
 
+        public string? FindGuidForPrefab(GameObject prefab)
+        {
+            if (prefab == null) return null;
+            // PrefabInstance 컴포넌트가 있으면 prefabGuid 사용
+            var inst = prefab.GetComponent<PrefabInstance>();
+            if (inst != null && !string.IsNullOrEmpty(inst.prefabGuid))
+                return inst.prefabGuid;
+            // 로드된 에셋에서 역검색
+            foreach (var (path, asset) in _loadedAssets)
+            {
+                if (ReferenceEquals(asset, prefab) && path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                    return GetGuidFromPath(path);
+            }
+            return null;
+        }
+
         public string? FindGuidForRendererProfile(RendererProfile profile)
         {
             if (profile == null) return null;

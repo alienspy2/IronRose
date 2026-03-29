@@ -29,10 +29,12 @@ namespace IronRose.Scripting
 
         public void LoadScripts(byte[] assemblyBytes, byte[]? pdbBytes = null)
         {
-            EditorDebug.Log("[ScriptDomain] Loading scripts...");
+            EditorDebug.Log($"[ScriptDomain] LoadScripts: assemblyBytes={assemblyBytes.Length}, pdbBytes={pdbBytes?.Length ?? 0}", force: true);
 
             // 새로운 ALC 생성
-            _currentALC = new AssemblyLoadContext($"ScriptContext_{DateTime.Now.Ticks}", isCollectible: true);
+            var alcName = $"ScriptContext_{DateTime.Now.Ticks}";
+            _currentALC = new AssemblyLoadContext(alcName, isCollectible: true);
+            EditorDebug.Log($"[ScriptDomain] Created new ALC: {alcName}", force: true);
 
             // ALC Resolving: default ALC fallback (IronRose.Engine 등 참조 해결)
             _resolvingHandler = (alc, assemblyName) =>
@@ -41,8 +43,12 @@ namespace IronRose.Scripting
                 foreach (var loaded in AssemblyLoadContext.Default.Assemblies)
                 {
                     if (loaded.GetName().Name == assemblyName.Name)
+                    {
+                        EditorDebug.Log($"[ScriptDomain] ALC Resolving: {assemblyName.Name} -> found in Default ALC", force: true);
                         return loaded;
+                    }
                 }
+                EditorDebug.LogWarning($"[ScriptDomain] ALC Resolving: {assemblyName.Name} -> NOT FOUND in Default ALC");
                 return null;
             };
             _currentALC.Resolving += _resolvingHandler;
@@ -53,13 +59,30 @@ namespace IronRose.Scripting
             {
                 using var pdbMs = new System.IO.MemoryStream(pdbBytes);
                 _currentAssembly = _currentALC.LoadFromStream(ms, pdbMs);
+                EditorDebug.Log("[ScriptDomain] Assembly loaded with PDB", force: true);
             }
             else
             {
                 _currentAssembly = _currentALC.LoadFromStream(ms);
+                EditorDebug.Log("[ScriptDomain] Assembly loaded without PDB", force: true);
             }
 
-            EditorDebug.Log($"[ScriptDomain] Loaded assembly: {_currentAssembly.FullName}");
+            EditorDebug.Log($"[ScriptDomain] Loaded assembly: {_currentAssembly.FullName}", force: true);
+
+            try
+            {
+                var loadedTypes = _currentAssembly.GetTypes();
+                EditorDebug.Log($"[ScriptDomain] Assembly contains {loadedTypes.Length} types", force: true);
+            }
+            catch (ReflectionTypeLoadException rtle)
+            {
+                EditorDebug.LogError($"[ScriptDomain] ReflectionTypeLoadException: {rtle.Types.Length} types, {rtle.LoaderExceptions.Length} loader exceptions");
+                foreach (var lex in rtle.LoaderExceptions)
+                {
+                    if (lex != null)
+                        EditorDebug.LogError($"[ScriptDomain]   loader exception: {lex.Message}");
+                }
+            }
 
             // 스크립트 클래스 인스턴스화
             InstantiateScripts();
@@ -67,23 +90,23 @@ namespace IronRose.Scripting
 
         public void Reload(byte[] newAssemblyBytes, byte[]? pdbBytes = null)
         {
-            EditorDebug.Log("[ScriptDomain] Hot reloading scripts...");
+            EditorDebug.Log($"[ScriptDomain] Reload: starting hot reload (newAssembly={newAssemblyBytes.Length}bytes, pdb={pdbBytes?.Length ?? 0}bytes)", force: true);
 
             UnloadPreviousContext();
             LoadScripts(newAssemblyBytes, pdbBytes);
 
-            EditorDebug.Log("[ScriptDomain] Hot reload completed!");
+            EditorDebug.Log("[ScriptDomain] Reload: hot reload completed!", force: true);
         }
 
         private void UnloadPreviousContext()
         {
             if (_currentALC == null)
             {
-                EditorDebug.Log("[ScriptDomain] No previous context to unload");
+                EditorDebug.Log("[ScriptDomain] UnloadPreviousContext: no previous context to unload", force: true);
                 return;
             }
 
-            EditorDebug.Log("[ScriptDomain] Unloading previous context...");
+            EditorDebug.Log($"[ScriptDomain] UnloadPreviousContext: unloading ALC (instances={_scriptInstances.Count}, assembly={_currentAssembly?.FullName ?? "null"})", force: true);
 
             _scriptInstances.Clear();
             _currentAssembly = null;
@@ -98,6 +121,7 @@ namespace IronRose.Scripting
             _previousALCWeakRef = new WeakReference(_currentALC, trackResurrection: true);
             _currentALC.Unload();
             _currentALC = null;
+            EditorDebug.Log("[ScriptDomain] UnloadPreviousContext: ALC unloaded, weak reference set", force: true);
         }
 
         /// <summary>
@@ -106,8 +130,13 @@ namespace IronRose.Scripting
         /// </summary>
         public void VerifyPreviousContextUnloaded()
         {
-            if (_previousALCWeakRef == null || !_previousALCWeakRef.IsAlive) return;
+            if (_previousALCWeakRef == null || !_previousALCWeakRef.IsAlive)
+            {
+                EditorDebug.Log($"[ScriptDomain] VerifyPreviousContextUnloaded: no previous ALC to check (weakRef={((_previousALCWeakRef == null) ? "null" : "dead")})", force: true);
+                return;
+            }
 
+            EditorDebug.Log("[ScriptDomain] VerifyPreviousContextUnloaded: attempting GC collection...", force: true);
             for (int i = 0; i < 5; i++)
             {
                 GC.Collect();
@@ -116,11 +145,11 @@ namespace IronRose.Scripting
 
             if (_previousALCWeakRef.IsAlive)
             {
-                EditorDebug.LogWarning("[ScriptDomain] WARNING: ALC not fully unloaded!");
+                EditorDebug.LogWarning("[ScriptDomain] VerifyPreviousContextUnloaded: WARNING — ALC not fully unloaded after 5 GC cycles! Possible type leak.");
             }
             else
             {
-                EditorDebug.Log("[ScriptDomain] Previous context unloaded successfully");
+                EditorDebug.Log("[ScriptDomain] VerifyPreviousContextUnloaded: previous ALC unloaded successfully", force: true);
                 _previousALCWeakRef = null;
             }
         }

@@ -7,6 +7,8 @@
 - `PigScript.cs` (MonoBehaviour) — 적(pig) 체력/파괴
 - `BombScript.cs` (MonoBehaviour) — 폭탄 폭발 로직
 - `CannonballScript.cs` (MonoBehaviour) — 포탄 충돌 처리
+- `ExplosionVfxScript.cs` (MonoBehaviour) — 폭발 VFX 스피어 (빨간색, scale 축소 후 자동 제거)
+- `DebrisVfxScript.cs` (MonoBehaviour) — 블록 파괴 시 작은 큐브 부스러기 VFX (물리 없이 흩뿌려지며 scale 축소 후 자동 제거). BlockScript.SpawnDebris()에서 호출.
 - `SimpleGameBase.cs` (MonoBehaviour) — 빈 베이스 클래스 (Start/Update 가상 메서드)
 
 ## 핵심 동작
@@ -19,7 +21,7 @@
    - CheckStageClear(): "Pig" 태그 오브젝트 0개 → 클리어
    - UpdateCameraZoom(): 카메라 자동 줌 (아래 참조)
 3. **스테이지 진행**: currentStage++ → SetupStage() → SpawnCannonball()
-4. **카메라 자동 줌**: shooter와 모든 pile 자식 블록의 X/Y 바운딩 박스를 계산하고, perspective FOV 기반으로 필요한 Z 거리를 역산하여 SmoothDamp로 부드럽게 이동. X/Y도 바운딩 중심에 맞춤.
+4. **카메라 자동 줌**: shooter와 모든 pile 자식 블록의 X 바운딩 박스를 계산하고, perspective FOV 기반으로 필요한 Z 거리를 역산하여 SmoothDamp로 부드럽게 이동. X는 바운딩 중심에 맞추고, **Y는 지면(Y=0)이 화면 하단 1/3에 오도록 FOV 기반으로 고정** (포탄을 Y 방향으로 추적하지 않음).
 
 ## 주의사항
 - **네임스페이스 충돌**: ImplicitUsings로 System 네임스페이스가 자동 포함됨. `Object.Destroy`는 반드시 `RoseEngine.Object.Destroy`, `Random.Range`는 `RoseEngine.Random.Range`로 한정해야 함.

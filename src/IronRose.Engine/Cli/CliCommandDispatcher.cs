@@ -926,7 +926,7 @@ namespace IronRose.Engine.Cli
                 if (!int.TryParse(args[0], out var id))
                     return JsonError($"Invalid GameObject ID: {args[0]}");
 
-                var path = args[1];
+                var path = ResolveProjectPath(args[1]);
                 return ExecuteOnMainThread(() =>
                 {
                     var go = FindGameObjectById(id);
@@ -1240,7 +1240,7 @@ namespace IronRose.Engine.Cli
                     return JsonError("Usage: material.create <name> <dirPath> [r,g,b,a]");
 
                 var matName = args[0];
-                var dirPath = args[1];
+                var dirPath = ResolveProjectPath(args[1]);
 
                 return ExecuteOnMainThread(() =>
                 {
@@ -1694,7 +1694,7 @@ namespace IronRose.Engine.Cli
                     return JsonError("Usage: prefab.create_variant <baseGuid> <path>");
 
                 var baseGuid = args[0];
-                var path = args[1];
+                var path = ResolveProjectPath(args[1]);
                 return ExecuteOnMainThread(() =>
                 {
                     try
@@ -2513,6 +2513,16 @@ namespace IronRose.Engine.Cli
             };
         }
 
+        /// <summary>
+        /// 상대 경로를 프로젝트 루트 기준 절대 경로로 변환한다.
+        /// 이미 절대 경로이면 그대로 반환.
+        /// </summary>
+        private static string ResolveProjectPath(string path)
+        {
+            if (Path.IsPathRooted(path)) return path;
+            return Path.Combine(ProjectContext.ProjectRoot, path);
+        }
+
         /// <summary>문자열 값을 지정한 타입으로 파싱한다.</summary>
         private static object? ParseFieldValue(Type type, string raw)
         {
@@ -2525,6 +2535,19 @@ namespace IronRose.Engine.Cli
                 if (type == typeof(Vector3)) return ParseVector3(raw);
                 if (type == typeof(Color)) return ParseColor(raw);
                 if (type.IsEnum) return Enum.Parse(type, raw);
+
+                // 에셋 레퍼런스 타입: GUID 문자열로 에셋 로드
+                var db = Resources.GetAssetDatabase();
+                if (db != null)
+                {
+                    if (type == typeof(Material)) return db.LoadByGuid<Material>(raw);
+                    if (type == typeof(GameObject)) return db.LoadByGuid<GameObject>(raw);
+                    if (type == typeof(Mesh)) return db.LoadByGuid<Mesh>(raw);
+                    if (type == typeof(Texture2D)) return db.LoadByGuid<Texture2D>(raw);
+                    if (type == typeof(Sprite)) return db.LoadByGuid<Sprite>(raw);
+                    if (type == typeof(AnimationClip)) return db.LoadByGuid<AnimationClip>(raw);
+                    if (type == typeof(Font)) return db.LoadByGuid<Font>(raw);
+                }
             }
             catch { }
             return null;

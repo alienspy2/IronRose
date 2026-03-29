@@ -3,10 +3,12 @@
 ## 구조
 - `AngryClawdGame.cs` — 메인 게임 컨트롤러. 스테이지 생성, slingshot 발사, cannonball 추적, 클리어 판정 담당. SimpleGameBase 상속.
 - `PileScript.cs` — pile prefab에 부착. Start() 시 랜덤 크기의 큐브 더미를 동적 생성.
-- `BlockScript.cs` — 일반 블록 큐브에 부착. 블록/폭탄 간 고속 충돌(8.0f 이상) 시 자신 파괴.
+- `BlockScript.cs` — 일반 블록 큐브에 부착. 블록/폭탄 간 고속 충돌(8.0f 이상) 시 자신 파괴. 파괴 시 부스러기 VFX 생성. SpawnDebris() public 메서드 제공.
 - `PigScript.cs` — pig 큐브에 부착. 모든 충돌에 대해 속도(2.0f 이상) 체크 후 사망 처리.
 - `BombScript.cs` — 폭탄 큐브에 부착. 충돌(2.0f 이상) 또는 외부 Explode() 호출 시 반경 3m 내 오브젝트 삭제.
-- `CannonballScript.cs` — cannonball에 부착. 태그 기반 판정: Pig 무조건 파괴, Block 속도 조건부 파괴, Bomb Explode() 위임.
+- `CannonballScript.cs` — cannonball에 부착. 태그 기반 판정: Pig 무조건 파괴, Block 속도 조건부 파괴(파괴 시 부스러기 VFX), Bomb Explode() 위임.
+- `ExplosionVfxScript.cs` — 폭발 VFX 스피어 (빨간색, scale 축소 후 자동 제거)
+- `DebrisVfxScript.cs` — 블록 파괴 시 작은 큐브 부스러기 VFX (물리 없이 흩뿌려지며 scale 축소 후 자동 제거)
 - `SimpleGameBase.cs` — 공통 기반 클래스 (빈 클래스)
 
 ## 핵심 동작

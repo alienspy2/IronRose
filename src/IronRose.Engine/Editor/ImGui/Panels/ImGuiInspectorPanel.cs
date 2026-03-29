@@ -3293,6 +3293,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             if (memberType == typeof(Font)) return "font";
             if (memberType == typeof(AnimationClip)) return "anim";
             if (memberType == typeof(PostProcessProfile)) return "ppprofile";
+            if (memberType == typeof(GameObject)) return "prefab";
             return "";
         }
 
@@ -3311,6 +3312,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 AnimationClip clip => db.FindGuidForAnimationClip(clip),
                 MipMesh mip    => mip.LodCount > 0 ? db.FindGuidForMesh(mip.lodMeshes[0]) : null,
                 PostProcessProfile pp => db.FindGuidForPostProcessProfile(pp),
+                GameObject go  => db.FindGuidForPrefab(go),
                 _              => null,
             };
         }
@@ -4160,6 +4162,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             },
             [typeof(AnimationClip)] = obj => (obj as AnimationClip)?.name,
             [typeof(PostProcessProfile)] = obj => (obj as PostProcessProfile)?.name,
+            [typeof(GameObject)] = obj => (obj as GameObject)?.name,
         };
 
         private void DrawAssetReferences(Component comp, Type type, bool readOnly = false)
@@ -4221,8 +4224,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 ImGui.Button($"{displayName}##{label}", new System.Numerics.Vector2(selectableW, 0));
             }
 
-            // Drag-drop target for Material / Sprite / AnimationClip / PostProcessProfile fields
-            if (setter != null && (memberType == typeof(Material) || memberType == typeof(Sprite) || memberType == typeof(AnimationClip) || memberType == typeof(PostProcessProfile)))
+            // Drag-drop target for Material / Sprite / AnimationClip / PostProcessProfile / GameObject fields
+            if (setter != null && (memberType == typeof(Material) || memberType == typeof(Sprite) || memberType == typeof(AnimationClip) || memberType == typeof(PostProcessProfile) || memberType == typeof(GameObject)))
             {
                 if (ImGui.BeginDragDropTarget())
                 {
@@ -4331,6 +4334,25 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                                         }
                                     }
                                 }
+                                else if (memberType == typeof(GameObject))
+                                {
+                                    if (droppedPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        var db = Resources.GetAssetDatabase();
+                                        var newPrefab = db?.Load<GameObject>(droppedPath);
+                                        if (newPrefab != null && comp != null && memberName != null)
+                                        {
+                                            var oldVal = asset;
+                                            setter(newPrefab);
+                                            UndoSystem.Record(new SetPropertyAction(
+                                                $"Set {label}",
+                                                comp.gameObject.GetInstanceID(),
+                                                comp.GetType().FullName!,
+                                                memberName,
+                                                oldVal, newPrefab));
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -4386,6 +4408,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                                 _ when capturedMemberType == typeof(Font)          => db.LoadByGuid<Font>(newGuid),
                                 _ when capturedMemberType == typeof(AnimationClip) => db.LoadByGuid<AnimationClip>(newGuid),
                                 _ when capturedMemberType == typeof(PostProcessProfile) => db.LoadByGuid<PostProcessProfile>(newGuid),
+                                _ when capturedMemberType == typeof(GameObject) => db.LoadByGuid<GameObject>(newGuid),
                                 _ => null,
                             };
 
@@ -4445,6 +4468,11 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     if (mip.LodCount > 0)
                         return db.FindPathForMesh(mip.lodMeshes[0]);
                     return null;
+                case GameObject go:
+                {
+                    var guid = db.FindGuidForPrefab(go);
+                    return guid != null ? db.GetPathFromGuid(guid) : null;
+                }
                 default:
                     return null;
             }

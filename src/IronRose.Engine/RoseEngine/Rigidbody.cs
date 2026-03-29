@@ -9,6 +9,7 @@
 //     mass, drag, angularDrag: float       — 물리 속성
 //     useGravity: bool                     — 중력 사용 여부 (런타임 변경 가능)
 //     isKinematic: bool                    — 키네마틱 모드
+//     allowSleep: bool                     — sleep 허용 여부 (기본 false, 런타임 변경 가능)
 //     velocity, angularVelocity: Vector3   — 속도 조회/설정
 //     AddForce(Vector3, ForceMode): void   — 힘/임펄스 적용
 //     AddTorque(Vector3, ForceMode): void  — 토크 적용
@@ -46,6 +47,18 @@ namespace RoseEngine
             }
         }
         public bool isKinematic { get; set; } = false;
+
+        private bool _allowSleep = false;
+        public bool allowSleep
+        {
+            get => _allowSleep;
+            set
+            {
+                _allowSleep = value;
+                if (bodyHandle != null)
+                    GetPhysicsManager()?.World3D.SetBodyAllowSleep(bodyHandle.Value, value);
+            }
+        }
 
         public Vector3 velocity
         {
@@ -262,6 +275,9 @@ namespace RoseEngine
 
             if (!_useGravity && bodyHandle != null)
                 mgr.World3D.SetBodyUseGravity(bodyHandle.Value, false);
+
+            if (!_allowSleep && bodyHandle != null)
+                mgr.World3D.SetBodyAllowSleep(bodyHandle.Value, false);
         }
 
         internal void RemoveFromPhysics()
