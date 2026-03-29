@@ -1,3 +1,22 @@
+// ------------------------------------------------------------
+// @file    RoseCache.cs
+// @brief   에셋(텍스처, 메시)을 바이너리 캐시 파일로 저장/로드하여 임포트 속도를 높인다.
+//          FormatVersion 9: Material.blendMode 직렬화 추가.
+// @deps    IronRose.Engine (GpuTextureCompressor, MeshImportResult, RoseMetadata),
+//          RoseEngine (Material, Texture2D, Color, BlendMode, Mesh, Vector2/3/4, BoneWeight)
+// @exports
+//   class RoseCache
+//     SetGpuCompressor(GpuTextureCompressor?): void         — GPU 텍스처 압축기 설정
+//     TryLoadTexture(string, RoseMetadata): Texture2D?      — 캐시에서 텍스처 로드
+//     StoreTexture(string, Texture2D, RoseMetadata): void   — 텍스처를 캐시에 저장
+//     TryLoadMesh(string, RoseMetadata): MeshImportResult?  — 캐시에서 메시 로드
+//     StoreMesh(string, MeshImportResult, RoseMetadata): void — 메시를 캐시에 저장
+//     HasValidCache(string): bool                           — 유효한 캐시 존재 여부
+//     InvalidateCache(string): void                         — 특정 에셋 캐시 무효화
+//     ClearAll(): void                                      — 전체 캐시 삭제
+// @note    FormatVersion 변경 시 기존 캐시는 자동 무효화됨.
+//          Material 직렬화 순서: blendMode(byte) -> color -> emission -> PBR floats -> textures
+// ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -15,7 +34,7 @@ namespace IronRose.AssetPipeline
     public class RoseCache
     {
         private const uint Magic = 0x45534F52; // "ROSE"
-        private const int FormatVersion = 8; // v8: normalMapStrength
+        private const int FormatVersion = 9; // v9: Material.blendMode
 
         // Custom format ID for BC6H (not in Veldrid 4.9 PixelFormat enum)
         private const int FormatBC6H_UFloat = 1000;
@@ -592,6 +611,7 @@ namespace IronRose.AssetPipeline
 
         private static void WriteMaterial(BinaryWriter writer, Material mat)
         {
+            writer.Write((byte)mat.blendMode);
             WriteColor(writer, mat.color);
             WriteColor(writer, mat.emission);
             writer.Write(mat.metallic);
@@ -607,6 +627,7 @@ namespace IronRose.AssetPipeline
         private static Material ReadMaterial(BinaryReader reader)
         {
             var mat = new Material();
+            mat.blendMode = (BlendMode)reader.ReadByte();
             mat.color = ReadColor(reader);
             mat.emission = ReadColor(reader);
             mat.metallic = reader.ReadSingle();

@@ -1,5 +1,28 @@
+// ------------------------------------------------------------
+// @file    Material.cs
+// @brief   PBR Material 데이터 클래스와 BlendMode enum 정의. 색상, 텍스처, PBR 파라미터,
+//          블렌드 모드, 텍스처 트랜스폼, 스카이박스 프로퍼티 등을 포함한다.
+// @deps    RoseEngine (Color, Texture2D, Shader, Vector2, Cubemap)
+// @exports
+//   enum BlendMode                                          — Opaque(0), AlphaBlend(1), Additive(2)
+//   class Material
+//     name, shader, color, mainTexture, emission            — 기본 속성
+//     metallic, roughness, occlusion, normalMap,
+//       normalMapStrength, MROMap                           — PBR 속성
+//     blendMode: BlendMode                                  — 렌더 파이프라인 블렌드 모드 (기본 Opaque)
+//     textureScale, textureOffset                           — 텍스처 트랜스폼
+//     exposure, rotation, cubemapFaceSize                   — 스카이박스 속성
+// @note    blendMode 기본값 Opaque로 기존 동작과 호환.
+// ------------------------------------------------------------
 namespace RoseEngine
 {
+    public enum BlendMode
+    {
+        Opaque = 0,
+        AlphaBlend = 1,
+        Additive = 2,
+    }
+
     public class Material
     {
         public string name { get; set; } = "";
@@ -15,6 +38,9 @@ namespace RoseEngine
         public Texture2D? normalMap { get; set; }
         public float normalMapStrength { get; set; } = 1.0f;
         public Texture2D? MROMap { get; set; }
+
+        // Blend mode for rendering pipeline selection
+        public BlendMode blendMode { get; set; } = BlendMode.Opaque;
 
         // Texture transform (Unity-style Tiling & Offset)
         public Vector2 textureScale { get; set; } = Vector2.one;
