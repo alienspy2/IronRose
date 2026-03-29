@@ -289,6 +289,8 @@ namespace IronRose.Rendering
         private Pipeline? _forwardPipeline;
         private Pipeline? _wireframePipeline;
         private Pipeline? _spritePipeline;
+        private Pipeline? _meshAlphaBlendPipeline;
+        private Pipeline? _meshAdditivePipeline;
         private DeviceBuffer? _lightBuffer;
         private ResourceLayout? _perFrameLayout;
         private ResourceSet? _perFrameResourceSet;
@@ -1079,6 +1081,58 @@ namespace IronRose.Rendering
                 Outputs = hdrOutputDesc,
             });
 
+            // --- Mesh AlphaBlend Pipeline (→ HDR, alpha blend, depth write off) ---
+            _meshAlphaBlendPipeline = factory.CreateGraphicsPipeline(new GraphicsPipelineDescription
+            {
+                BlendState = new BlendStateDescription(
+                    RgbaFloat.Black,
+                    new BlendAttachmentDescription(
+                        blendEnabled: true,
+                        sourceColorFactor: BlendFactor.SourceAlpha,
+                        destinationColorFactor: BlendFactor.InverseSourceAlpha,
+                        colorFunction: BlendFunction.Add,
+                        sourceAlphaFactor: BlendFactor.One,
+                        destinationAlphaFactor: BlendFactor.InverseSourceAlpha,
+                        alphaFunction: BlendFunction.Add)),
+                DepthStencilState = new DepthStencilStateDescription(
+                    depthTestEnabled: true, depthWriteEnabled: false, comparisonKind: ComparisonKind.LessEqual),
+                RasterizerState = new RasterizerStateDescription(
+                    cullMode: FaceCullMode.Back, fillMode: PolygonFillMode.Solid,
+                    frontFace: FrontFace.Clockwise, depthClipEnabled: true, scissorTestEnabled: false),
+                PrimitiveTopology = PrimitiveTopology.TriangleList,
+                ResourceLayouts = new[] { _perObjectLayout!, _perFrameLayout! },
+                ShaderSet = new ShaderSetDescription(
+                    vertexLayouts: new[] { vertexLayout },
+                    shaders: _forwardShaders!),
+                Outputs = hdrOutputDesc,
+            });
+
+            // --- Mesh Additive Pipeline (→ HDR, additive blend, depth write off) ---
+            _meshAdditivePipeline = factory.CreateGraphicsPipeline(new GraphicsPipelineDescription
+            {
+                BlendState = new BlendStateDescription(
+                    RgbaFloat.Black,
+                    new BlendAttachmentDescription(
+                        blendEnabled: true,
+                        sourceColorFactor: BlendFactor.SourceAlpha,
+                        destinationColorFactor: BlendFactor.One,
+                        colorFunction: BlendFunction.Add,
+                        sourceAlphaFactor: BlendFactor.One,
+                        destinationAlphaFactor: BlendFactor.One,
+                        alphaFunction: BlendFunction.Add)),
+                DepthStencilState = new DepthStencilStateDescription(
+                    depthTestEnabled: true, depthWriteEnabled: false, comparisonKind: ComparisonKind.LessEqual),
+                RasterizerState = new RasterizerStateDescription(
+                    cullMode: FaceCullMode.Back, fillMode: PolygonFillMode.Solid,
+                    frontFace: FrontFace.Clockwise, depthClipEnabled: true, scissorTestEnabled: false),
+                PrimitiveTopology = PrimitiveTopology.TriangleList,
+                ResourceLayouts = new[] { _perObjectLayout!, _perFrameLayout! },
+                ShaderSet = new ShaderSetDescription(
+                    vertexLayouts: new[] { vertexLayout },
+                    shaders: _forwardShaders!),
+                Outputs = hdrOutputDesc,
+            });
+
             // --- Debug Overlay Pipeline (→ Swapchain, overwrite) ---
             if (_debugOverlayShaders != null && _debugOverlayLayout != null)
             {
@@ -1788,6 +1842,8 @@ namespace IronRose.Rendering
             _forwardPipeline?.Dispose();
             _wireframePipeline?.Dispose();
             _spritePipeline?.Dispose();
+            _meshAlphaBlendPipeline?.Dispose();
+            _meshAdditivePipeline?.Dispose();
 
             // Shadow atlas
             _atlasShadowSet?.Dispose();
