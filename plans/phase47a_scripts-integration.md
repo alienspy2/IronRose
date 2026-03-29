@@ -1,4 +1,4 @@
-# Phase 00: Scripts 통합 -- 디렉토리/csproj/상수/경로 변경
+# Phase 47a: Scripts 통합 -- 디렉토리/csproj/상수/경로 변경
 
 ## 목표
 - LiveCode + FrozenCode 이중 구조를 Scripts 단일 구조로 통합
@@ -142,7 +142,7 @@ private static Type? ResolveComponentType(string typeName)
 ```
 - **추가 변경**: `assembly.info` 핸들러 (2084행 부근)의 "LiveCode" 용어를 "Scripts"로 변경:
   - `liveCodeTypes` 변수명 --> `scriptTypes`
-  - `EngineCore.LiveCodeDemoTypes` --> `EngineCore.ScriptDemoTypes` (주의: 이 프로퍼티는 Phase 02에서 이름이 변경됨. 이 Phase에서는 아직 `LiveCodeDemoTypes`가 사용되므로 **변수명만 변경하고 프로퍼티 참조는 그대로 유지**)
+  - `EngineCore.LiveCodeDemoTypes` --> `EngineCore.ScriptDemoTypes` (주의: 이 프로퍼티는 Phase 47c에서 이름이 변경됨. 이 Phase에서는 아직 `LiveCodeDemoTypes`가 사용되므로 **변수명만 변경하고 프로퍼티 참조는 그대로 유지**)
   - JSON 응답의 `liveCodeDemoTypes` --> `scriptDemoTypes`, `liveCodeDemoCount` --> `scriptDemoCount`
 
 ### `src/IronRose.Engine/RoseEngine/SceneManager.cs`
@@ -309,6 +309,20 @@ private static Type? ResolveComponentType(string typeName)
 - FrozenCode 프로젝트 엔트리(GUID `{0343B9F4-9C20-48D0-A6A3-E740F91F884A}`)를 제거:
   - `Project` 블록과 `GlobalSection(ProjectConfigurationPlatforms)` 내의 해당 GUID 행 전부 삭제
 
+## 빌드 통과를 위한 임시 수정 (Phase 47b에서 전면 재작성될 파일들)
+
+`ProjectContext.LiveCodePath`와 `EngineDirectories.LiveCodePath`가 삭제되므로, 이를 참조하는 기존 파일에서 빌드 오류가 발생한다. 아래 파일들은 Phase 47b에서 전면 재작성/삭제되지만, 이 Phase에서 빌드를 통과시키기 위해 최소 수정이 필요하다.
+
+### `src/IronRose.Engine/LiveCodeManager.cs` (임시 수정 -- Phase 47b에서 삭제됨)
+- **변경 위치 1**: 211행 `ProjectContext.LiveCodePath` --> `ProjectContext.ScriptsPath`
+- **변경 위치 2**: 226행 `RoseEngine.EngineDirectories.LiveCodePath` --> `RoseEngine.EngineDirectories.ScriptsPath`
+- **변경 위치 3**: 241행 `ProjectContext.LiveCodePath` --> `ProjectContext.ScriptsPath`
+- 다른 코드는 변경하지 않음 (Phase 47b에서 파일 전체가 재작성됨)
+
+### `src/IronRose.Engine/EngineCore.cs` (임시 수정 -- Phase 47c에서 최종 정리됨)
+- **변경 위치**: 738행 `ProjectContext.FrozenCodePath` --> `ProjectContext.ScriptsPath`
+- 다른 코드는 변경하지 않음 (Phase 47c에서 `InitFrozenCode()` 전체가 삭제됨)
+
 ## 검증 기준
 - [ ] `dotnet build` 성공 (IronRose 엔진 솔루션)
 - [ ] `dotnet build` 성공 (MyGame 솔루션: `dotnet build /home/alienspy/git/MyGame/MyGame.sln`)
@@ -320,10 +334,7 @@ private static Type? ResolveComponentType(string typeName)
 - [ ] `MyGame/FrozenCode/` 디렉토리가 삭제됨
 
 ## 참고
-- 이 Phase에서는 `LiveCodeManager.cs`의 내부 코드는 수정하지 않는다. LiveCodeManager가 참조하는 `ProjectContext.LiveCodePath`가 `ProjectContext.ScriptsPath`로 변경되므로, LiveCodeManager 내부의 `ProjectContext.LiveCodePath` 호출도 `ProjectContext.ScriptsPath`로 변경해야 빌드가 성공한다. 이 수정은 최소한으로 수행한다 (Phase 01에서 파일 전체를 재작성하므로, 빌드만 통과하는 수준으로).
-- `LiveCodeManager.cs`에서 `ProjectContext.LiveCodePath` 참조 (211행, 241행)를 `ProjectContext.ScriptsPath`로 변경해야 빌드 통과됨.
-- `EngineCore.cs`에서 `ProjectContext.FrozenCodePath` 참조 (738행)를 `ProjectContext.ScriptsPath`로 변경해야 빌드 통과됨. 단, `InitFrozenCode()` 메서드는 Phase 02에서 삭제될 예정이므로 임시 수정.
-- `EngineDirectories.LiveCodePath`를 참조하는 `LiveCodeManager.cs` 226행도 `EngineDirectories.ScriptsPath`로 변경 필요.
-- `CliCommandDispatcher.cs`의 `assembly.info` 핸들러에서 `EngineCore.LiveCodeDemoTypes`를 참조하는데, 이 프로퍼티는 Phase 02에서 이름이 변경된다. 이 Phase에서는 **프로퍼티명은 그대로 유지**하고 출력 JSON key만 변경한다.
+- `CliCommandDispatcher.cs`의 `assembly.info` 핸들러에서 `EngineCore.LiveCodeDemoTypes`를 참조하는데, 이 프로퍼티는 Phase 47c에서 이름이 변경된다. 이 Phase에서는 **프로퍼티명은 그대로 유지**하고 출력 JSON key만 변경한다.
 - MyGame은 별도 레포이므로, IronRose 엔진 `dotnet build`와는 별도로 `dotnet build /home/alienspy/git/MyGame/MyGame.sln`으로 확인한다.
 - MyGame 디렉토리 변경은 `git mv`가 아닌 일반 파일 이동으로 수행한다 (별도 레포).
+- Phase 47b에서 `LiveCodeManager.cs`가 완전히 삭제되고 `ScriptReloadManager.cs`로 교체되므로, 이 Phase의 임시 수정은 빌드 통과만을 위한 것이다.

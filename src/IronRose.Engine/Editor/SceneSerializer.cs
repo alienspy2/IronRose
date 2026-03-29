@@ -1046,6 +1046,8 @@ namespace IronRose.Engine.Editor
         internal static void SetEditorInternalRecursive(GameObject go, bool value)
         {
             go._isEditorInternal = value;
+            if (value)
+                SceneManager.UnregisterBehaviours(go);
             for (int i = 0; i < go.transform.childCount; i++)
                 SetEditorInternalRecursive(go.transform.GetChild(i).gameObject, value);
         }

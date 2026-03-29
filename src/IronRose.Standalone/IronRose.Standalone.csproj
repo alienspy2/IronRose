@@ -15,7 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="..\IronRose.Engine\IronRose.Engine.csproj" />
     <ProjectReference Include="..\IronRose.Contracts\IronRose.Contracts.csproj" />
-    <ProjectReference Include="..\..\FrozenCode\FrozenCode.csproj" />
+    <ProjectReference Include="..\..\Scripts\Scripts.csproj" />
   </ItemGroup>
 
 </Project>

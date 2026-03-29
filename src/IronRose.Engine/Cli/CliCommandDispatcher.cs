@@ -38,6 +38,7 @@
 //          transform.translate, transform.rotate, transform.look_at,
 //          transform.get_children, transform.set_local_position,
 //          prefab.create_variant, prefab.is_instance, prefab.unpack,
+//          prefab.info, prefab.set_field,
 //          asset.import, asset.scan,
 //          editor.screenshot, editor.copy, editor.paste, editor.select_all, editor.undo_history,
 //          screen.info, scene.clear,
@@ -1800,6 +1801,107 @@ namespace IronRose.Engine.Cli
             };
 
             // ----------------------------------------------------------------
+            // prefab.info -- 프리팹 에셋 정보 조회 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["prefab.info"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: prefab.info <guid|path>");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var (guid, path) = ResolvePrefabAsset(args[0]);
+                    if (guid == null)
+                        return JsonError($"Prefab not found: {args[0]}");
+
+                    var db = Resources.GetAssetDatabase();
+                    var templateGo = db?.LoadByGuid<GameObject>(guid);
+                    if (templateGo == null)
+                        return JsonError($"Failed to load prefab: guid={guid}");
+
+                    var goSnapshots = new List<object>();
+                    CollectPrefabSnapshots(templateGo, true, goSnapshots);
+
+                    return JsonOk(new { guid, path, gameObjects = goSnapshots });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // prefab.set_field -- 프리팹 에셋 필드 수정 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["prefab.set_field"] = args =>
+            {
+                // 4인자: <guid|path> <component> <field> <value> (루트 GO)
+                // 5인자: <guid|path> <goName> <component> <field> <value> (특정 GO)
+                if (args.Length < 4)
+                    return JsonError("Usage: prefab.set_field <guid|path> [goName] <component> <field> <value>");
+
+                bool hasGoName = args.Length >= 5;
+                var assetArg = args[0];
+                var goName = hasGoName ? args[1] : null;
+                var componentType = hasGoName ? args[2] : args[1];
+                var fieldName = hasGoName ? args[3] : args[2];
+                var newValue = hasGoName ? args[4] : args[3];
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var (guid, path) = ResolvePrefabAsset(assetArg);
+                    if (guid == null || path == null)
+                        return JsonError($"Prefab not found: {assetArg}");
+
+                    var db = Resources.GetAssetDatabase();
+                    var rootGo = db?.LoadByGuid<GameObject>(guid);
+                    if (rootGo == null)
+                        return JsonError($"Failed to load prefab: guid={guid}");
+
+                    // 대상 GO 결정
+                    GameObject targetGo;
+                    if (goName == null)
+                    {
+                        targetGo = rootGo;
+                    }
+                    else
+                    {
+                        targetGo = FindInHierarchy(rootGo, goName);
+                        if (targetGo == null)
+                            return JsonError($"GO not found in prefab: {goName}");
+                    }
+
+                    // 컴포넌트/필드 찾기
+                    var comp = targetGo.InternalComponents
+                        .FirstOrDefault(c => c.GetType().Name == componentType);
+                    if (comp == null)
+                        return JsonError($"Component not found: {componentType}");
+
+                    var field = comp.GetType().GetField(fieldName,
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (field == null)
+                        return JsonError($"Field not found: {fieldName}");
+
+                    var value = ParseFieldValue(field.FieldType, newValue);
+                    if (value == null)
+                        return JsonError($"Cannot parse value '{newValue}' as {field.FieldType.Name}");
+
+                    field.SetValue(comp, value);
+
+                    // 디스크에 저장
+                    SceneSerializer.SavePrefab(rootGo, path);
+
+                    // 씬 내 인스턴스 갱신
+                    PrefabUtility.RefreshPrefabInstances(guid);
+
+                    return JsonOk(new
+                    {
+                        ok = true, guid,
+                        goName = targetGo.name,
+                        component = componentType,
+                        field = fieldName,
+                        newValue
+                    });
+                });
+            };
+
+            // ----------------------------------------------------------------
             // asset.import -- 에셋 임포트/리임포트 트리거 (메인 스레드)
             // ----------------------------------------------------------------
             _handlers["asset.import"] = args =>
@@ -2119,7 +2221,7 @@ namespace IronRose.Engine.Cli
             };
 
             // ----------------------------------------------------------------
-            // assembly.info -- 로드된 어셈블리 및 LiveCode 타입 정보 조회
+            // assembly.info -- 로드된 어셈블리 및 Scripts 타입 정보 조회
             // ----------------------------------------------------------------
             _handlers["assembly.info"] = args =>
             {
@@ -2158,8 +2260,8 @@ namespace IronRose.Engine.Cli
                     });
                 }
 
-                // LiveCode 데모 타입 (LiveCodeManager에서 등록된 것)
-                var liveCodeTypes = EngineCore.LiveCodeDemoTypes
+                // Scripts 데모 타입 (ScriptReloadManager에서 등록된 것)
+                var scriptTypes = EngineCore.ScriptDemoTypes
                     .Select(t => t.FullName ?? t.Name)
                     .ToArray();
 
@@ -2167,8 +2269,8 @@ namespace IronRose.Engine.Cli
                 {
                     totalAssemblies = assemblies.Count,
                     assemblies,
-                    liveCodeDemoTypes = liveCodeTypes,
-                    liveCodeDemoCount = liveCodeTypes.Length
+                    scriptDemoTypes = scriptTypes,
+                    scriptDemoCount = scriptTypes.Length
                 });
             };
 
@@ -2483,7 +2585,7 @@ namespace IronRose.Engine.Cli
 
         /// <summary>
         /// typeName 문자열로부터 Component Type을 찾는다.
-        /// 검색 순서: 1) RoseEngine 네임스페이스 (엔진 내장), 2) FrozenCode 어셈블리, 3) LiveCode 어셈블리.
+        /// 검색 순서: 1) RoseEngine 네임스페이스 (엔진 내장), 2) Scripts 어셈블리.
         /// </summary>
         private static Type? ResolveComponentType(string typeName)
         {
@@ -2495,24 +2597,11 @@ namespace IronRose.Engine.Cli
                     return type;
             }
 
-            // 2. FrozenCode 어셈블리
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                if (asm.GetName().Name == "FrozenCode")
-                {
-                    foreach (var type in asm.GetTypes())
-                    {
-                        if (type.Name == typeName && typeof(Component).IsAssignableFrom(type))
-                            return type;
-                    }
-                }
-            }
-
-            // 3. LiveCode 어셈블리 (collectible ALC)
+            // 2. Scripts 어셈블리 (collectible ALC)
             foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
             {
                 var asmName = asm.GetName().Name;
-                if (asmName != null && asmName.Contains("LiveCode", StringComparison.OrdinalIgnoreCase))
+                if (asmName != null && asmName.Contains("Scripts", StringComparison.OrdinalIgnoreCase))
                 {
                     try
                     {
@@ -2561,6 +2650,60 @@ namespace IronRose.Engine.Cli
             return Path.Combine(ProjectContext.ProjectRoot, path);
         }
 
+        /// <summary>프리팹 GO 계층을 순회하며 스냅샷을 수집한다.</summary>
+        private static void CollectPrefabSnapshots(GameObject go, bool isRoot, List<object> results)
+        {
+            var snapshot = GameObjectSnapshot.From(go);
+            results.Add(new
+            {
+                name = snapshot.Name,
+                isRoot,
+                components = snapshot.Components.Select(c => new
+                {
+                    typeName = c.TypeName,
+                    fields = c.Fields.Select(f => new
+                    {
+                        name = f.Name,
+                        typeName = f.TypeName,
+                        value = f.Value
+                    })
+                })
+            });
+            for (int i = 0; i < go.transform.childCount; i++)
+                CollectPrefabSnapshots(go.transform.GetChild(i).gameObject, false, results);
+        }
+
+        /// <summary>GO 계층에서 이름으로 검색한다.</summary>
+        private static GameObject? FindInHierarchy(GameObject root, string name)
+        {
+            if (root.name == name) return root;
+            for (int i = 0; i < root.transform.childCount; i++)
+            {
+                var found = FindInHierarchy(root.transform.GetChild(i).gameObject, name);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// GUID 또는 경로 문자열을 받아 (guid, absolutePath) 튜플을 반환한다.
+        /// </summary>
+        private static (string? guid, string? path) ResolvePrefabAsset(string arg)
+        {
+            var db = Resources.GetAssetDatabase();
+            if (db == null) return (null, null);
+
+            if (Guid.TryParse(arg, out _))
+            {
+                var p = db.GetPathFromGuid(arg);
+                return (arg, p);
+            }
+
+            var resolved = ResolveProjectPath(arg);
+            var g = db.GetGuidFromPath(resolved);
+            return (g, resolved);
+        }
+
         /// <summary>문자열 값을 지정한 타입으로 파싱한다.</summary>
         private static object? ParseFieldValue(Type type, string raw)
         {
@@ -2574,17 +2717,18 @@ namespace IronRose.Engine.Cli
                 if (type == typeof(Color)) return ParseColor(raw);
                 if (type.IsEnum) return Enum.Parse(type, raw);
 
-                // 에셋 레퍼런스 타입: GUID 문자열로 에셋 로드
+                // 에셋 레퍼런스 타입: GUID 문자열로 에셋 로드 (asset: 접두사 지원)
+                var assetGuid = raw.StartsWith("asset:", StringComparison.Ordinal) ? raw.Substring(6) : raw;
                 var db = Resources.GetAssetDatabase();
                 if (db != null)
                 {
-                    if (type == typeof(Material)) return db.LoadByGuid<Material>(raw);
-                    if (type == typeof(GameObject)) return db.LoadByGuid<GameObject>(raw);
-                    if (type == typeof(Mesh)) return db.LoadByGuid<Mesh>(raw);
-                    if (type == typeof(Texture2D)) return db.LoadByGuid<Texture2D>(raw);
-                    if (type == typeof(Sprite)) return db.LoadByGuid<Sprite>(raw);
-                    if (type == typeof(AnimationClip)) return db.LoadByGuid<AnimationClip>(raw);
-                    if (type == typeof(Font)) return db.LoadByGuid<Font>(raw);
+                    if (type == typeof(Material)) return db.LoadByGuid<Material>(assetGuid);
+                    if (type == typeof(GameObject)) return db.LoadByGuid<GameObject>(assetGuid);
+                    if (type == typeof(Mesh)) return db.LoadByGuid<Mesh>(assetGuid);
+                    if (type == typeof(Texture2D)) return db.LoadByGuid<Texture2D>(assetGuid);
+                    if (type == typeof(Sprite)) return db.LoadByGuid<Sprite>(assetGuid);
+                    if (type == typeof(AnimationClip)) return db.LoadByGuid<AnimationClip>(assetGuid);
+                    if (type == typeof(Font)) return db.LoadByGuid<Font>(assetGuid);
                 }
             }
             catch { }

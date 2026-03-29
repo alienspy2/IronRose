@@ -1078,7 +1078,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             if (_cachedComponentTypes != null) return _cachedComponentTypes;
 
             var baseType = typeof(Component);
-            // 같은 이름의 타입 중복 방지 (LiveCode 리로드 시 이전 어셈블리가 남아있을 수 있음)
+            // 같은 이름의 타입 중복 방지 (Scripts 리로드 시 이전 어셈블리가 남아있을 수 있음)
             var typeMap = new Dictionary<string, Type>();
 
             foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
@@ -1097,7 +1097,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                         if (t.IsAbstract || t.IsInterface) continue;
                         if (!baseType.IsAssignableFrom(t)) continue;
                         if (t == typeof(Transform)) continue; // Transform은 항상 자동 생성
-                        // 나중에 로드된 어셈블리(최신 LiveCode)가 이전 것을 덮어씀
+                        // 나중에 로드된 어셈블리(최신 Scripts)가 이전 것을 덮어씀
                         typeMap[t.FullName ?? t.Name] = t;
                     }
                 }

@@ -1,6 +1,6 @@
 ﻿// ------------------------------------------------------------
 // @file    ImGuiScriptsPanel.cs
-// @brief   Scripts View 패널. LiveCode/FrozenCode 폴더의 .cs 파일을 트리로 표시하고
+// @brief   Scripts View 패널. Scripts 폴더의 .cs 파일을 트리로 표시하고
 //          생성/삭제/이름변경/복제/외부 에디터 열기 등의 파일 관리 기능 제공.
 // @deps    IronRose.Engine/ProjectContext, IronRose.Engine/ProjectSettings,
 //          IronRose.Engine.Editor.ImGuiEditor.Panels/EditorModal, RoseEngine/Debug, RoseEngine/Component
@@ -13,7 +13,7 @@
 //     _draggedScriptPath: string?            — 드래그 중인 스크립트 경로 (internal static)
 //     DragPayloadType: string                — 드래그 페이로드 타입 식별자 (internal const)
 // @note    Draw() 첫 호출 시 lazy 초기화 (ProjectContext.IsProjectLoaded 이후).
-//          FindRootDirectories()는 ProjectContext.LiveCodePath/FrozenCodePath 기반.
+//          FindRootDirectories()는 ProjectContext.ScriptsPath 기반.
 //          FileSystemWatcher로 .cs 파일 변경 감지하여 트리 자동 갱신.
 // ------------------------------------------------------------
 using System;
@@ -31,7 +31,7 @@ using Vector2 = System.Numerics.Vector2;
 namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 {
     /// <summary>
-    /// Scripts View 패널 — LiveCode / FrozenCode 폴더의 .cs 파일을 트리로 표시하고 관리.
+    /// Scripts View 패널 — Scripts 폴더의 .cs 파일을 트리로 표시하고 관리.
     /// </summary>
     public class ImGuiScriptsPanel : IEditorPanel
     {
@@ -46,12 +46,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         internal const string DragPayloadType = "SCRIPT_PATH";
 
         // ── Root directories ──
-        private string? _liveCodeRoot;
-        private string? _frozenCodeRoot;
+        private string? _scriptsRoot;
 
         // ── Tree state ──
-        private ScriptFolderNode? _liveCodeTree;
-        private ScriptFolderNode? _frozenCodeTree;
+        private ScriptFolderNode? _scriptsTree;
         private bool _needsRebuild = true;
         private bool _initialized;
         private readonly HashSet<string> _openFolders = new();
@@ -59,8 +57,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         private string _searchFilter = "";
 
         // ── FileSystemWatchers ──
-        private FileSystemWatcher? _liveCodeWatcher;
-        private FileSystemWatcher? _frozenCodeWatcher;
+        private FileSystemWatcher? _scriptsWatcher;
 
         // ── Context menu state ──
         private bool _openCreateScriptPopup;
@@ -113,10 +110,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 if (ImGui.BeginChild("ScriptsTree", Vector2.Zero, ImGuiChildFlags.None,
                     ImGuiWindowFlags.HorizontalScrollbar))
                 {
-                    if (_liveCodeTree != null)
-                        DrawFolderNode(_liveCodeTree, isRoot: true);
-                    if (_frozenCodeTree != null)
-                        DrawFolderNode(_frozenCodeTree, isRoot: true);
+                    if (_scriptsTree != null)
+                        DrawFolderNode(_scriptsTree, isRoot: true);
 
                     // Empty area context menu
                     if (ImGui.BeginPopupContextWindow("##ScriptsEmptyCtx",
@@ -472,15 +467,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         private void RebuildTree()
         {
-            if (_liveCodeRoot != null && Directory.Exists(_liveCodeRoot))
-                _liveCodeTree = BuildFolderNode(_liveCodeRoot, "LiveCode");
+            if (_scriptsRoot != null && Directory.Exists(_scriptsRoot))
+                _scriptsTree = BuildFolderNode(_scriptsRoot, "Scripts");
             else
-                _liveCodeTree = null;
-
-            if (_frozenCodeRoot != null && Directory.Exists(_frozenCodeRoot))
-                _frozenCodeTree = BuildFolderNode(_frozenCodeRoot, "FrozenCode");
-            else
-                _frozenCodeTree = null;
+                _scriptsTree = null;
         }
 
         private static ScriptFolderNode BuildFolderNode(string fullPath, string displayName)
@@ -536,26 +526,19 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         private void FindRootDirectories()
         {
-            // ProjectContext 기반으로 LiveCode/FrozenCode 디렉토리 설정
-            var liveCodeDir = ProjectContext.LiveCodePath;
-            var frozenCodeDir = ProjectContext.FrozenCodePath;
+            var scriptsDir = ProjectContext.ScriptsPath;
 
-            if (Directory.Exists(liveCodeDir))
-                _liveCodeRoot = liveCodeDir;
+            if (Directory.Exists(scriptsDir))
+                _scriptsRoot = scriptsDir;
 
-            if (Directory.Exists(frozenCodeDir))
-                _frozenCodeRoot = frozenCodeDir;
-
-            // Fallback: LiveCode 디렉토리가 없으면 생성
-            if (_liveCodeRoot == null)
+            // Fallback: Scripts 디렉토리가 없으면 생성
+            if (_scriptsRoot == null)
             {
-                _liveCodeRoot = liveCodeDir;
-                Directory.CreateDirectory(_liveCodeRoot);
+                _scriptsRoot = scriptsDir;
+                Directory.CreateDirectory(_scriptsRoot);
             }
 
-            Debug.Log($"[Scripts] LiveCode root: {_liveCodeRoot}");
-            if (_frozenCodeRoot != null)
-                Debug.Log($"[Scripts] FrozenCode root: {_frozenCodeRoot}");
+            Debug.Log($"[Scripts] Scripts root: {_scriptsRoot}");
         }
 
         // =====================================================================
@@ -564,10 +547,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         private void SetupWatchers()
         {
-            if (_liveCodeRoot != null)
-                _liveCodeWatcher = CreateWatcher(_liveCodeRoot);
-            if (_frozenCodeRoot != null)
-                _frozenCodeWatcher = CreateWatcher(_frozenCodeRoot);
+            if (_scriptsRoot != null)
+                _scriptsWatcher = CreateWatcher(_scriptsRoot);
         }
 
         private FileSystemWatcher CreateWatcher(string path)

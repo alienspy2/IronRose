@@ -225,6 +225,11 @@ Claude Code --Bash--> ironrose_cli.py --Unix Domain Socket--> CliPipeServer
 - Color를 "r, g, b, a" 문자열로 포맷 (InvariantCulture 사용)
 - material.info, light.info, camera.info, render.info에서 사용
 
+## Phase 47a 변경사항
+- `ResolveComponentType()`의 FrozenCode/LiveCode 이중 검색이 Scripts 단일 검색으로 변경됨
+- `assembly.info` 핸들러의 JSON 응답 키가 `liveCodeDemoTypes`/`liveCodeDemoCount`에서 `scriptDemoTypes`/`scriptDemoCount`로 변경됨
+- `EngineCore.LiveCodeDemoTypes` 프로퍼티 참조는 Phase 47c에서 이름 변경 예정
+
 ## 주의사항
 - CLI 서버는 프로젝트 미로드 상태에서도 동작한다 (ping 등 기본 명령만 사용 가능)
 - 메인 스레드 큐 대기 타임아웃은 5초. 모달 대화상자 등으로 메인 스레드가 블로킹되면 타임아웃 에러 반환

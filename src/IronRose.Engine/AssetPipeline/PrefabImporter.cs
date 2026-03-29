@@ -45,7 +45,10 @@ namespace IronRose.AssetPipeline
         /// </summary>
         public GameObject? LoadPrefab(string prefabPath)
         {
-            return LoadPrefabInternal(prefabPath, 0);
+            EditorDebug.Log($"[PrefabImporter] LoadPrefab called: {prefabPath}, exists={System.IO.File.Exists(prefabPath)}");
+            var result = LoadPrefabInternal(prefabPath, 0);
+            EditorDebug.Log($"[PrefabImporter] LoadPrefab result: {(result != null ? result.name : "NULL")} for {prefabPath}");
+            return result;
         }
 
         private GameObject? LoadPrefabInternal(string prefabPath, int depth)
@@ -57,7 +60,11 @@ namespace IronRose.AssetPipeline
             }
 
             var config = TomlConfig.LoadFile(prefabPath, "[PrefabImporter]");
-            if (config == null) return null;
+            if (config == null)
+            {
+                EditorDebug.LogWarning($"[PrefabImporter] TomlConfig.LoadFile returned null for: {prefabPath}");
+                return null;
+            }
 
             // Variant 감지: basePrefabGuid가 있으면 Variant
             string? basePrefabGuid = null;
@@ -77,7 +84,10 @@ namespace IronRose.AssetPipeline
 
         private GameObject? LoadBase(TomlConfig config, string prefabPath)
         {
-            var gameObjects = SceneSerializer.LoadPrefabGameObjectsFromString(config.ToTomlString());
+            var tomlStr = config.ToTomlString();
+            EditorDebug.Log($"[PrefabImporter] LoadBase: tomlStr length={tomlStr.Length} for {prefabPath}");
+            var gameObjects = SceneSerializer.LoadPrefabGameObjectsFromString(tomlStr);
+            EditorDebug.Log($"[PrefabImporter] LoadBase: gameObjects.Count={gameObjects.Count} for {prefabPath}");
             if (gameObjects.Count == 0)
             {
                 EditorDebug.LogWarning($"[PrefabImporter] No GameObjects in prefab: {prefabPath}");

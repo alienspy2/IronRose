@@ -96,6 +96,8 @@ $CLI asset.find "tree"                       # 에셋 검색 (부분 매칭)
 $CLI asset.list Assets/Models                # 폴더 내 에셋 목록
 $CLI prefab.instantiate <guid> 0,0,0         # 프리팹 인스턴스 생성
 $CLI prefab.save <goId> Assets/Prefabs/x.prefab  # GO를 프리팹으로 저장
+$CLI prefab.info <guid>                      # 프리팹 에셋 정보 조회 (GO, 컴포넌트, 필드)
+$CLI prefab.set_field <guid> PileScript explosionVfxPrefab asset:<prefabGuid>  # 프리팹 필드 수정
 ```
 
 ### 에디터 조작

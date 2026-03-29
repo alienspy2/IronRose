@@ -9,6 +9,7 @@
 //          IronRose.AssetPipeline/AssetDatabase, IronRose.Engine.Editor/EditorPlayMode,
 //          IronRose.Engine.Editor/EditorState,
 //          IronRose.Engine.Editor.ImGuiEditor/ImGuiOverlay, ShaderRegistry,
+//          IronRose.Engine/ScriptReloadManager,
 //          IronRose.Engine.Cli/CliPipeServer, IronRose.Engine.Cli/CliCommandDispatcher,
 //          IronRose.Engine.Cli/CliLogBuffer
 // @exports
@@ -19,6 +20,7 @@
 //     Shutdown(): void                    — 엔진 종료
 //     HeadlessEditor: bool                — Standalone 빌드 여부
 //     ScreenCaptureEnabled: bool          — 디버깅 스크린캡처 on/off
+//     ScriptDemoTypes: Type[] (static)    — Scripts에서 발견된 MonoBehaviour 데모 타입 목록
 //     ShowEditor(): void                  — 에디터 표시
 //     RequestQuit(): void                 — 종료 요청
 // @note    ProcessEngineKeys()에서 ESC 키로 커서 잠금 임시 해제 (에디터만).
@@ -72,7 +74,7 @@ namespace IronRose.Engine
         private double _fixedAccumulator = 0;
 
         // 서브시스템 매니저 (Phase 15 — H-2)
-        private LiveCodeManager? _liveCodeManager;
+        private ScriptReloadManager? _scriptReloadManager;
         private AssetWarmupManager? _warmupManager;
         private Editor.ThumbnailGenerator? _thumbnailGenerator;
 
@@ -101,11 +103,11 @@ namespace IronRose.Engine
         // 핫 리로드 후 씬 복원 콜백
         public Action? OnAfterReload
         {
-            get => _liveCodeManager?.OnAfterReload ?? _pendingOnAfterReload;
+            get => _scriptReloadManager?.OnAfterReload ?? _pendingOnAfterReload;
             set
             {
-                if (_liveCodeManager != null)
-                    _liveCodeManager.OnAfterReload = value;
+                if (_scriptReloadManager != null)
+                    _scriptReloadManager.OnAfterReload = value;
                 else
                     _pendingOnAfterReload = value;
             }
@@ -124,13 +126,13 @@ namespace IronRose.Engine
             }
         }
 
-        // LiveCode에서 발견된 MonoBehaviour 데모 타입 목록 (DemoLauncher에서 참조)
-        public static Type[] LiveCodeDemoTypes
+        // Scripts에서 발견된 MonoBehaviour 데모 타입 목록 (DemoLauncher에서 참조)
+        public static Type[] ScriptDemoTypes
         {
-            get => _staticLiveCodeManager?.LiveCodeDemoTypes ?? Array.Empty<Type>();
+            get => _staticScriptReloadManager?.ScriptDemoTypes ?? Array.Empty<Type>();
             private set { } // kept for API compat
         }
-        private static LiveCodeManager? _staticLiveCodeManager;
+        private static ScriptReloadManager? _staticScriptReloadManager;
 
         public void Initialize(IWindow window)
         {
@@ -187,8 +189,7 @@ namespace IronRose.Engine
             if (ProjectContext.IsProjectLoaded)
             {
                 InitAssets();
-                InitFrozenCode();
-                InitLiveCode();
+                InitScripts();
                 InitGpuCompressor();
             }
             if (!HeadlessEditor)
@@ -299,8 +300,8 @@ namespace IronRose.Engine
             // 에셋 파일 변경 감지 처리 (Play 상태와 무관)
             _assetDatabase?.ProcessFileChanges();
 
-            // 핫 리로드 요청 처리 (Play 중에는 보류, Stop 후 수행)
-            _liveCodeManager?.ProcessReload();
+            // 핫 리로드 요청 처리
+            _scriptReloadManager?.ProcessReload();
 
             // 게임 로직은 Playing 상태에서만 실행
             bool shouldRunGameLogic = IronRose.Engine.Editor.EditorPlayMode.State == IronRose.Engine.Editor.PlayModeState.Playing;
@@ -319,7 +320,7 @@ namespace IronRose.Engine
                     _fixedAccumulator -= FixedDeltaTime;
                 }
 
-                _liveCodeManager?.UpdateScripts();
+                _scriptReloadManager?.UpdateScripts();
                 SceneManager.Update((float)deltaTime);
 
                 // PostProcess Volume 블렌딩 (카메라 위치 기반)
@@ -526,7 +527,7 @@ namespace IronRose.Engine
             _gpuCompressor = null;
             _postProcessManager?.Dispose();
             _physicsManager?.Dispose();
-            _liveCodeManager?.Dispose();
+            _scriptReloadManager?.Dispose();
             _thumbnailGenerator?.Dispose();
             _imguiOverlay?.Dispose();
             _renderSystem?.Dispose();
@@ -733,62 +734,21 @@ namespace IronRose.Engine
             }
         }
 
-        private void InitFrozenCode()
+        private void InitScripts()
         {
-            var frozenCodePath = ProjectContext.FrozenCodePath;
-            if (!Directory.Exists(frozenCodePath))
-                return;
-
-            var csFiles = Directory.GetFiles(frozenCodePath, "*.cs");
-            if (csFiles.Length == 0)
-                return;
-
-            RoseEngine.EditorDebug.Log($"[Engine] Compiling {csFiles.Length} FrozenCode files...");
-
-            var compiler = new Scripting.ScriptCompiler();
-            compiler.AddReference(typeof(IronRose.API.Screen));
-            compiler.AddReference(typeof(EngineCore).Assembly.Location);
-            compiler.AddReference(typeof(PostProcessStack).Assembly.Location);
-            compiler.AddReference(typeof(IronRose.Scripting.IHotReloadable).Assembly.Location);
-
-            var entryAsm = Assembly.GetEntryAssembly();
-            if (entryAsm != null && !string.IsNullOrEmpty(entryAsm.Location))
-                compiler.AddReference(entryAsm.Location);
-
-            var result = compiler.CompileFromFiles(csFiles, "FrozenCode");
-            if (result.Success && result.AssemblyBytes != null)
-            {
-                Assembly.Load(result.AssemblyBytes);
-                RoseEngine.EditorDebug.Log("[Engine] FrozenCode loaded successfully");
-
-                // Add Component 메뉴 캐시 무효화
-                ImGuiInspectorPanel.InvalidateComponentTypeCache();
-                ImGuiHierarchyPanel.InvalidateComponentTypeCache();
-                SceneSerializer.InvalidateComponentTypeCache();
-            }
-            else
-            {
-                RoseEngine.EditorDebug.LogBuildError("[Engine] FrozenCode compilation failed:");
-                foreach (var err in result.Errors)
-                    RoseEngine.EditorDebug.LogBuildError($"  {err.Message}",
-                        sourceFile: err.FilePath, sourceLine: err.Line);
-            }
-        }
-
-        private void InitLiveCode()
-        {
-            _liveCodeManager = new LiveCodeManager();
-            _liveCodeManager.Initialize();
-            _staticLiveCodeManager = _liveCodeManager;
+            _scriptReloadManager = new ScriptReloadManager();
+            _scriptReloadManager.Initialize();
+            _staticScriptReloadManager = _scriptReloadManager;
             if (_pendingOnAfterReload != null)
             {
-                _liveCodeManager.OnAfterReload = _pendingOnAfterReload;
+                _scriptReloadManager.OnAfterReload = _pendingOnAfterReload;
                 _pendingOnAfterReload = null;
             }
 
-            // Play 모드 종료 시 보류 중인 핫 리로드 수행
-            var mgr = _liveCodeManager;
-            Editor.EditorPlayMode.OnAfterStopPlayMode += () => mgr.FlushPendingReload();
+            // Play mode 진입/종료 시 ScriptReloadManager 콜백 연결
+            var mgr = _scriptReloadManager;
+            Editor.EditorPlayMode.OnBeforeEnterPlayMode += () => mgr.OnEnterPlayMode();
+            Editor.EditorPlayMode.OnAfterStopPlayMode += () => mgr.OnExitPlayMode();
         }
 
         private void InitGpuCompressor()

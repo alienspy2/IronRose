@@ -13,7 +13,7 @@
 3. 프로젝트 로드 성공 시 `Debug.SetLogDirectory(ProjectRoot/Logs/)` — 로그를 프로젝트 폴더로 전환
 4. `RoseConfig.Load()`, `ProjectSettings.Load()`, `EditorState.Load()`
 5. 서브시스템 초기화: Application(경로 초기화 + PlayerPrefs 로드 포함), Input, Graphics, ShaderCache, RenderSystem, Screen, PluginApi, Physics
-6. 프로젝트 로드 시: Assets, LiveCode, GpuCompressor 초기화
+6. 프로젝트 로드 시: Assets, Scripts(ScriptReloadManager), GpuCompressor 초기화
 7. `HeadlessEditor`가 false이면 에디터(ImGuiOverlay) 초기화
 8. 에셋 캐시 워밍업 시작
 

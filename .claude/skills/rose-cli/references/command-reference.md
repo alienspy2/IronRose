@@ -452,6 +452,33 @@ prefab.is_instance <goId>
 prefab.unpack <goId>
 ```
 
+### `prefab.info`
+프리팹 에셋의 GO 계층, 컴포넌트, 필드 값을 조회.
+```
+prefab.info <guid|path>
+```
+반환: `{ guid, path, gameObjects: [{ name, isRoot, components: [{ typeName, fields: [{ name, typeName, value }] }] }] }`
+
+### `prefab.set_field`
+프리팹 에셋의 컴포넌트 필드를 수정하고 디스크에 저장. GO 이름 생략 시 루트 GO 대상.
+에셋 참조 필드는 `asset:` 접두사 사용.
+```
+prefab.set_field <guid|path> <componentType> <fieldName> <value>
+prefab.set_field <guid|path> <goName> <componentType> <fieldName> <value>
+```
+예시:
+```bash
+# 루트 GO의 float 필드 수정
+$CLI prefab.set_field dcc25465-... ExplosionVfxScript shrinkDuration 0.5
+
+# 에셋 참조 (GameObject) 필드 수정
+$CLI prefab.set_field ae2c9f21-... PileScript explosionVfxPrefab asset:dcc25465-...
+
+# 특정 자식 GO의 필드 수정
+$CLI prefab.set_field ae2c9f21-... ChildSprite MeshRenderer materialGuid asset:08ba5c79-...
+```
+반환: `{ ok: true, guid, goName, component, field, newValue }`
+
 ---
 
 ## Asset

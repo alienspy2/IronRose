@@ -184,11 +184,15 @@ namespace IronRose.AssetPipeline
             // 일반 파일 경로 로드
             // 1. 메모리 캐시 확인
             if (_loadedAssets.TryGetValue(path, out var cached))
+            {
                 return ExtractFromResult<T>(cached);
+            }
 
             // 1-1. 임포트 실패 캐시 확인 (매 프레임 재시도 방지)
             if (_failedImports.Contains(path))
+            {
                 return null;
+            }
 
             var meta = RoseMetadata.LoadOrCreate(path);
             var importerType = GetImporterType(meta);
@@ -227,6 +231,7 @@ namespace IronRose.AssetPipeline
 
                 case "PrefabImporter":
                     asset = ImportPrefab(path);
+                    EditorDebug.Log($"[AssetDatabase] ImportPrefab result: {(asset != null ? ((RoseEngine.GameObject)asset).name : "NULL")} for path={path}");
                     break;
 
                 case "FontImporter":
@@ -399,6 +404,46 @@ namespace IronRose.AssetPipeline
         // ─── 캐시 관리 ──────────────────────────────────────────
 
         public void ClearCache() => _roseCache.ClearAll();
+
+        /// <summary>
+        /// 스크립트 핫 리로드 후, 스크립트 타입 컴포넌트를 포함하는 프리팹 캐시를 무효화한다.
+        /// 캐시된 프리팹 템플릿의 컴포넌트가 이전 ALC의 타입을 참조하고 있으므로,
+        /// 해당 엔트리를 제거하여 다음 접근 시 새 ALC 타입으로 재역직렬화되도록 한다.
+        /// </summary>
+        public void InvalidateScriptPrefabCache()
+        {
+            var toRemove = new List<string>();
+            foreach (var kvp in _loadedAssets)
+            {
+                if (kvp.Value is not GameObject go) continue;
+                if (HasScriptComponent(go))
+                    toRemove.Add(kvp.Key);
+            }
+
+            foreach (var key in toRemove)
+                _loadedAssets.Remove(key);
+
+            if (toRemove.Count > 0)
+                EditorDebug.Log($"[AssetDatabase] InvalidateScriptPrefabCache: evicted {toRemove.Count} prefab(s) with script components", force: true);
+        }
+
+        /// <summary>GO 계층 내에 Scripts 어셈블리의 컴포넌트가 있는지 재귀 검사.</summary>
+        private static bool HasScriptComponent(GameObject go)
+        {
+            foreach (var comp in go.InternalComponents)
+            {
+                if (comp is Transform) continue;
+                var asmName = comp.GetType().Assembly.GetName().Name;
+                if (asmName == "Scripts")
+                    return true;
+            }
+            for (int i = 0; i < go.transform.childCount; i++)
+            {
+                if (HasScriptComponent(go.transform.GetChild(i).gameObject))
+                    return true;
+            }
+            return false;
+        }
 
         /// <summary>Returns paths of cacheable assets (mesh/texture) that don't have a valid disk cache.</summary>
         public string[] GetUncachedAssetPaths()

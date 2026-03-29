@@ -15,8 +15,7 @@
 //     AssetsPath: string               -- Assets/ 절대 경로
 //     EditorAssetsPath: string         -- EditorAssets/ 절대 경로
 //     CachePath: string                -- RoseCache/ 절대 경로
-//     LiveCodePath: string             -- LiveCode/ 절대 경로
-//     FrozenCodePath: string           -- FrozenCode/ 절대 경로
+//     ScriptsPath: string              -- Scripts/ 절대 경로
 // @note    projectRoot 인자가 없으면 ~/.ironrose/settings.toml의 last_project 경로를 사용한다.
 //          last_project도 없으면 CWD를 프로젝트 루트로 폴백 (엔진 레포 직접 실행 케이스).
 //          Directory.Build.props의 IronRoseRoot와 engine.path 불일치 시 경고 로그 출력.
@@ -59,11 +58,8 @@ namespace IronRose.Engine
         /// <summary>RoseCache/ 절대 경로.</summary>
         public static string CachePath => Path.Combine(ProjectRoot, "RoseCache");
 
-        /// <summary>LiveCode/ 절대 경로.</summary>
-        public static string LiveCodePath => Path.Combine(ProjectRoot, "LiveCode");
-
-        /// <summary>FrozenCode/ 절대 경로.</summary>
-        public static string FrozenCodePath => Path.Combine(ProjectRoot, "FrozenCode");
+        /// <summary>Scripts/ 절대 경로.</summary>
+        public static string ScriptsPath => Path.Combine(ProjectRoot, "Scripts");
 
         /// <summary>
         /// 프로젝트 루트를 설정하고 project.toml을 읽어 초기화한다.

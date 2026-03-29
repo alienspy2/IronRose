@@ -9,8 +9,7 @@
 //     NormalizeEpsilon: float       — 벡터 정규화 시 0-division 방지 epsilon
 //   static class EngineDirectories
 //     CachePath: string             — 캐시 폴더명 ("RoseCache")
-//     LiveCodePath: string          — 라이브 코드 폴더명 ("LiveCode")
-//     FrozenCodePath: string        — 프로즌 코드 폴더명 ("FrozenCode")
+//     ScriptsPath: string           — 스크립트 폴더명 ("Scripts")
 //   static class MouseButtonIndex
 //     Left/Right/Middle/Count: int  — 마우스 버튼 인덱스
 // @note    EngineDirectories는 폴더명 상수만 제공한다.
@@ -42,11 +41,8 @@ namespace RoseEngine
         /// <summary>캐시 폴더명.</summary>
         public const string CachePath = "RoseCache";
 
-        /// <summary>라이브 코드 폴더명.</summary>
-        public const string LiveCodePath = "LiveCode";
-
-        /// <summary>프로즌 코드 폴더명.</summary>
-        public const string FrozenCodePath = "FrozenCode";
+        /// <summary>스크립트 폴더명.</summary>
+        public const string ScriptsPath = "Scripts";
     }
 
     /// <summary>마우스 버튼 인덱스 상수.</summary>

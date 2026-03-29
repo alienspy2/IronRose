@@ -20,8 +20,7 @@
 //     Update(float): void                                      — 메인 업데이트 루프
 //     FixedUpdate(float): void                                 — 물리 업데이트 루프
 //     Clear(): void                                            — 씬 전체 초기화
-// @note    [Diag] 태그 로그는 EditorDebug로, MonoBehaviour 콜백 에러는 Debug로 출력.
-//          Update 루프에서 300프레임마다 [Diag] 진단 로그 출력.
+// @note    MonoBehaviour 콜백 에러는 Debug.LogError로 출력.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -83,11 +82,25 @@ namespace RoseEngine
             _allGameObjects.Add(go);
         }
 
+        /// <summary>지정 GO의 모든 MonoBehaviour를 등록 해제한다 (프리팹 템플릿 마킹 시 사용).</summary>
+        public static void UnregisterBehaviours(GameObject go)
+        {
+            for (int i = _behaviours.Count - 1; i >= 0; i--)
+            {
+                if (_behaviours[i].gameObject == go)
+                {
+                    _pendingStart.Remove(_behaviours[i]);
+                    _behaviours.RemoveAt(i);
+                }
+            }
+        }
+
         public static void RegisterBehaviour(MonoBehaviour behaviour)
         {
             if (_behaviours.Contains(behaviour)) return;
+            // 프리팹 템플릿(_isEditorInternal) GO의 behaviour는 등록하지 않음
+            if (behaviour.gameObject != null && behaviour.gameObject._isEditorInternal) return;
 
-            EditorDebug.Log($"[Diag] RegisterBehaviour: {behaviour.GetType().Name} (enabled={behaviour.enabled}, go={behaviour.gameObject?.name}, active={behaviour.gameObject?.activeInHierarchy})");
             _behaviours.Add(behaviour);
 
             try
@@ -114,7 +127,7 @@ namespace RoseEngine
         }
 
         /// <summary>
-        /// LiveCode 마이그레이션 등에서 라이프사이클 콜백 없이 행동 등록 해제.
+        /// Scripts 마이그레이션 등에서 라이프사이클 콜백 없이 행동 등록 해제.
         /// </summary>
         internal static void UnregisterBehaviour(MonoBehaviour behaviour)
         {
@@ -174,17 +187,10 @@ namespace RoseEngine
             InvokeScheduler.Process(Time.deltaTime);
 
             // 3. Update all behaviours
-            if (Time.frameCount % 300 == 0)
-                EditorDebug.Log($"[Diag] Update loop: {_behaviours.Count} behaviours registered");
             for (int i = 0; i < _behaviours.Count; i++)
             {
                 var b = _behaviours[i];
-                if (!IsActive(b))
-                {
-                    if (Time.frameCount % 300 == 0)
-                        EditorDebug.Log($"[Diag] SKIPPED {b.GetType().Name}: enabled={b.enabled}, destroyed={b._isDestroyed}, activeInHierarchy={b.gameObject.activeInHierarchy}");
-                    continue;
-                }
+                if (!IsActive(b)) continue;
                 try { b.Update(); }
                 catch (Exception ex)
                 {

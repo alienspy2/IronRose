@@ -6,8 +6,8 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
-    <!-- 빌드 출력을 런타임 디렉토리에 복사하지 않음 -->
-    <!-- LiveCode는 Roslyn 런타임 컴파일 전용. 빌드는 IntelliSense 지원 목적으로만 수행 -->
+    <!-- dotnet build 핫리로드: DLL은 bin/Debug/net10.0/Scripts.dll로 출력됨 -->
+    <!-- 의존성 DLL 복사 불필요 (엔진이 이미 로드한 어셈블리를 ALC Resolving으로 참조) -->
     <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
   </PropertyGroup>

@@ -44,8 +44,14 @@ namespace IronRose.Engine.Editor
         public static Action? OnResetFixedAccumulator;
 
         /// <summary>
+        /// Play 모드 진입 직전 호출되는 콜백.
+        /// ScriptReloadManager가 FileSystemWatcher를 중단하는 데 사용됩니다.
+        /// </summary>
+        public static Action? OnBeforeEnterPlayMode;
+
+        /// <summary>
         /// Play 모드 종료 후 호출되는 콜백.
-        /// LiveCodeManager가 보류 중인 핫 리로드를 수행하는 데 사용됩니다.
+        /// ScriptReloadManager가 FileSystemWatcher를 재활성화하고 변경 감지를 수행하는 데 사용됩니다.
         /// </summary>
         public static Action? OnAfterStopPlayMode;
 
@@ -54,6 +60,9 @@ namespace IronRose.Engine.Editor
         public static void EnterPlayMode()
         {
             if (State != PlayModeState.Edit) return;
+
+            // Play mode 진입 전 콜백 (예: FileSystemWatcher 중단)
+            OnBeforeEnterPlayMode?.Invoke();
 
             var scene = SceneManager.GetActiveScene();
             _savedSceneToml = SceneSerializer.SaveToString();

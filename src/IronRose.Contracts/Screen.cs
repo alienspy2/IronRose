@@ -4,7 +4,7 @@ namespace IronRose.API
 {
     /// <summary>
     /// 화면/렌더링 관련 플러그인 API.
-    /// LiveCode 스크립트에서 호출 가능.
+    /// Scripts 스크립트에서 호출 가능.
     /// </summary>
     public static class Screen
     {

@@ -1,35 +1,29 @@
 # IronRose 스크립트 핫 리로드
 
-## FrozenCode / LiveCode 종속성 구조
+## Scripts 프로젝트 구조
 
 ```
-IronRose.Engine  ←──── FrozenCode (컴파일 타임 참조)
-IronRose.Contracts ←─┘
-                       ↑
-                  RoseEditor ── FrozenCode (ProjectReference)
-                  Standalone ── FrozenCode (ProjectReference)
-
-IronRose.Engine  ←──── LiveCode (csproj 참조는 동일하나 실행 시 직접 참조하지 않음)
-IronRose.Contracts ←─┘
-                       ↑
-                  LiveCodeManager ── Roslyn 런타임 컴파일 (FileSystemWatcher 감시)
+IronRose.Engine  <---- Scripts (csproj 참조, 실행 시 직접 참조하지 않음)
+IronRose.Contracts <-+
+                       |
+                  ScriptReloadManager -- dotnet build + DLL 로드 (FileSystemWatcher 감시)
+                  Standalone -- Scripts (ProjectReference)
 ```
 
-- **FrozenCode** — `dotnet build` 시 컴파일. RoseEditor/Standalone이 `ProjectReference`로 직접 참조
-- **LiveCode** — 실행 시 `LiveCodeManager`가 Roslyn으로 런타임 컴파일하여 핫 리로드. 실행 프로젝트가 직접 참조하지 않음
-- 두 프로젝트 모두 동일한 종속성(`IronRose.Engine` + `IronRose.Contracts`)
+- **Scripts** -- 게임 스크립트 단일 프로젝트. `dotnet build`로 컴파일되며, 에디터에서는 ScriptReloadManager가 핫 리로드 수행.
+- Standalone 빌드에서는 ProjectReference로 직접 참조.
 
-## 스크립트 핫 리로드 (Phase 2)
+## 스크립트 핫 리로드
 
 ```
-1. LiveCode/*.cs 수정
-2. Roslyn 런타임 컴파일
-3. 즉시 로드 및 실행
+1. Scripts/*.cs 수정
+2. FileSystemWatcher 감지 (0.5초 trailing edge debounce)
+3. dotnet build --no-restore Scripts.csproj
+4. File.ReadAllBytes(Scripts.dll) -> ALC 로드
+5. MigrateEditorComponents() -> 씬 컴포넌트 마이그레이션
 ```
 
-## 스크립트 편입 (`/digest`)
+## Play Mode 동작
 
-엔진 실행이 종료된 후, 핫 리로드로 검증이 완료된 LiveCode 스크립트를 `/digest` 커맨드로 `FrozenCode/` 프로젝트에 편입합니다.
-- LiveCode에서 테스트 완료된 `.cs` 파일을 FrozenCode 프로젝트로 이동
-- LiveCode 디렉토리는 항상 실험/개발 중인 스크립트만 유지
-- **중요: LiveCode ↔ FrozenCode 간 스크립트 이동은 반드시 엔진이 종료된 상태에서만 수행할 것** (실행 중 이동 시 어셈블리 불일치로 컴포넌트 참조가 깨질 수 있음)
+- Play mode 진입 시: FileSystemWatcher 중단
+- Play mode 종료 시: FileSystemWatcher 재활성화, 변경 감지 시 일괄 빌드/리로드

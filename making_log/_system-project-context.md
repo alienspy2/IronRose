@@ -6,6 +6,11 @@
   - `Initialize()`에서 project.toml 탐색 및 파싱
   - 글로벌 설정(last_project)을 `~/.ironrose/settings.toml`에 저장/읽기
 
+## Phase 47a 변경사항
+- `LiveCodePath`, `FrozenCodePath` 속성이 `ScriptsPath` 단일 속성으로 통합됨
+- `ScriptsPath`는 `Path.Combine(ProjectRoot, "Scripts")`를 반환
+- 이에 따라 `EngineDirectories` 상수도 `ScriptsPath = "Scripts"`로 통합됨
+
 ## 핵심 동작
 
 ### 초기화 흐름 (Initialize)

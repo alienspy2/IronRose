@@ -13,8 +13,7 @@ IronRose는 **엔진 레포**와 **에셋 프로젝트 레포**로 분리된 구
     MyGame.RoseEditor.csproj
     Assets/
     EditorAssets/
-    FrozenCode/
-    LiveCode/
+    Scripts/
 ```
 
 에셋 프로젝트는 `$(IronRoseRoot)` MSBuild 변수로 엔진을 로컬 소스 참조한다.
@@ -57,7 +56,7 @@ IronRose는 **엔진 레포**와 **에셋 프로젝트 레포**로 분리된 구
   - `PhysicsWorld3D.cs` — BepuPhysics v2.4.0
   - `PhysicsWorld2D.cs` — Aether.Physics2D v2.2.0
 
-- `src/IronRose.Scripting/` — Roslyn 런타임 컴파일 (핫 리로드)
+- `src/IronRose.Scripting/` — 스크립트 핫 리로드 (ALC 도메인 관리)
 
 - `src/IronRose.Contracts/` — 플러그인 API 계약 인터페이스
 
@@ -79,8 +78,7 @@ IronRose는 **엔진 레포**와 **에셋 프로젝트 레포**로 분리된 구
   - `Program.cs` — 에디터 진입점
   - `Directory.Build.props` — `$(IronRoseRoot)` 변수 정의
   - `project.toml` — 프로젝트 설정
-  - `FrozenCode/FrozenCode.csproj` — 안정 스크립트
-  - `LiveCode/LiveCode.csproj` — 실험 스크립트 (Roslyn 핫 리로드)
+  - `Scripts/Scripts.csproj` — 게임 스크립트 (dotnet build 핫 리로드)
   - `EditorAssets/` — 에디터 에셋 (Fonts, Matcaps, Skybox)
   - `Assets/` — 빈 에셋 디렉토리 구조
   - `.gitignore` — 프로젝트용
@@ -96,8 +94,7 @@ IronRose는 **엔진 레포**와 **에셋 프로젝트 레포**로 분리된 구
 | `ProjectContext.AssetsPath` | `ProjectRoot/Assets` |
 | `ProjectContext.EditorAssetsPath` | `EngineRoot/EditorAssets` (엔진 전용, internal) |
 | `ProjectContext.CachePath` | `ProjectRoot/RoseCache` |
-| `ProjectContext.LiveCodePath` | `ProjectRoot/LiveCode` |
-| `ProjectContext.FrozenCodePath` | `ProjectRoot/FrozenCode` |
+| `ProjectContext.ScriptsPath` | `ProjectRoot/Scripts` |
 | `ProjectContext.IsProjectLoaded` | `project.toml` 발견 여부 |
 
 `ShaderRegistry.Resolve(filename)` — 셰이더 파일명 → 절대 경로 변환.
