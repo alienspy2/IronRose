@@ -3027,6 +3027,35 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
             ImGui.Spacing();
 
+            // ── Blend Mode ──
+            {
+                var blendNames = new[] { "Opaque", "AlphaBlend", "Additive" };
+                int currentIdx = 0;
+                if (_editedMatTable!.TryGetValue("blendMode", out var blendVal))
+                {
+                    var blendStr = blendVal?.ToString() ?? "Opaque";
+                    currentIdx = blendStr switch
+                    {
+                        "AlphaBlend" => 1,
+                        "Additive" => 2,
+                        _ => 0,
+                    };
+                }
+
+                string wl = EditorWidgets.BeginPropertyRow("Blend Mode");
+                if (ImGui.Combo(wl, ref currentIdx, blendNames, blendNames.Length))
+                {
+                    var oldSnap = Toml.FromModel(_editedMatTable);
+                    _editedMatTable["blendMode"] = blendNames[currentIdx];
+                    SaveMatFile();
+                    var newSnap = Toml.FromModel(_editedMatTable);
+                    UndoSystem.Record(new MaterialPropertyUndoAction(
+                        "Change Material blendMode", _matFilePath!, oldSnap, newSnap));
+                }
+            }
+
+            ImGui.Spacing();
+
             // ── Base Surface ──
             DrawMatTextureSlot("mainTextureGuid", "Main Texture");
             DrawMatVec2("textureScaleX", "textureScaleY", "Tiling", 1f, 1f);
@@ -3100,6 +3129,14 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             var db = Resources.GetAssetDatabase();
 
             ImGui.BeginDisabled();
+
+            ImGui.Spacing();
+
+            // ── Blend Mode ──
+            {
+                string wl = EditorWidgets.BeginPropertyRow("Blend Mode");
+                ImGui.TextUnformatted(mat.blendMode.ToString());
+            }
 
             ImGui.Spacing();
 
