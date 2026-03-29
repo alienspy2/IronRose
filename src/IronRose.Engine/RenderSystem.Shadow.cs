@@ -156,6 +156,7 @@ namespace IronRose.Rendering
             {
                 if (!renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
                 if (renderer.gameObject._isEditorInternal) continue;
+                if ((renderer.material?.blendMode ?? BlendMode.Opaque) != BlendMode.Opaque) continue;
                 var filter = renderer.GetComponent<MeshFilter>();
                 if (filter?.mesh == null) continue;
                 var mesh = filter.mesh;
@@ -219,6 +220,7 @@ namespace IronRose.Rendering
                 {
                     if (!renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
                     if (renderer.gameObject._isEditorInternal) continue;
+                    if ((renderer.material?.blendMode ?? BlendMode.Opaque) != BlendMode.Opaque) continue;
                     var filter = renderer.GetComponent<MeshFilter>();
                     if (filter?.mesh == null) continue;
                     var mesh = filter.mesh;

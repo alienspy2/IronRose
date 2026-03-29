@@ -1606,13 +1606,16 @@ namespace IronRose.Rendering
                 RenderSkybox(cl, camera, viewProj);
             }
 
-            // === 5. Forward Pass → HDR (sprites, text, wireframe) ===
+            // === 5. Forward Pass → HDR (sprites, text, wireframe, transparent meshes) ===
             if (DebugOverlaySettings.wireframe && _wireframePipeline != null)
             {
                 UploadForwardLightData(cl, camera);
                 cl.SetPipeline(_wireframePipeline);
                 DrawAllRenderers(cl, viewProj, useWireframeColor: true);
             }
+
+            // --- 반투명 메시 (AlphaBlend/Additive) ---
+            DrawTransparentRenderers(cl, viewProj, camera);
 
             if (_spritePipeline != null && SpriteRenderer._allSpriteRenderers.Count > 0)
             {
