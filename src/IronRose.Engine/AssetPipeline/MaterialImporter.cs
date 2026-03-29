@@ -2,7 +2,7 @@
 // @file    MaterialImporter.cs
 // @brief   .mat (TOML) 파일을 Material로 임포트하고, Material을 TOML로 직렬화한다.
 //          색상은 [color], [emission] 서브테이블 구조로 저장한다. blendMode는 문자열로 저장.
-// @deps    IronRose.Engine/TomlConfig, RoseEngine (Material, Color, Texture2D, Vector2),
+// @deps    IronRose.Engine/TomlConfig, RoseEngine (Material, Color, Texture2D, Vector2, BlendMode),
 //          AssetPipeline/IAssetDatabase, AssetPipeline/RoseMetadata
 // @exports
 //   class MaterialImporter

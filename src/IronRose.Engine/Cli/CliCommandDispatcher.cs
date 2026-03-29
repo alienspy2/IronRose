@@ -31,7 +31,7 @@
 //          prefab.instantiate, prefab.save,
 //          asset.list, asset.find, asset.guid, asset.path,
 //          scene.tree, scene.new,
-//          material.info, material.set_color, material.set_metallic, material.set_roughness,
+//          material.info, material.set_color, material.set_metallic, material.set_roughness, material.set_blend_mode,
 //          light.info, light.set_color, light.set_intensity,
 //          camera.info, camera.set_fov,
 //          render.info, render.set_ambient,
@@ -1121,6 +1121,7 @@ namespace IronRose.Engine.Cli
                     return JsonOk(new
                     {
                         name = mat.name,
+                        blendMode = mat.blendMode.ToString(),
                         color = FormatColor(mat.color),
                         metallic = mat.metallic,
                         roughness = mat.roughness,
@@ -1232,12 +1233,43 @@ namespace IronRose.Engine.Cli
             };
 
             // ----------------------------------------------------------------
+            // material.set_blend_mode -- 블렌드 모드 변경 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["material.set_blend_mode"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: material.set_blend_mode <goId> <Opaque|AlphaBlend|Additive>");
+
+                if (!int.TryParse(args[0], out var id))
+                    return JsonError($"Invalid GameObject ID: {args[0]}");
+
+                if (!Enum.TryParse<BlendMode>(args[1], true, out var mode))
+                    return JsonError($"Invalid blend mode: {args[1]}. Use: Opaque, AlphaBlend, Additive");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var go = FindGameObjectById(id);
+                    if (go == null)
+                        return JsonError($"GameObject not found: {id}");
+
+                    var renderer = go.GetComponent<MeshRenderer>();
+                    if (renderer?.material == null)
+                        return JsonError($"No material on GameObject: {id}");
+
+                    renderer.material.blendMode = mode;
+                    SaveMaterialToDisk(renderer.material);
+                    SceneManager.GetActiveScene().isDirty = true;
+                    return JsonOk(new { blendMode = mode.ToString() });
+                });
+            };
+
+            // ----------------------------------------------------------------
             // material.create -- 새 머티리얼 파일 생성 (메인 스레드)
             // ----------------------------------------------------------------
             _handlers["material.create"] = args =>
             {
                 if (args.Length < 2)
-                    return JsonError("Usage: material.create <name> <dirPath> [r,g,b,a]");
+                    return JsonError("Usage: material.create <name> <dirPath> [r,g,b,a] [blendMode]");
 
                 var matName = args[0];
                 var dirPath = ResolveProjectPath(args[1]);
@@ -1246,15 +1278,21 @@ namespace IronRose.Engine.Cli
                 {
                     var filePath = Path.Combine(dirPath, matName + ".mat");
 
+                    // blendMode 파싱 (4번째 인자, 옵션)
+                    var blendMode = BlendMode.Opaque;
+                    if (args.Length >= 4 && Enum.TryParse<BlendMode>(args[3], true, out var bm))
+                        blendMode = bm;
+
                     // 색상이 지정되면 해당 색으로, 아니면 기본 흰색으로 생성
                     if (args.Length >= 3)
                     {
-                        var mat = new Material { name = matName, color = ParseColor(args[2]) };
+                        var mat = new Material { name = matName, color = ParseColor(args[2]), blendMode = blendMode };
                         MaterialImporter.WriteMaterial(filePath, mat);
                     }
                     else
                     {
-                        MaterialImporter.WriteDefault(filePath);
+                        var mat = new Material { name = matName, blendMode = blendMode };
+                        MaterialImporter.WriteMaterial(filePath, mat);
                     }
 
                     // AssetDatabase에 등록하기 위해 리스캔
