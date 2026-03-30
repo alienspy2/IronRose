@@ -9,15 +9,18 @@
 //     Draw(): void                — ImGui 패널 렌더링
 // @note    파일 목록은 Draw() 호출 시 1초 간격으로 갱신하여 I/O 부하를 줄인다.
 //          feedback 폴더가 없으면 저장 시 자동 생성한다.
+//          창 크기 변경 시 입력 영역/목록 영역이 가용 공간에 맞게 리사이즈된다.
+//          각 feedback 항목은 CollapsingHeader로 접었다 펼 수 있으며 내용을 표시한다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using ImGuiNET;
-using Vector2 = System.Numerics.Vector2;
 using IronRose.Engine;
 using RoseEngine;
+using Vector2 = System.Numerics.Vector2;
+using Vector4 = System.Numerics.Vector4;
 
 namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 {
@@ -63,11 +66,18 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         private void DrawInputSection()
         {
-            ImGui.Text("New Feedback:");
-            ImGui.InputTextMultiline("##feedback_input", ref _inputText, 4096,
-                new Vector2(ImGui.GetContentRegionAvail().X, 100));
+            float availWidth = ImGui.GetContentRegionAvail().X;
 
-            if (ImGui.Button("Save", new Vector2(80, 0)))
+            ImGui.Text("New Feedback:");
+
+            // Multiline input fills available width, fixed height
+            ImGui.InputTextMultiline("##feedback_input", ref _inputText, 4096,
+                new Vector2(availWidth, 80));
+
+            // Save button aligned to right
+            float buttonWidth = 80f;
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + availWidth - buttonWidth);
+            if (ImGui.Button("Save", new Vector2(buttonWidth, 0)))
             {
                 SaveFeedback();
             }
@@ -80,29 +90,57 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             ImGui.Text($"Feedback ({_entries.Count}):");
             ImGui.Spacing();
 
-            int deleteIndex = -1;
+            // Use BeginChild to fill remaining vertical space with scrollable list
+            Vector2 remaining = ImGui.GetContentRegionAvail();
+            // Reserve space for status message at bottom
+            float reservedHeight = string.IsNullOrEmpty(_statusMessage) ? 0f : 40f;
+            float listHeight = remaining.Y - reservedHeight;
+            if (listHeight < 50f) listHeight = 50f;
 
-            for (int i = 0; i < _entries.Count; i++)
+            if (ImGui.BeginChild("##feedback_list", new Vector2(0, listHeight),
+                ImGuiChildFlags.Border, ImGuiWindowFlags.None))
             {
-                ImGui.PushID(i);
+                int deleteIndex = -1;
 
-                if (ImGui.CollapsingHeader(_entries[i].FileName, ImGuiTreeNodeFlags.DefaultOpen))
+                for (int i = 0; i < _entries.Count; i++)
                 {
-                    ImGui.TextWrapped(_entries[i].Content);
+                    ImGui.PushID(i);
 
-                    if (ImGui.Button("Delete"))
+                    if (ImGui.CollapsingHeader(_entries[i].FileName, ImGuiTreeNodeFlags.DefaultOpen))
                     {
-                        deleteIndex = i;
+                        // Indent content slightly for readability
+                        ImGui.Indent(8f);
+
+                        // Display file content with word wrapping
+                        ImGui.PushTextWrapPos(ImGui.GetContentRegionAvail().X + ImGui.GetCursorPosX());
+                        ImGui.TextWrapped(_entries[i].Content);
+                        ImGui.PopTextWrapPos();
+
+                        ImGui.Spacing();
+
+                        // Delete button with subtle styling
+                        ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.6f, 0.2f, 0.2f, 0.4f));
+                        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.7f, 0.2f, 0.2f, 0.7f));
+                        ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.8f, 0.2f, 0.2f, 1.0f));
+                        if (ImGui.Button("Delete"))
+                        {
+                            deleteIndex = i;
+                        }
+                        ImGui.PopStyleColor(3);
+
+                        ImGui.Unindent(8f);
+                        ImGui.Spacing();
                     }
+
+                    ImGui.PopID();
                 }
 
-                ImGui.PopID();
+                if (deleteIndex >= 0)
+                {
+                    DeleteFeedback(deleteIndex);
+                }
             }
-
-            if (deleteIndex >= 0)
-            {
-                DeleteFeedback(deleteIndex);
-            }
+            ImGui.EndChild();
         }
 
         private void SaveFeedback()
