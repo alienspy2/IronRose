@@ -48,6 +48,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         private ImGuiSpriteEditorPanel? _spriteEditor;
         private ImGuiAnimationEditorPanel? _animEditor;
         private ImGuiScriptsPanel? _scripts;
+        private ImGuiFeedbackPanel? _feedback;
         private ImGuiStartupPanel? _startupPanel;
 
         // Property windows (고정 Inspector)
@@ -346,6 +347,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             _spriteEditor = new ImGuiSpriteEditorPanel(device, _renderer);
             _animEditor = new ImGuiAnimationEditorPanel();
             _scripts = new ImGuiScriptsPanel();
+            _feedback = new ImGuiFeedbackPanel();
             _startupPanel = new ImGuiStartupPanel();
             _inspector.AnimEditor = _animEditor;
 
@@ -674,6 +676,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                     if (ImGui.MenuItem("Animation Editor", null, ref ae))
                         _animEditor.IsOpen = ae;
 
+                    bool fb = _feedback!.IsOpen;
+                    if (ImGui.MenuItem("Feedback", null, ref fb))
+                        _feedback.IsOpen = fb;
+
                     ImGui.EndMenu();
                 }
 
@@ -708,6 +714,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             _spriteEditor?.Draw();
             _animEditor?.Draw();
             _scripts?.Draw();
+            _feedback?.Draw();
 
             // ── Property windows (고정 Inspector) ──
             DrawPropertyWindows();
@@ -1591,6 +1598,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             _sceneView!.IsOpen = EditorState.PanelSceneView;
             _project!.IsOpen = EditorState.PanelProject;
             _textureTool!.IsOpen = EditorState.PanelTextureTool;
+            _feedback!.IsOpen = EditorState.PanelFeedback;
         }
 
         private void SyncPanelStatesToEditorState()
@@ -1604,6 +1612,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             EditorState.PanelSceneView = _sceneView?.IsOpen ?? true;
             EditorState.PanelProject = _project?.IsOpen ?? true;
             EditorState.PanelTextureTool = _textureTool?.IsOpen ?? false;
+            EditorState.PanelFeedback = _feedback?.IsOpen ?? false;
         }
 
         private void SetUiScale(float scale)

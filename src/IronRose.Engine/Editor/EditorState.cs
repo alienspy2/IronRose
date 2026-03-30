@@ -13,6 +13,7 @@
 //     SceneViewRenderStyle: string              — Scene View 렌더 스타일
 //     SnapTranslate/Rotate/Scale/Grid2D: float  — 스냅 설정
 //     ImGuiLayoutData: string?                  — ImGui 독 레이아웃 INI 데이터
+//     PanelFeedback: bool                       — Feedback 패널 가시성
 //     IsEditingPrefab: bool                     — 프리팹 편집 모드 여부
 //     Load(): void                              — 상태 파일 로드
 //     Save(): void                              — 상태 파일 저장
@@ -104,6 +105,7 @@ namespace IronRose.Engine.Editor
         public static bool PanelSceneView { get; set; } = true;
         public static bool PanelProject { get; set; } = true;
         public static bool PanelTextureTool { get; set; } = false;
+        public static bool PanelFeedback { get; set; } = false;
         public static bool PanelProjectSettings { get; set; } = false;
 
         // Legacy: ActiveRendererProfileGuid — 마이그레이션용 (ProjectSettings로 이전됨)
@@ -181,6 +183,7 @@ namespace IronRose.Engine.Editor
                 PanelSceneView = panels.GetBool("scene_view", PanelSceneView);
                 PanelProject = panels.GetBool("project", PanelProject);
                 PanelTextureTool = panels.GetBool("texture_tool", PanelTextureTool);
+                PanelFeedback = panels.GetBool("feedback", PanelFeedback);
                 PanelProjectSettings = panels.GetBool("project_settings", PanelProjectSettings);
             }
 
@@ -227,6 +230,7 @@ namespace IronRose.Engine.Editor
                 toml += $"scene_view = {BoolStr(PanelSceneView)}\n";
                 toml += $"project = {BoolStr(PanelProject)}\n";
                 toml += $"texture_tool = {BoolStr(PanelTextureTool)}\n";
+                toml += $"feedback = {BoolStr(PanelFeedback)}\n";
                 toml += $"project_settings = {BoolStr(PanelProjectSettings)}\n";
 
                 if (!string.IsNullOrEmpty(ImGuiLayoutData))
