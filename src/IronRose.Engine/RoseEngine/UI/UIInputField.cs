@@ -1,3 +1,16 @@
+// ------------------------------------------------------------
+// @file    UIInputField.cs
+// @brief   텍스트 입력 필드 UI 컴포넌트. 포커스/선택/커서/클립보드/키보드 입력을 처리한다.
+// @deps    CanvasRenderer, IUIRenderable, Component, Font, Input, SystemClipboard, Application
+// @exports
+//   class UIInputField : Component, IUIRenderable
+//     string text                       — 현재 텍스트
+//     Action<string>? onValueChanged    — 값 변경 시 호출되는 콜백
+//     Action<string>? onEndEdit         — 편집 완료 시 호출되는 콜백
+//     void OnRenderUI(...)              — 렌더링 + 입력 처리
+// @note    CanvasRenderer.IsInteractive가 false이면 포커스 획득을 무시하고 렌더링만 수행한다.
+//          Play Mode에서만 입력 모드에 진입한다.
+// ------------------------------------------------------------
 using System;
 using ImGuiNET;
 using SNVector2 = System.Numerics.Vector2;
@@ -73,8 +86,8 @@ namespace RoseEngine
 
             float scale = fontSize / font.fontSize;
 
-            // ── Hit test / focus (Play Mode에서만 입력 모드 진입) ──
-            if (interactable && Application.isPlaying)
+            // ── Hit test / focus (Play Mode에서만 입력 모드 진입, Scene View에서는 스킵) ──
+            if (interactable && Application.isPlaying && CanvasRenderer.IsInteractive)
             {
                 var mousePos = ImGui.GetMousePos();
                 bool inRect = mousePos.X >= screenRect.x && mousePos.X <= screenRect.xMax &&

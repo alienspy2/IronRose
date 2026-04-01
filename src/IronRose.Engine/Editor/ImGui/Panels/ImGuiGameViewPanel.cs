@@ -1,3 +1,15 @@
+// ------------------------------------------------------------
+// @file    ImGuiGameViewPanel.cs
+// @brief   에디터 Game View 패널. 게임 렌더링 결과를 표시하고
+//          Canvas UI 오버레이를 렌더링한다.
+// @deps    CanvasRenderer
+// @exports
+//   class ImGuiGameViewPanel : IEditorPanel
+//     void Draw()             — 패널 렌더링
+//     (uint,uint) GetRenderTargetSize(...)  — RT 크기 계산
+// @note    Canvas UI 오버레이 렌더링 시 CanvasRenderer.IsInteractive를 true로 명시하여
+//          Game View에서 게임 UI 입력이 정상 처리되도록 한다.
+// ------------------------------------------------------------
 using System;
 using System.Numerics;
 using ImGuiNET;
@@ -129,10 +141,11 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     _imageScreenMin = ImGui.GetItemRectMin();
                     _imageScreenMax = ImGui.GetItemRectMax();
 
-                    // Canvas UI 오버레이 렌더링
+                    // Canvas UI 오버레이 렌더링 (Game View: 입력 처리 활성화)
                     var dl = ImGui.GetWindowDrawList();
                     float imgW = _imageScreenMax.X - _imageScreenMin.X;
                     float imgH = _imageScreenMax.Y - _imageScreenMin.Y;
+                    RoseEngine.CanvasRenderer.IsInteractive = true;
                     RoseEngine.CanvasRenderer.RenderAll(dl, _imageScreenMin.X, _imageScreenMin.Y, imgW, imgH);
                 }
                 else

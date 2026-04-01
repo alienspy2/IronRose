@@ -1,3 +1,15 @@
+// ------------------------------------------------------------
+// @file    UIScrollView.cs
+// @brief   스크롤 가능한 UI 컨테이너 컴포넌트. 수평/수직 스크롤바와 마우스 휠을 지원한다.
+// @deps    CanvasRenderer, IUIRenderable, Component
+// @exports
+//   class UIScrollView : Component, IUIRenderable
+//     Vector2 scrollPosition   — 현재 스크롤 위치
+//     Vector2 contentSize      — 콘텐츠 전체 크기
+//     void OnRenderUI(...)     — 렌더링 + 입력 처리
+// @note    CanvasRenderer.IsInteractive가 false이면 스크롤/드래그 입력을 무시하고
+//          스크롤바 렌더링만 수행한다.
+// ------------------------------------------------------------
 using System;
 using ImGuiNET;
 using SNVector2 = System.Numerics.Vector2;
@@ -37,13 +49,15 @@ namespace RoseEngine
                 new SNVector2(screenRect.xMax, screenRect.yMax),
                 true);
 
-            // Input handling
+            // Input handling (Scene View 등 비인터랙티브 컨텍스트에서는 입력 스킵)
             var mousePos = ImGui.GetMousePos();
             bool inRect = mousePos.X >= screenRect.x && mousePos.X <= screenRect.xMax &&
                           mousePos.Y >= screenRect.y && mousePos.Y <= screenRect.yMax;
 
+            bool interactive = CanvasRenderer.IsInteractive;
+
             // Mouse wheel scrolling
-            if (inRect)
+            if (interactive && inRect)
             {
                 var wheel = ImGui.GetIO().MouseWheel;
                 if (Math.Abs(wheel) > 0.01f)
@@ -69,21 +83,24 @@ namespace RoseEngine
                 bool hoverThumb = mousePos.X >= barX && mousePos.X <= screenRect.xMax &&
                                   mousePos.Y >= thumbY && mousePos.Y <= thumbY + thumbHeight;
 
-                if (hoverThumb && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                if (interactive)
                 {
-                    _isDraggingV = true;
-                    _dragStartOffset = mousePos.Y - thumbY;
-                }
-                if (_isDraggingV)
-                {
-                    if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
+                    if (hoverThumb && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
                     {
-                        float newThumbY = mousePos.Y - _dragStartOffset - screenRect.y;
-                        float t = (barHeight - thumbHeight) > 0 ? newThumbY / (barHeight - thumbHeight) : 0;
-                        scrollPosition = new Vector2(scrollPosition.x, Math.Clamp(t * maxScrollY, 0, maxScrollY));
+                        _isDraggingV = true;
+                        _dragStartOffset = mousePos.Y - thumbY;
                     }
-                    else
-                        _isDraggingV = false;
+                    if (_isDraggingV)
+                    {
+                        if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
+                        {
+                            float newThumbY = mousePos.Y - _dragStartOffset - screenRect.y;
+                            float t = (barHeight - thumbHeight) > 0 ? newThumbY / (barHeight - thumbHeight) : 0;
+                            scrollPosition = new Vector2(scrollPosition.x, Math.Clamp(t * maxScrollY, 0, maxScrollY));
+                        }
+                        else
+                            _isDraggingV = false;
+                    }
                 }
 
                 uint col = ColorToU32(hoverThumb || _isDraggingV ? scrollbarHoverColor : scrollbarColor);
@@ -104,21 +121,24 @@ namespace RoseEngine
                 bool hoverThumb = mousePos.Y >= barY && mousePos.Y <= screenRect.yMax &&
                                   mousePos.X >= thumbX && mousePos.X <= thumbX + thumbWidth;
 
-                if (hoverThumb && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                if (interactive)
                 {
-                    _isDraggingH = true;
-                    _dragStartOffset = mousePos.X - thumbX;
-                }
-                if (_isDraggingH)
-                {
-                    if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
+                    if (hoverThumb && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
                     {
-                        float newThumbX = mousePos.X - _dragStartOffset - screenRect.x;
-                        float t = (barWidth - thumbWidth) > 0 ? newThumbX / (barWidth - thumbWidth) : 0;
-                        scrollPosition = new Vector2(Math.Clamp(t * maxScrollX, 0, maxScrollX), scrollPosition.y);
+                        _isDraggingH = true;
+                        _dragStartOffset = mousePos.X - thumbX;
                     }
-                    else
-                        _isDraggingH = false;
+                    if (_isDraggingH)
+                    {
+                        if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
+                        {
+                            float newThumbX = mousePos.X - _dragStartOffset - screenRect.x;
+                            float t = (barWidth - thumbWidth) > 0 ? newThumbX / (barWidth - thumbWidth) : 0;
+                            scrollPosition = new Vector2(Math.Clamp(t * maxScrollX, 0, maxScrollX), scrollPosition.y);
+                        }
+                        else
+                            _isDraggingH = false;
+                    }
                 }
 
                 uint col = ColorToU32(hoverThumb || _isDraggingH ? scrollbarHoverColor : scrollbarColor);

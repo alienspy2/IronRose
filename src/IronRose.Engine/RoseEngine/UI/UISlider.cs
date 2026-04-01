@@ -1,3 +1,15 @@
+// ------------------------------------------------------------
+// @file    UISlider.cs
+// @brief   드래그 가능한 UI 슬라이더 컴포넌트. 수평/수직 방향을 지원하며
+//          값 변경 시 onValueChanged 콜백을 호출한다.
+// @deps    CanvasRenderer, IUIRenderable, Component
+// @exports
+//   class UISlider : Component, IUIRenderable
+//     float value                      — 현재 슬라이더 값
+//     Action<float>? onValueChanged    — 값 변경 시 호출되는 콜백
+//     void OnRenderUI(...)             — 렌더링 + 입력 처리
+// @note    CanvasRenderer.IsInteractive가 false이면 입력을 무시하고 렌더링만 수행한다.
+// ------------------------------------------------------------
 using System;
 using ImGuiNET;
 using SNVector2 = System.Numerics.Vector2;
@@ -80,8 +92,8 @@ namespace RoseEngine
                 drawList.AddCircleFilled(new SNVector2(hx, hy), handleSize * 0.5f, handleCol);
             }
 
-            // Interaction
-            if (!interactable) return;
+            // Interaction (Scene View 등 비인터랙티브 컨텍스트에서는 입력 스킵)
+            if (!interactable || !CanvasRenderer.IsInteractive) return;
 
             var mousePos = ImGui.GetMousePos();
             bool inRect = mousePos.X >= screenRect.x && mousePos.X <= screenRect.xMax &&

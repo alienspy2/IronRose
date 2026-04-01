@@ -1,3 +1,14 @@
+// ------------------------------------------------------------
+// @file    UIButton.cs
+// @brief   클릭 가능한 UI 버튼 컴포넌트. ImGui 히트 테스트로 hover/press 상태를 감지하고
+//          onClick 콜백을 호출한다.
+// @deps    CanvasRenderer, IUIRenderable, UIImage, Component
+// @exports
+//   class UIButton : Component, IUIRenderable
+//     Action? onClick          — 클릭 시 호출되는 콜백
+//     void OnRenderUI(...)     — 렌더링 + 입력 처리
+// @note    CanvasRenderer.IsInteractive가 false이면 입력을 무시하고 렌더링만 수행한다.
+// ------------------------------------------------------------
 using System;
 using ImGuiNET;
 using SNVector2 = System.Numerics.Vector2;
@@ -29,18 +40,26 @@ namespace RoseEngine
 
         public void OnRenderUI(ImDrawListPtr drawList, Rect screenRect)
         {
-            // Hit test
-            var mousePos = ImGui.GetMousePos();
-            _isHovered = interactable &&
-                mousePos.X >= screenRect.x && mousePos.X <= screenRect.xMax &&
-                mousePos.Y >= screenRect.y && mousePos.Y <= screenRect.yMax;
-
-            _isPressed = _isHovered && ImGui.IsMouseDown(ImGuiMouseButton.Left);
-
-            if (_isHovered && ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+            // Hit test (Scene View 등 비인터랙티브 컨텍스트에서는 입력 스킵)
+            if (!CanvasRenderer.IsInteractive)
             {
-                try { onClick?.Invoke(); }
-                catch (Exception ex) { Debug.LogError($"[UIButton] onClick error: {ex.Message}"); }
+                _isHovered = false;
+                _isPressed = false;
+            }
+            else
+            {
+                var mousePos = ImGui.GetMousePos();
+                _isHovered = interactable &&
+                    mousePos.X >= screenRect.x && mousePos.X <= screenRect.xMax &&
+                    mousePos.Y >= screenRect.y && mousePos.Y <= screenRect.yMax;
+
+                _isPressed = _isHovered && ImGui.IsMouseDown(ImGuiMouseButton.Left);
+
+                if (_isHovered && ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+                {
+                    try { onClick?.Invoke(); }
+                    catch (Exception ex) { Debug.LogError($"[UIButton] onClick error: {ex.Message}"); }
+                }
             }
 
             // Apply tint color to sibling UIImage/UIText

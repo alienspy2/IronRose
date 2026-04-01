@@ -1,3 +1,17 @@
+// ------------------------------------------------------------
+// @file    ImGuiSceneViewPanel.cs
+// @brief   에디터 Scene View 패널. 3D 씬을 렌더링하고 트랜스폼 도구,
+//          렌더 모드 선택, 기즈모/UI 오버레이, 에셋 드래그앤드롭을 제공한다.
+// @deps    CanvasRenderer, EditorState, EditorSelection, EditorAssets,
+//          EditorWidgets, UndoSystem, ImGuiHierarchyPanel, ImGuiProjectPanel
+// @exports
+//   class ImGuiSceneViewPanel : IEditorPanel
+//     void Draw()                — 패널 렌더링
+//     void ProcessShortcuts()    — 키보드 단축키 처리
+//     (uint,uint) GetRenderTargetSize(...)  — RT 크기 계산
+// @note    Canvas UI 오버레이 렌더링 시 CanvasRenderer.IsInteractive를 false로 설정하여
+//          Scene View에서 게임 UI 입력이 처리되지 않도록 한다.
+// ------------------------------------------------------------
 using System;
 using System.Numerics;
 using ImGuiNET;
@@ -156,13 +170,15 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     _imageScreenMin = ImGui.GetItemRectMin();
                     _imageScreenMax = ImGui.GetItemRectMax();
 
-                    // Canvas UI overlay
+                    // Canvas UI overlay (Scene View: 렌더링만, 입력 처리 비활성화)
                     if (_showUI)
                     {
                         var dl = ImGui.GetWindowDrawList();
                         float imgW = _imageScreenMax.X - _imageScreenMin.X;
                         float imgH = _imageScreenMax.Y - _imageScreenMin.Y;
+                        RoseEngine.CanvasRenderer.IsInteractive = false;
                         RoseEngine.CanvasRenderer.RenderAll(dl, _imageScreenMin.X, _imageScreenMin.Y, imgW, imgH);
+                        RoseEngine.CanvasRenderer.IsInteractive = true;
                     }
 
                     // 2D gizmo overlays (within window context for correct viewport draw list)

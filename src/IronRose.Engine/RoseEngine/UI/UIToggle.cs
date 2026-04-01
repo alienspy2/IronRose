@@ -1,3 +1,15 @@
+// ------------------------------------------------------------
+// @file    UIToggle.cs
+// @brief   체크박스 스타일 UI 토글 컴포넌트. 클릭 시 isOn 상태를 반전하고
+//          onValueChanged 콜백을 호출한다.
+// @deps    CanvasRenderer, IUIRenderable, Component
+// @exports
+//   class UIToggle : Component, IUIRenderable
+//     bool isOn                      — 토글 상태
+//     Action<bool>? onValueChanged   — 값 변경 시 호출되는 콜백
+//     void OnRenderUI(...)           — 렌더링 + 입력 처리
+// @note    CanvasRenderer.IsInteractive가 false이면 입력을 무시하고 렌더링만 수행한다.
+// ------------------------------------------------------------
 using System;
 using ImGuiNET;
 using SNVector2 = System.Numerics.Vector2;
@@ -48,8 +60,8 @@ namespace RoseEngine
                 drawList.AddLine(new SNVector2(mx, my), new SNVector2(x1, y0), checkCol, 2f);
             }
 
-            // Click detection
-            if (!interactable) return;
+            // Click detection (Scene View 등 비인터랙티브 컨텍스트에서는 입력 스킵)
+            if (!interactable || !CanvasRenderer.IsInteractive) return;
 
             var mousePos = ImGui.GetMousePos();
             bool inRect = mousePos.X >= screenRect.x && mousePos.X <= screenRect.xMax &&

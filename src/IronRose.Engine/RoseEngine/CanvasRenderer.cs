@@ -1,3 +1,19 @@
+// ------------------------------------------------------------
+// @file    CanvasRenderer.cs
+// @brief   Canvas UI 트리를 ImGui DrawList로 렌더링하는 정적 시스템.
+//          Game View / Scene View에서 Canvas UI를 화면 위에 오버레이 렌더링한다.
+// @deps    Canvas, RectTransform, IUIRenderable, Texture2D, UIScrollView, UILayoutGroup
+// @exports
+//   static class CanvasRenderer
+//     static bool IsInteractive             — UI 입력 처리 활성화 여부 (Scene View에서 false)
+//     static bool DebugDrawRects            — 디버그 Rect 아웃라인 표시
+//     static void RenderAll(...)            — 모든 활성 Canvas를 sortingOrder 순으로 렌더
+//     static GameObject? HitTest(...)       — 스크린 좌표에서 최상위 UI GO 반환
+//     static void CollectHitsInRect(...)    — 사각형 영역과 겹치는 UI GO 수집
+//     static float GetCanvasScaleFor(...)   — GO의 조상 Canvas scaleFactor 반환
+// @note    IsInteractive는 호출하는 쪽(Game View/Scene View)에서 설정해야 한다.
+//          기본값 true로 standalone 실행 시 게임 UI가 정상 작동한다.
+// ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using ImGuiNET;
@@ -13,6 +29,14 @@ namespace RoseEngine
     {
         /// <summary>디버그 Rect 아웃라인 표시 (에디터용).</summary>
         public static bool DebugDrawRects;
+
+        /// <summary>
+        /// UI 컴포넌트의 입력 처리(클릭, 드래그 등) 활성화 여부.
+        /// false이면 렌더링만 수행하고 입력은 무시한다.
+        /// 기본값 true (standalone 실행 시 게임 UI가 정상 작동해야 하므로).
+        /// Scene View에서 RenderAll 호출 전에 false로 설정, 호출 후 복원한다.
+        /// </summary>
+        public static bool IsInteractive = true;
 
         /// <summary>현재 렌더링 중인 Canvas의 scale factor. RenderNode 순회 중에만 유효.</summary>
         internal static float CurrentCanvasScale { get; private set; } = 1f;
