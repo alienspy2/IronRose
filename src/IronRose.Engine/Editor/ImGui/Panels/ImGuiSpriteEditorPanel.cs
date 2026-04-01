@@ -128,7 +128,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             if (!_isOpen || _texture == null) return;
 
             ImGui.SetNextWindowSize(new Vector2(900, 600), ImGuiCond.FirstUseEver);
-            if (ImGui.Begin("Sprite Editor", ref _isOpen, ImGuiWindowFlags.MenuBar))
+            var spriteEdVisible = ImGui.Begin("Sprite Editor", ref _isOpen, ImGuiWindowFlags.MenuBar);
+            PanelMaximizer.DrawTabContextMenu("Sprite Editor");
+            if (spriteEdVisible)
             {
                 DrawMenuBar();
                 DrawContent();

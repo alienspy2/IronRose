@@ -32,6 +32,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         private int? _toggleNodeId;
         private bool _suppressDirty;
         private bool _needScroll;
+        private long _lastSelectionVersion;
+        private HashSet<int>? _forceExpandIds;
 
         // ── Drag & Drop state ──
         private const string DragPayloadType = "HIERARCHY_GO";
@@ -65,6 +67,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             if (!IsOpen) { _isWindowFocused = false; return; }
 
             var beginResult = ImGui.Begin("Hierarchy", ref _isOpen);
+            PanelMaximizer.DrawTabContextMenu("Hierarchy");
             if (beginResult)
             {
                 _isWindowFocused = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows);
@@ -146,11 +149,32 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     pair.Value.Sort((a, b) =>
                         a.transform.GetSiblingIndex().CompareTo(b.transform.GetSiblingIndex()));
 
+                // 외부 선택 변경 시 (Scene View 등) 부모 노드 자동 펼치기 + 스크롤
+                if (_lastSelectionVersion != EditorSelection.SelectionVersion)
+                {
+                    _lastSelectionVersion = EditorSelection.SelectionVersion;
+                    var selectedGo = EditorSelection.SelectedGameObject;
+                    if (selectedGo != null && !_isWindowFocused)
+                    {
+                        _forceExpandIds = new HashSet<int>();
+                        var parent = selectedGo.transform.parent;
+                        while (parent != null)
+                        {
+                            int pid = parent.gameObject.GetInstanceID();
+                            _openNodeIds.Add(pid);
+                            _forceExpandIds.Add(pid);
+                            parent = parent.parent;
+                        }
+                        _needScroll = true;
+                    }
+                }
+
                 // 이전 프레임 완성본 보존 후 현재 프레임 빌드 시작
                 (_prevFlatOrderedIds, _flatOrderedIds) = (_flatOrderedIds, _prevFlatOrderedIds);
                 _flatOrderedIds.Clear();
                 foreach (var root in roots)
                     DrawNode(root, childMap);
+                _forceExpandIds = null;
 
                 // ── Keyboard navigation ──
                 HandleKeyboardNavigation(childMap);
@@ -201,6 +225,11 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             }
             // 씬 로드 후 첫 프레임: ImGui TreeNode 상태를 _openNodeIds와 동기화
             else if (_suppressDirty && hasChildren && _openNodeIds.Contains(id))
+            {
+                ImGui.SetNextItemOpen(true);
+            }
+            // 외부 선택 변경 시 조상 노드 강제 펼치기
+            else if (_forceExpandIds != null && _forceExpandIds.Contains(id))
             {
                 ImGui.SetNextItemOpen(true);
             }

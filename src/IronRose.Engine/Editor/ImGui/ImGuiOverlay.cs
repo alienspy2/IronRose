@@ -390,6 +390,21 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             // Load About image
             LoadAboutImage();
 
+            // Register panels with PanelMaximizer for tab context menu
+            PanelMaximizer.Register("Hierarchy", _hierarchy);
+            PanelMaximizer.Register("Inspector", _inspector);
+            PanelMaximizer.Register("Project Settings", _projectSettings);
+            PanelMaximizer.Register("Scene Environment", _sceneEnvironment);
+            PanelMaximizer.Register("Console", _console);
+            PanelMaximizer.Register("Game View", _gameView);
+            PanelMaximizer.Register("Scene View", _sceneView);
+            PanelMaximizer.Register("Project", _project);
+            PanelMaximizer.Register("Texture Tool", _textureTool);
+            PanelMaximizer.Register("Sprite Editor", _spriteEditor);
+            PanelMaximizer.Register("Animation Editor", _animEditor);
+            PanelMaximizer.Register("Scripts", _scripts);
+            PanelMaximizer.Register("Feedback", _feedback);
+
             // Restore saved panel visibility (only if layout was loaded, not first-time default)
             if (!_layoutManager.NeedsLayout)
                 RestorePanelStates();
@@ -753,8 +768,12 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             // ── Script build progress modal ──
             DrawBuildProgressModal();
 
-            // ── Auto-save ──
-            SyncPanelStatesToEditorState();
+            // ── Maximize auto-restore (최대화된 패널이 닫히면 자동 복원) ──
+            PanelMaximizer.CheckAutoRestore();
+
+            // ── Auto-save (최대화 중에는 패널 상태를 저장하지 않음) ──
+            if (!PanelMaximizer.IsMaximized)
+                SyncPanelStatesToEditorState();
             _layoutManager.UpdateAutoSave(deltaTime);
 
             PopCurrentFont();

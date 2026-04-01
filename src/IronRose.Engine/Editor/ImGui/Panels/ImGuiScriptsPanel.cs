@@ -99,7 +99,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 _needsRebuild = false;
             }
 
-            if (ImGui.Begin("Scripts", ref _isOpen))
+            var scriptsVisible = ImGui.Begin("Scripts", ref _isOpen);
+            PanelMaximizer.DrawTabContextMenu("Scripts");
+            if (scriptsVisible)
             {
                 // ── Toolbar ──
                 DrawToolbar();

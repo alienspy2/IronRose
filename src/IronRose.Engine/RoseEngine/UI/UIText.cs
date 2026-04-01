@@ -49,7 +49,7 @@ namespace RoseEngine
             if (texId == IntPtr.Zero) return;
 
             uint col = ColorToU32(color);
-            float scale = fontSize / font.fontSize;
+            float scale = fontSize * CanvasRenderer.CurrentCanvasScale / font.fontSize;
 
             // Measure text size for alignment
             float textW, textH;
@@ -93,6 +93,16 @@ namespace RoseEngine
                     ox = screenRect.width - textW;
                     oy = screenRect.height - textH;
                     break;
+            }
+
+            // Compensate for descender: glyphs without descenders (digits, uppercase)
+            // appear shifted up when centered by full lineHeight. Shift down by half descender.
+            bool isMiddle = alignment == TextAnchor.MiddleLeft
+                         || alignment == TextAnchor.MiddleCenter
+                         || alignment == TextAnchor.MiddleRight;
+            if (isMiddle && font.descender > 0)
+            {
+                oy += font.descender * scale * 0.5f;
             }
 
             float startX = screenRect.x + ox;

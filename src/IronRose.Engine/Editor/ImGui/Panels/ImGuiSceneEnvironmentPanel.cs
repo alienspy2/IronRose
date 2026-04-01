@@ -32,7 +32,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             if (!ProjectContext.IsProjectLoaded) return;
             if (!IsOpen) return;
 
-            if (ImGui.Begin("Scene Environment", ref _isOpen))
+            var envVisible = ImGui.Begin("Scene Environment", ref _isOpen);
+            PanelMaximizer.DrawTabContextMenu("Scene Environment");
+            if (envVisible)
             {
                 DrawSkyboxSection();
                 DrawAmbientSection();

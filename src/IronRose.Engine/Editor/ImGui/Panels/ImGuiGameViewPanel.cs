@@ -13,6 +13,7 @@
 using System;
 using System.Numerics;
 using ImGuiNET;
+using IronRose.Engine.Editor;
 
 namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 {
@@ -29,7 +30,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         public bool IsOpen { get => _isOpen; set => _isOpen = value; }
 
         private IntPtr _textureId;
-        private int _selectedResIdx;
+        private int _selectedResIdx = ResolutionKeyToIndex(EditorState.GameViewResolution);
         private bool _wireframe;
         private Vector2 _imageAreaSize; // 이미지 표시 영역 크기 (툴바 제외)
 
@@ -47,6 +48,15 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         private const uint MinRTSize = 128; // 최소 RT 크기
 
         private static readonly string[] ResolutionNames = { "Native", "1920 x 1080", "1280 x 720" };
+        private static readonly string[] ResolutionKeys = { "native", "1920x1080", "1280x720" };
+
+        private static int ResolutionKeyToIndex(string key)
+        {
+            for (int i = 0; i < ResolutionKeys.Length; i++)
+                if (string.Equals(ResolutionKeys[i], key, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            return 0;
+        }
 
         public GameViewResolution SelectedResolution => (GameViewResolution)_selectedResIdx;
         public bool IsWireframe => _wireframe;
@@ -120,7 +130,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             }
 
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
-            if (ImGui.Begin("Game View", ref _isOpen))
+            var gameViewVisible = ImGui.Begin("Game View", ref _isOpen);
+            PanelMaximizer.DrawTabContextMenu("Game View");
+            if (gameViewVisible)
             {
                 _isWindowFocused = ImGui.IsWindowFocused();
 
@@ -173,7 +185,13 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             ImGui.Text("Resolution");
             ImGui.SameLine();
             ImGui.SetNextItemWidth(140);
+            int prevRes = _selectedResIdx;
             ImGui.Combo("##Resolution", ref _selectedResIdx, ResolutionNames, ResolutionNames.Length);
+            if (_selectedResIdx != prevRes)
+            {
+                EditorState.GameViewResolution = ResolutionKeys[_selectedResIdx];
+                EditorState.Save();
+            }
 
             ImGui.SameLine();
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 12);

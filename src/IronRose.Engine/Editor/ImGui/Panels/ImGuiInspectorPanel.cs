@@ -66,6 +66,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         // ── Asset Preview 캐시 ──
         private string? _previewCachedPath;
+        private int _previewReimportVersion;
         private IntPtr _previewTextureId;
         private int _previewTexWidth;
         private int _previewTexHeight;
@@ -152,7 +153,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     _mode = selectedGoId != null ? InspectorMode.GameObject : InspectorMode.None;
             }
 
-            if (ImGui.Begin("Inspector", ref _isOpen))
+            var inspectorVisible = ImGui.Begin("Inspector", ref _isOpen);
+            PanelMaximizer.DrawTabContextMenu("Inspector");
+            if (inspectorVisible)
             {
                 switch (_mode)
                 {
@@ -2130,8 +2133,12 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 return;
             }
 
-            // 선택 에셋이 바뀌면 메타 로드 + 멀티셀렉트 대상 계산
-            if (_currentAssetPath != assetPath)
+            // 선택 에셋이 바뀌거나, 외부(CLI 등)에서 reimport가 발생하면 메타 재로드
+            var curReimportVer = Resources.GetAssetDatabase()?.ReimportVersion ?? 0;
+            bool assetChanged = _currentAssetPath != assetPath;
+            bool externalReimport = !assetChanged && !_hasChanges
+                                    && _previewReimportVersion != curReimportVer;
+            if (assetChanged || externalReimport)
             {
                 _currentAssetPath = assetPath;
                 _assetMeta = RoseMetadata.LoadOrCreate(assetPath);
@@ -3570,7 +3577,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         private void DrawAssetPreview(string assetPath, string importerType)
         {
             // 캐시가 유효하면 재생성 없이 바로 그리기
-            if (_previewCachedPath != assetPath)
+            var dbVersion = Resources.GetAssetDatabase()?.ReimportVersion ?? 0;
+            if (_previewCachedPath != assetPath || _previewReimportVersion != dbVersion)
                 BuildPreviewCache(assetPath, importerType);
 
             if (_previewType == PreviewType.None) return;
@@ -3599,6 +3607,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         {
             ClearPreviewCache();
             _previewCachedPath = assetPath;
+            _previewReimportVersion = Resources.GetAssetDatabase()?.ReimportVersion ?? 0;
 
             var db = Resources.GetAssetDatabase();
             if (db == null) return;
@@ -4016,12 +4025,17 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         {
             if (_assetMeta == null || _editedImporter == null) return;
 
+            var db = Resources.GetAssetDatabase();
             foreach (var path in _editingAssetPaths)
             {
                 var meta = (path == _currentAssetPath) ? _assetMeta : RoseMetadata.LoadOrCreate(path);
                 meta.importer = CloneTomlTable(_editedImporter);
-                // Save triggers RoseMetadata.OnSaved → AssetDatabase auto-reimport
+                // PushImportGuard로 OnRoseMetadataSaved의 비동기 reimport를 억제하고
+                // 동기 Reimport를 직접 호출하여, 프리뷰 갱신 시점에 텍스처가 확정되도록 한다.
+                db?.PushImportGuard();
                 meta.Save(path + ".rose");
+                db?.PopImportGuard();
+                db?.Reimport(path);
             }
 
             ClearPreviewCache();

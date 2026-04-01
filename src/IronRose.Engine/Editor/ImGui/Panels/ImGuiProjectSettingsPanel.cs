@@ -36,7 +36,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             if (!ProjectContext.IsProjectLoaded) return;
             if (!IsOpen) return;
 
-            if (ImGui.Begin("Project Settings", ref _isOpen))
+            var settingsVisible = ImGui.Begin("Project Settings", ref _isOpen);
+            PanelMaximizer.DrawTabContextMenu("Project Settings");
+            if (settingsVisible)
             {
                 if (ImGui.CollapsingHeader("Build", ImGuiTreeNodeFlags.DefaultOpen))
                 {

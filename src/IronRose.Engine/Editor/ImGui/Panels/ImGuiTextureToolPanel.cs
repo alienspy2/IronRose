@@ -106,7 +106,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         {
             if (!IsOpen) return;
 
-            if (ImGui.Begin("Texture Tool", ref _isOpen))
+            var texToolVisible = ImGui.Begin("Texture Tool", ref _isOpen);
+            PanelMaximizer.DrawTabContextMenu("Texture Tool");
+            if (texToolVisible)
             {
                 int modeInt = (int)_mode;
                 if (ImGui.Combo("Mode", ref modeInt, ModeNames, ModeNames.Length))

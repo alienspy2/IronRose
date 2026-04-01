@@ -132,7 +132,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
             if (!IsOpen) { _isWindowFocused = false; return; }
 
-            if (ImGui.Begin("Project", ref _isOpen))
+            var projectVisible = ImGui.Begin("Project", ref _isOpen);
+            PanelMaximizer.DrawTabContextMenu("Project");
+            if (projectVisible)
             {
                 _isWindowFocused = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows);
 

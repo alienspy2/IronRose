@@ -2379,8 +2379,7 @@ namespace IronRose.Engine.Cli
                         meta.importer["wrap_mode"] = "Clamp";
                         meta.importer["filter_mode"] = "Bilinear";
                     }
-                    meta.Save(path + ".rose");
-                    ReimportAsset(path);
+                    SaveMetaAndReimport(meta, path);
                     return JsonOk(new { path, textureType = newType });
                 });
             };
@@ -2409,8 +2408,7 @@ namespace IronRose.Engine.Cli
                         return JsonError("border must be 4 floats: left,bottom,right,top");
 
                     meta.importer["border"] = FloatsToTomlArray(border);
-                    meta.Save(path + ".rose");
-                    ReimportAsset(path);
+                    SaveMetaAndReimport(meta, path);
                     return JsonOk(new { path, border = FormatFloats(border) });
                 });
             };
@@ -2439,8 +2437,7 @@ namespace IronRose.Engine.Cli
                         return JsonError("pivot must be 2 floats: x,y (0~1 range)");
 
                     meta.importer["pivot"] = FloatsToTomlArray(pivot);
-                    meta.Save(path + ".rose");
-                    ReimportAsset(path);
+                    SaveMetaAndReimport(meta, path);
                     return JsonOk(new { path, pivot = FormatFloats(pivot) });
                 });
             };
@@ -2468,8 +2465,7 @@ namespace IronRose.Engine.Cli
                         return JsonError($"Not a sprite asset: {path}. Use 'sprite.set_type' first.");
 
                     meta.importer["pixels_per_unit"] = (double)ppu;
-                    meta.Save(path + ".rose");
-                    ReimportAsset(path);
+                    SaveMetaAndReimport(meta, path);
                     return JsonOk(new { path, pixelsPerUnit = ppu });
                 });
             };
@@ -2498,8 +2494,7 @@ namespace IronRose.Engine.Cli
                         return JsonError($"Not a sprite asset: {path}. Use 'sprite.set_type' first.");
 
                     meta.importer["sprite_mode"] = mode;
-                    meta.Save(path + ".rose");
-                    ReimportAsset(path);
+                    SaveMetaAndReimport(meta, path);
                     return JsonOk(new { path, spriteMode = mode });
                 });
             };
@@ -2528,9 +2523,37 @@ namespace IronRose.Engine.Cli
                         return JsonError($"Not a texture asset: {path}");
 
                     meta.importer["filter_mode"] = filter;
-                    meta.Save(path + ".rose");
-                    ReimportAsset(path);
+                    SaveMetaAndReimport(meta, path);
                     return JsonOk(new { path, filterMode = filter });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // sprite.set_compression -- 텍스처 압축 방식 설정 (BC7/BC5/BC6H/none)
+            // ----------------------------------------------------------------
+            _handlers["sprite.set_compression"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: sprite.set_compression <assetPath|guid> <BC7|BC5|BC6H|none>");
+
+                var assetRef = args[0];
+                var comp = args[1];
+                if (comp != "BC7" && comp != "BC5" && comp != "BC6H" && comp != "none")
+                    return JsonError("compression must be 'BC7', 'BC5', 'BC6H', or 'none'");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var path = ResolveAssetPath(assetRef);
+                    if (path == null)
+                        return JsonError($"Asset not found: {assetRef}");
+
+                    var meta = RoseMetadata.LoadOrCreate(path);
+                    if (!IsTextureImporter(meta))
+                        return JsonError($"Not a texture asset: {path}");
+
+                    meta.importer["compression"] = comp;
+                    SaveMetaAndReimport(meta, path);
+                    return JsonOk(new { path, compression = comp });
                 });
             };
 
@@ -2859,6 +2882,20 @@ namespace IronRose.Engine.Cli
         {
             var db = Resources.GetAssetDatabase();
             db?.Reimport(path);
+        }
+
+        /// <summary>
+        /// .rose 메타데이터를 저장한 뒤 에셋을 Reimport한다.
+        /// PushImportGuard로 OnRoseMetadataSaved의 자동 reimport를 억제하여
+        /// 동일 에셋에 대한 이중 reimport(동기+비동기)를 방지한다.
+        /// </summary>
+        private static void SaveMetaAndReimport(RoseMetadata meta, string assetPath)
+        {
+            var db = Resources.GetAssetDatabase();
+            db?.PushImportGuard();
+            meta.Save(assetPath + ".rose");
+            db?.PopImportGuard();
+            db?.Reimport(assetPath);
         }
 
         /// <summary>콤마로 구분된 float 배열을 파싱한다.</summary>

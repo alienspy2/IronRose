@@ -79,7 +79,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             }
             _prevPlayModeState = currentPlayState;
 
-            if (ImGui.Begin("Console", ref _isOpen))
+            var consoleVisible = ImGui.Begin("Console", ref _isOpen);
+            PanelMaximizer.DrawTabContextMenu("Console");
+            if (consoleVisible)
             {
                 // Toolbar
                 if (ImGui.Button("Clear"))

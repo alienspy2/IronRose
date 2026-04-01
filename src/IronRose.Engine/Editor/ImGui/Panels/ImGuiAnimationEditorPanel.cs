@@ -178,7 +178,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     ? $"Animation Editor — {_clip.name}*###AnimEditor"
                     : $"Animation Editor — {_clip.name}###AnimEditor";
                 bool blockedOpen = _isOpen;
-                if (ImGui.Begin(blockedTitle, ref blockedOpen, ImGuiWindowFlags.MenuBar))
+                var blockedVisible = ImGui.Begin(blockedTitle, ref blockedOpen, ImGuiWindowFlags.MenuBar);
+                PanelMaximizer.DrawTabContextMenu("Animation Editor");
+                if (blockedVisible)
                 {
                     ImGui.TextColored(new Vector4(1f, 0.6f, 0.2f, 1f), "Animation Editor is disabled during Play Mode.");
                 }
@@ -195,7 +197,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             string title = $"Animation Editor — {_clip.name}{rec}{dirty}###AnimEditor";
 
             bool windowOpen = _isOpen;
-            if (ImGui.Begin(title, ref windowOpen, ImGuiWindowFlags.MenuBar))
+            var animVisible = ImGui.Begin(title, ref windowOpen, ImGuiWindowFlags.MenuBar);
+            PanelMaximizer.DrawTabContextMenu("Animation Editor");
+            if (animVisible)
             {
                 // Shortcuts only when window focused
                 if (ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows))

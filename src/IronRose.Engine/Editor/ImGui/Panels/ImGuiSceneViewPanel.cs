@@ -153,7 +153,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             }
 
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
-            if (ImGui.Begin("Scene View", ref _isOpen))
+            var sceneViewVisible = ImGui.Begin("Scene View", ref _isOpen);
+            PanelMaximizer.DrawTabContextMenu("Scene View");
+            if (sceneViewVisible)
             {
                 _isWindowFocused = ImGui.IsWindowFocused();
 

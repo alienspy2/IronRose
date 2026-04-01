@@ -58,6 +58,9 @@ namespace IronRose.Engine.Editor
         /// <summary>Scene View 렌더 스타일 ("wireframe", "matcap", "diffuse_only", "rendered").</summary>
         public static string SceneViewRenderStyle { get; set; } = "matcap";
 
+        /// <summary>Game View 해상도 설정 ("native", "1920x1080", "1280x720").</summary>
+        public static string GameViewResolution { get; set; } = "native";
+
         // Snap settings
         /// <summary>이동 스냅 단위 (월드 유닛).</summary>
         public static float SnapTranslate { get; set; } = 1.0f;
@@ -149,6 +152,9 @@ namespace IronRose.Engine.Editor
                 var sr = editor.GetString("scene_view_render_style", "");
                 if (!string.IsNullOrEmpty(sr))
                     SceneViewRenderStyle = sr;
+                var gvr = editor.GetString("game_view_resolution", "");
+                if (!string.IsNullOrEmpty(gvr))
+                    GameViewResolution = gvr;
                 var sarp = editor.GetString("active_renderer_profile_guid", "");
                 if (!string.IsNullOrEmpty(sarp))
                     ActiveRendererProfileGuid = sarp;
@@ -210,6 +216,7 @@ namespace IronRose.Engine.Editor
                 toml += $"ui_scale = {UiScale:F1}\n";
                 toml += $"editor_font = \"{EditorFont}\"\n";
                 toml += $"scene_view_render_style = \"{SceneViewRenderStyle}\"\n";
+                toml += $"game_view_resolution = \"{GameViewResolution}\"\n";
                 toml += "\n[snap]\n";
                 toml += $"translate = {SnapTranslate:F3}\n";
                 toml += $"rotate = {SnapRotate:F1}\n";

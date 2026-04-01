@@ -16,11 +16,14 @@
 //     ClearAll(): void                                      — 전체 캐시 삭제
 // @note    FormatVersion 변경 시 기존 캐시는 자동 무효화됨.
 //          Material 직렬화 순서: blendMode(byte) -> color -> emission -> PBR floats -> textures
+//          Store 계열 메서드는 temp file + atomic rename 패턴으로 동시 접근 안전성을 보장한다.
+//          Load/HasValidCache는 FileShare.ReadWrite|Delete로 열어 쓰기 중 읽기를 허용한다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using BCnEncoder.Decoder;
 using BCnEncoder.Encoder;
 using BCnEncoder.Shared;
 using IronRose.Engine;
@@ -60,7 +63,7 @@ namespace IronRose.AssetPipeline
                 var cachePath = GetCachePath(assetPath);
                 if (!File.Exists(cachePath)) return null;
 
-                using var fs = File.OpenRead(cachePath);
+                using var fs = new FileStream(cachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                 using var reader = new BinaryReader(fs);
 
                 if (!ValidateHeader(reader, assetPath)) return null;
@@ -86,20 +89,26 @@ namespace IronRose.AssetPipeline
 
         public void StoreTexture(string assetPath, Texture2D texture, RoseMetadata meta)
         {
+            var cachePath = GetCachePath(assetPath);
+            var tempPath = cachePath + $".{Guid.NewGuid():N}.tmp";
             try
             {
                 var sw = Stopwatch.StartNew();
                 var compression = GetMetaString(meta, "compression", "BC7");
                 var textureType = GetMetaString(meta, "texture_type", "Color");
-                Debug.Log($"[RoseCache] Caching texture: {assetPath} ({texture.width}x{texture.height}, {compression}/{textureType})");
+                var genMips = GetMetaBool(meta, "generate_mipmaps", false);
 
-                var cachePath = GetCachePath(assetPath);
-                using var fs = File.Create(cachePath);
-                using var writer = new BinaryWriter(fs);
+                Debug.Log($"[RoseCache] Caching texture: {assetPath} ({texture.width}x{texture.height}, {compression}/{textureType}, mips={genMips})");
 
-                WriteValidationHeader(writer, assetPath);
-                writer.Write((byte)2); // Texture
-                WriteTexture(writer, texture, compression, textureType);
+                using (var fs = File.Create(tempPath))
+                using (var writer = new BinaryWriter(fs))
+                {
+                    WriteValidationHeader(writer, assetPath);
+                    writer.Write((byte)2); // Texture
+                    WriteTexture(writer, texture, compression, textureType, genMips);
+                }
+
+                File.Move(tempPath, cachePath, overwrite: true);
 
                 sw.Stop();
                 Debug.Log($"[RoseCache] Cached (texture): {assetPath} ({sw.ElapsedMilliseconds}ms)");
@@ -107,6 +116,7 @@ namespace IronRose.AssetPipeline
             catch (Exception ex)
             {
                 Debug.LogWarning($"[RoseCache] Failed to cache '{assetPath}': {ex.Message}");
+                try { File.Delete(tempPath); } catch { }
             }
         }
 
@@ -117,7 +127,7 @@ namespace IronRose.AssetPipeline
                 var cachePath = GetCachePath(assetPath);
                 if (!File.Exists(cachePath)) return null;
 
-                using var fs = File.OpenRead(cachePath);
+                using var fs = new FileStream(cachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                 using var reader = new BinaryReader(fs);
 
                 if (!ValidateHeader(reader, assetPath)) return null;
@@ -205,68 +215,72 @@ namespace IronRose.AssetPipeline
 
         public void StoreMesh(string assetPath, MeshImportResult result, RoseMetadata meta)
         {
+            var cachePath = GetCachePath(assetPath);
+            var tempPath = cachePath + $".{Guid.NewGuid():N}.tmp";
             try
             {
                 var sw = Stopwatch.StartNew();
                 Debug.Log($"[RoseCache] Caching mesh: {assetPath} ({result.Meshes.Length} meshes, {result.Materials.Length} materials)");
 
-                var cachePath = GetCachePath(assetPath);
-                using var fs = File.Create(cachePath);
-                using var writer = new BinaryWriter(fs);
-
-                WriteValidationHeader(writer, assetPath);
-                writer.Write((byte)1); // Mesh
-
-                // v6: 다중 메시 포맷
-                writer.Write(result.Meshes.Length);
-                for (int m = 0; m < result.Meshes.Length; m++)
+                using (var fs = File.Create(tempPath))
+                using (var writer = new BinaryWriter(fs))
                 {
-                    var nm = result.Meshes[m];
-                    writer.Write(nm.Name ?? $"Mesh_{m}");
-                    writer.Write(nm.MaterialIndex);
+                    WriteValidationHeader(writer, assetPath);
+                    writer.Write((byte)1); // Mesh
 
-                    // Vertices
-                    writer.Write(nm.Mesh.vertices.Length);
-                    foreach (var v in nm.Mesh.vertices)
+                    // v6: 다중 메시 포맷
+                    writer.Write(result.Meshes.Length);
+                    for (int m = 0; m < result.Meshes.Length; m++)
                     {
-                        writer.Write(v.Position.x); writer.Write(v.Position.y); writer.Write(v.Position.z);
-                        writer.Write(v.Normal.x); writer.Write(v.Normal.y); writer.Write(v.Normal.z);
-                        writer.Write(v.UV.x); writer.Write(v.UV.y);
-                    }
+                        var nm = result.Meshes[m];
+                        writer.Write(nm.Name ?? $"Mesh_{m}");
+                        writer.Write(nm.MaterialIndex);
 
-                    // Indices
-                    writer.Write(nm.Mesh.indices.Length);
-                    foreach (var idx in nm.Mesh.indices)
-                        writer.Write(idx);
-
-                    // MipMesh LOD 체인
-                    var mip = m < result.MipMeshes.Length ? result.MipMeshes[m] : null;
-                    bool hasMipMesh = mip != null && mip.LodCount >= 1;
-                    writer.Write(hasMipMesh);
-                    if (hasMipMesh)
-                    {
-                        writer.Write(mip!.LodCount);
-                        for (int lod = 1; lod < mip.LodCount; lod++)
+                        // Vertices
+                        writer.Write(nm.Mesh.vertices.Length);
+                        foreach (var v in nm.Mesh.vertices)
                         {
-                            var lodIndices = mip.lodMeshes[lod].indices;
-                            writer.Write(lodIndices.Length);
-                            foreach (var idx in lodIndices)
-                                writer.Write(idx);
+                            writer.Write(v.Position.x); writer.Write(v.Position.y); writer.Write(v.Position.z);
+                            writer.Write(v.Normal.x); writer.Write(v.Normal.y); writer.Write(v.Normal.z);
+                            writer.Write(v.UV.x); writer.Write(v.UV.y);
+                        }
+
+                        // Indices
+                        writer.Write(nm.Mesh.indices.Length);
+                        foreach (var idx in nm.Mesh.indices)
+                            writer.Write(idx);
+
+                        // MipMesh LOD 체인
+                        var mip = m < result.MipMeshes.Length ? result.MipMeshes[m] : null;
+                        bool hasMipMesh = mip != null && mip.LodCount >= 1;
+                        writer.Write(hasMipMesh);
+                        if (hasMipMesh)
+                        {
+                            writer.Write(mip!.LodCount);
+                            for (int lod = 1; lod < mip.LodCount; lod++)
+                            {
+                                var lodIndices = mip.lodMeshes[lod].indices;
+                                writer.Write(lodIndices.Length);
+                                foreach (var idx in lodIndices)
+                                    writer.Write(idx);
+                            }
                         }
                     }
+
+                    // Materials (이름 포함)
+                    writer.Write(result.Materials.Length);
+                    for (int i = 0; i < result.Materials.Length; i++)
+                    {
+                        writer.Write(result.Materials[i].name ?? $"Material_{i}");
+                        Debug.Log($"[RoseCache]   Material[{i}] compressing...");
+                        var matSw = Stopwatch.StartNew();
+                        WriteMaterial(writer, result.Materials[i]);
+                        matSw.Stop();
+                        Debug.Log($"[RoseCache]   Material[{i}] done ({matSw.ElapsedMilliseconds}ms)");
+                    }
                 }
 
-                // Materials (이름 포함)
-                writer.Write(result.Materials.Length);
-                for (int i = 0; i < result.Materials.Length; i++)
-                {
-                    writer.Write(result.Materials[i].name ?? $"Material_{i}");
-                    Debug.Log($"[RoseCache]   Material[{i}] compressing...");
-                    var matSw = Stopwatch.StartNew();
-                    WriteMaterial(writer, result.Materials[i]);
-                    matSw.Stop();
-                    Debug.Log($"[RoseCache]   Material[{i}] done ({matSw.ElapsedMilliseconds}ms)");
-                }
+                File.Move(tempPath, cachePath, overwrite: true);
 
                 sw.Stop();
                 Debug.Log($"[RoseCache] Cached (mesh): {assetPath} ({sw.ElapsedMilliseconds}ms)");
@@ -274,6 +288,7 @@ namespace IronRose.AssetPipeline
             catch (Exception ex)
             {
                 Debug.LogWarning($"[RoseCache] Failed to cache mesh '{assetPath}': {ex.Message}");
+                try { File.Delete(tempPath); } catch { }
             }
         }
 
@@ -284,7 +299,7 @@ namespace IronRose.AssetPipeline
                 var cachePath = GetCachePath(assetPath);
                 if (!File.Exists(cachePath)) return false;
 
-                using var fs = File.OpenRead(cachePath);
+                using var fs = new FileStream(cachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                 using var reader = new BinaryReader(fs);
                 return ValidateHeader(reader, assetPath);
             }
@@ -391,7 +406,8 @@ namespace IronRose.AssetPipeline
         // ─── BC Compression ──────────────────────────────────
 
         private static (byte[][] mipData, Veldrid.PixelFormat format) CompressTexture(
-            byte[] rgbaData, int width, int height, string compression, string textureType)
+            byte[] rgbaData, int width, int height, string compression, string textureType,
+            bool generateMipmaps = true)
         {
             if (compression == "none" || string.IsNullOrEmpty(compression) || RoseConfig.DontUseCompressTexture)
                 return (new[] { rgbaData }, Veldrid.PixelFormat.R8_G8_B8_A8_UNorm);
@@ -410,18 +426,29 @@ namespace IronRose.AssetPipeline
 
                 if (_gpuCompressor != null)
                 {
-                    // GPU path: hardware mipmap generation → BC compress each mip
-                    var mipChain = _gpuCompressor.GenerateMipmapsGPU(rgbaData, width, height);
-
-                    mipData = new byte[mipChain.Length][];
-                    int mw = width, mh = height;
-                    for (int i = 0; i < mipChain.Length; i++)
+                    if (generateMipmaps)
                     {
-                        mipData[i] = isNormalMap
-                            ? _gpuCompressor.CompressBC5(mipChain[i], mw, mh)
-                            : _gpuCompressor.CompressBC7(mipChain[i], mw, mh);
-                        mw = Math.Max(1, mw / 2);
-                        mh = Math.Max(1, mh / 2);
+                        // GPU path: hardware mipmap generation → BC compress each mip
+                        var mipChain = _gpuCompressor.GenerateMipmapsGPU(rgbaData, width, height);
+
+                        mipData = new byte[mipChain.Length][];
+                        int mw = width, mh = height;
+                        for (int i = 0; i < mipChain.Length; i++)
+                        {
+                            mipData[i] = isNormalMap
+                                ? _gpuCompressor.CompressBC5(mipChain[i], mw, mh)
+                                : _gpuCompressor.CompressBC7(mipChain[i], mw, mh);
+                            mw = Math.Max(1, mw / 2);
+                            mh = Math.Max(1, mh / 2);
+                        }
+                    }
+                    else
+                    {
+                        // GPU path: mip0 only
+                        mipData = new byte[1][];
+                        mipData[0] = isNormalMap
+                            ? _gpuCompressor.CompressBC5(rgbaData, width, height)
+                            : _gpuCompressor.CompressBC7(rgbaData, width, height);
                     }
                 }
                 else
@@ -496,7 +523,7 @@ namespace IronRose.AssetPipeline
         // ─── Texture Serialization ───────────────────────────
 
         private static void WriteTexture(BinaryWriter writer, Texture2D? tex,
-            string compression, string textureType)
+            string compression, string textureType, bool generateMipmaps = true)
         {
             if (tex == null)
             {
@@ -546,7 +573,15 @@ namespace IronRose.AssetPipeline
             else if (tex._pixelData != null)
             {
                 (mipData, format) = CompressTexture(
-                    tex._pixelData, tex.width, tex.height, compression, textureType);
+                    tex._pixelData, tex.width, tex.height, compression, textureType, generateMipmaps);
+
+                // 압축 결과를 텍스처 객체에도 반영하여, 리임포트 후 GPU 업로드가
+                // 캐시 로드와 동일한 경로(BC 압축)를 사용하도록 보장한다.
+                if (format != Veldrid.PixelFormat.R8_G8_B8_A8_UNorm)
+                {
+                    tex._mipData = mipData;
+                    tex._gpuFormat = format;
+                }
             }
             else
             {
@@ -654,11 +689,66 @@ namespace IronRose.AssetPipeline
                              reader.ReadSingle(), reader.ReadSingle());
         }
 
+        // ─── BC Decode Helper ─────────────────────────────────
+
+        private static byte[]? DecodeBcToRgba(byte[] bcData, int width, int height, Veldrid.PixelFormat format)
+        {
+            try
+            {
+                var bcFormat = format switch
+                {
+                    Veldrid.PixelFormat.BC7_UNorm or Veldrid.PixelFormat.BC7_UNorm_SRgb => CompressionFormat.Bc7,
+                    Veldrid.PixelFormat.BC3_UNorm or Veldrid.PixelFormat.BC3_UNorm_SRgb => CompressionFormat.Bc3,
+                    Veldrid.PixelFormat.BC1_Rgba_UNorm or Veldrid.PixelFormat.BC1_Rgba_UNorm_SRgb => CompressionFormat.Bc1WithAlpha,
+                    Veldrid.PixelFormat.BC1_Rgb_UNorm or Veldrid.PixelFormat.BC1_Rgb_UNorm_SRgb => CompressionFormat.Bc1,
+                    _ => (CompressionFormat?)null,
+                };
+                if (bcFormat == null) return null;
+
+                var decoder = new BcDecoder();
+                var pixels = decoder.DecodeRaw(bcData, width, height, bcFormat.Value);
+
+                // ColorRgba32[] → byte[], 투명 픽셀의 RGB 정리
+                // BC 압축은 A=0인 픽셀의 RGB를 보존하지 않으므로,
+                // 디코딩 후 깨진 RGB가 bilinear 필터링 시 번짐(color fringe)을 유발한다.
+                // A=0 픽셀의 RGB를 0으로 초기화하여 방지.
+                var rgba = new byte[width * height * 4];
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    byte a = pixels[i].a;
+                    if (a == 0)
+                    {
+                        // rgba는 이미 0으로 초기화됨 — skip
+                    }
+                    else
+                    {
+                        rgba[i * 4 + 0] = pixels[i].r;
+                        rgba[i * 4 + 1] = pixels[i].g;
+                        rgba[i * 4 + 2] = pixels[i].b;
+                        rgba[i * 4 + 3] = a;
+                    }
+                }
+                return rgba;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[RoseCache] BC decode failed, using compressed: {ex.Message}");
+                return null;
+            }
+        }
+
         // ─── Metadata Helpers ────────────────────────────────
 
         private static string GetMetaString(RoseMetadata meta, string key, string defaultValue)
         {
             return meta.importer.TryGetValue(key, out var val) ? val?.ToString() ?? defaultValue : defaultValue;
+        }
+
+        private static bool GetMetaBool(RoseMetadata meta, string key, bool defaultValue)
+        {
+            if (meta.importer.TryGetValue(key, out var val))
+                return val is bool b ? b : defaultValue;
+            return defaultValue;
         }
     }
 }

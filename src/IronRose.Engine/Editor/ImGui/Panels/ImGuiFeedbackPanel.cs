@@ -48,7 +48,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         {
             if (!IsOpen) return;
 
-            if (ImGui.Begin("Feedback", ref _isOpen))
+            var feedbackVisible = ImGui.Begin("Feedback", ref _isOpen);
+            PanelMaximizer.DrawTabContextMenu("Feedback");
+            if (feedbackVisible)
             {
                 DrawInputSection();
                 ImGui.Separator();

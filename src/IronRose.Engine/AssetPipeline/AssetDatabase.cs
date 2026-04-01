@@ -56,6 +56,8 @@ namespace IronRose.AssetPipeline
         // Reimport queue filled by OnSaved when async reimport is busy
         private readonly Queue<string> _pendingReimports = new();
         public bool ProjectDirty { get; set; }
+        /// <summary>Reimport가 완료될 때마다 증가. UI가 프리뷰 갱신 여부를 판단하는 데 사용.</summary>
+        public int ReimportVersion { get; private set; }
 
         // ─── Play-mode deferred cache ops ───────────────────────
         private readonly ConcurrentQueue<(string path, Texture2D tex, RoseMetadata meta)> _pendingCacheTextures = new();
@@ -806,6 +808,7 @@ namespace IronRose.AssetPipeline
             }
 
             ProjectDirty = true;
+            ReimportVersion++;
             _importDepth--;
             if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Reimported: {path}");
         }

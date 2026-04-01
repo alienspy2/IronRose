@@ -12,6 +12,8 @@ namespace RoseEngine
         public string name { get; private set; } = "";
         public int fontSize { get; private set; }
         public float lineHeight { get; private set; }    // pixels (raw, not divided by ppu)
+        public float ascender { get; private set; }     // pixels from baseline to top
+        public float descender { get; private set; }    // pixels from baseline to bottom (positive value)
 
         // Atlas
         internal Texture2D? atlasTexture;
@@ -210,6 +212,8 @@ namespace RoseEngine
 
             // lineHeight in pixels (TextRenderer divides by its own ppu)
             lineHeight = (float)rowHeight;
+            ascender = ascenderPx;
+            descender = descenderPx;
         }
     }
 }
