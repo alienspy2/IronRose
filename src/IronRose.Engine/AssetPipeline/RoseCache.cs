@@ -514,9 +514,9 @@ namespace IronRose.AssetPipeline
         {
             var bcFormat = isNormalMap ? CompressionFormat.Bc5 : CompressionFormat.Bc7;
             var encoder = new BcEncoder(bcFormat);
-            encoder.OutputOptions.Quality = CompressionQuality.Fast;
+            encoder.OutputOptions.Quality = CompressionQuality.Balanced;
             encoder.OutputOptions.GenerateMipMaps = false;
-            encoder.Options.IsParallel = false;
+            encoder.Options.IsParallel = true;
             return encoder.EncodeToRawBytes(rgbaData, width, height, BcPixelFormat.Rgba32);
         }
 
