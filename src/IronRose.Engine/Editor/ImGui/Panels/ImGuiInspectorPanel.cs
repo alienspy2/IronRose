@@ -3771,6 +3771,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             ImGui.TextDisabled($"{_previewTexWidth} x {_previewTexHeight}");
             ImGui.SameLine();
             ImGui.TextDisabled($"  {memStr}");
+            ImGui.SameLine();
+            ImGui.TextDisabled($"  {compression}");
         }
 
         private static long CalculateTextureMemorySize(int width, int height, string compression, bool generateMipmaps)
