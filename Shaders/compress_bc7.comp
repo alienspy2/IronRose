@@ -1,13 +1,14 @@
 #version 450
 
-// BC7 Mode 6 GPU texture compressor
+// BC7 Mode 6 + Mode 1 GPU texture compressor
 // Each thread processes one 4x4 block -> 128-bit BC7 block (4 uints)
 //
-// Mode 6: 1 subset, 7-bit RGBA endpoints + 1 p-bit each, 4-bit indices
-// Bit layout: mode(7) + R0(7)+R1(7)+G0(7)+G1(7)+B0(7)+B1(7)+A0(7)+A1(7) + P0(1)+P1(1) + indices(63)
+// Mode 6: 1 subset, RGBA 7-bit endpoints + 1 p-bit each, 4-bit indices
+// Mode 1: 2 subsets (64 partitions), RGB 6-bit endpoints + shared p-bit, 3-bit indices
 //
-// Endpoint selection: PCA-based fitting (power iteration on 4x4 covariance matrix)
-// P-bit selection: exhaustive search over all 4 combinations (p0,p1)
+// Endpoint selection: PCA-based fitting (power iteration on covariance matrix)
+// P-bit selection: exhaustive search
+// Mode selection: min error between Mode 6 and Mode 1 (Mode 1 only for opaque blocks)
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
@@ -31,6 +32,46 @@ const uint WEIGHTS[16] = uint[16](
     0, 4, 9, 13, 17, 21, 26, 30, 34, 38, 43, 47, 51, 55, 60, 64
 );
 
+// BC7 Mode 1 interpolation weights (3-bit, 8 entries)
+const uint WEIGHTS3[8] = uint[8](
+    0, 9, 18, 27, 37, 46, 55, 64
+);
+
+// BC7 2-subset partition table (64 partitions)
+// Each uint encodes 16 texels: bit i = subset number (0 or 1) for texel i
+// From Microsoft BC7 Format Reference, Table P2
+const uint PARTITIONS2[64] = uint[64](
+    0xCCCCu, 0x8888u, 0xEEEEu, 0xECC8u,
+    0xC880u, 0xFEECu, 0xEEC8u, 0xEC80u,
+    0xC800u, 0xFFECu, 0xFE80u, 0xE800u,
+    0xFFE8u, 0xFF00u, 0xFFF0u, 0xF000u,
+    0xF710u, 0x008Eu, 0x7100u, 0x08CEu,
+    0x008Cu, 0x7310u, 0x3100u, 0x8CCEu,
+    0x088Cu, 0x2100u, 0x6666u, 0x366Cu,
+    0x17E8u, 0x0FF0u, 0x718Eu, 0x399Cu,
+    0xAAAAu, 0xF0F0u, 0x5A5Au, 0x33CCu,
+    0x3C3Cu, 0x55AAu, 0x9696u, 0xA55Au,
+    0x73CEu, 0x13C8u, 0x324Cu, 0x3BDCu,
+    0x6996u, 0xC33Cu, 0x9966u, 0x0660u,
+    0x0272u, 0x04E4u, 0x4E40u, 0x2720u,
+    0xC936u, 0x936Cu, 0x39C6u, 0x639Cu,
+    0x9336u, 0x9CC6u, 0x817Eu, 0xE718u,
+    0xCCF0u, 0x0FCCu, 0x7744u, 0xEE22u
+);
+
+// 2-subset anchor index table (anchor texel index for subset 1)
+// From Microsoft BC7 Format Reference
+const uint ANCHOR2[64] = uint[64](
+    15u,15u,15u,15u,15u,15u,15u,15u,
+    15u,15u,15u,15u,15u,15u,15u,15u,
+    15u, 2u, 8u, 2u, 2u, 8u, 8u,15u,
+     2u, 8u, 2u, 2u, 8u, 8u, 2u, 2u,
+    15u,15u, 6u, 8u, 2u, 8u,15u,15u,
+     2u, 8u, 2u, 2u, 2u,15u,15u, 6u,
+     6u, 2u, 6u, 8u,15u,15u, 2u, 2u,
+    15u,15u,15u,15u,15u, 2u, 2u,15u
+);
+
 uvec4 loadPixel(uint px, uint py) {
     px = min(px, texWidth - 1u);
     py = min(py, texHeight - 1u);
@@ -47,6 +88,11 @@ void writeBits(inout uvec4 data, inout uint bitPos, uint value, uint numBits) {
         data[wordIdx + 1u] |= (value >> (32u - bitOff));
     }
     bitPos += numBits;
+}
+
+// Returns subset number (0 or 1) for texel t in partition p
+uint getSubset(uint partitionIdx, uint texelIdx) {
+    return (PARTITIONS2[partitionIdx] >> texelIdx) & 1u;
 }
 
 // Compute PCA principal axis from 16 texels (RGBA).
@@ -92,7 +138,6 @@ vec4 computePcaAxis(uvec4 texels[16]) {
 
         float len = length(result);
         if (len < 1e-10) {
-            // Zero variance — all texels identical, return zero axis to signal fallback
             return vec4(0.0);
         }
         axis = result / len;
@@ -101,21 +146,61 @@ vec4 computePcaAxis(uvec4 texels[16]) {
     return axis;
 }
 
-void main() {
-    uint bx = gl_GlobalInvocationID.x;
-    uint by = gl_GlobalInvocationID.y;
-    if (bx >= blocksX || by >= blocksY) return;
+// Compute PCA principal axis from a subset of texels (RGB only, for Mode 1).
+// subsetMask: bit i = 1 means texel i belongs to this subset.
+// Returns the principal axis as a vec3. Zero-variance returns vec3(0.0).
+vec3 computePcaAxisRgb(uvec4 texels[16], uint subsetMask) {
+    // 1) Mean (RGB only)
+    vec3 mean = vec3(0.0);
+    uint count = 0u;
+    for (uint t = 0u; t < 16u; t++) {
+        if (((subsetMask >> t) & 1u) != 0u) {
+            mean += vec3(texels[t].rgb);
+            count++;
+        }
+    }
+    if (count == 0u) return vec3(0.0);
+    mean /= float(count);
 
-    // Load 4x4 block
-    uvec4 texels[16];
-    uint baseX = bx * 4u;
-    uint baseY = by * 4u;
-    for (uint j = 0u; j < 4u; j++) {
-        for (uint i = 0u; i < 4u; i++) {
-            texels[j * 4u + i] = loadPixel(baseX + i, baseY + j);
+    // 2) Covariance matrix (symmetric 3x3, store upper triangle)
+    //    Index mapping: 00=0, 01=1, 02=2, 11=3, 12=4, 22=5
+    float cov[6];
+    for (uint k = 0u; k < 6u; k++) {
+        cov[k] = 0.0;
+    }
+    for (uint t = 0u; t < 16u; t++) {
+        if (((subsetMask >> t) & 1u) != 0u) {
+            vec3 d = vec3(texels[t].rgb) - mean;
+            cov[0] += d.r * d.r;
+            cov[1] += d.r * d.g;
+            cov[2] += d.r * d.b;
+            cov[3] += d.g * d.g;
+            cov[4] += d.g * d.b;
+            cov[5] += d.b * d.b;
         }
     }
 
+    // 3) Power iteration (8 iterations)
+    vec3 axis = normalize(vec3(1.0, 1.0, 1.0));
+    for (uint iter = 0u; iter < 8u; iter++) {
+        vec3 result;
+        result.r = cov[0] * axis.r + cov[1] * axis.g + cov[2] * axis.b;
+        result.g = cov[1] * axis.r + cov[3] * axis.g + cov[4] * axis.b;
+        result.b = cov[2] * axis.r + cov[4] * axis.g + cov[5] * axis.b;
+
+        float len = length(result);
+        if (len < 1e-10) {
+            return vec3(0.0);
+        }
+        axis = result / len;
+    }
+
+    return axis;
+}
+
+// Encode a block as BC7 Mode 6 (1 subset, RGBA 7-bit + p-bit, 4-bit indices).
+// Returns packed 128-bit block in uvec4, and total SSD error via out parameter.
+uvec4 encodeMode6(uvec4 texels[16], out uint outError) {
     // --- PCA-based endpoint selection ---
     vec4 axis = computePcaAxis(texels);
 
@@ -210,7 +295,6 @@ void main() {
             bestPb1 = p1;
             bestE0_7 = ep0q;
             bestE1_7 = ep1q;
-            // Copy indices element-by-element (GLSL has no array assignment)
             for (uint t = 0u; t < 16u; t++) {
                 bestIndices[t] = tempIndices[t];
             }
@@ -223,7 +307,6 @@ void main() {
     uint pb1 = bestPb1;
 
     // Anchor fix-up: index[0] must have MSB = 0 (i.e. < 8 for 4-bit)
-    // If not, swap endpoints and complement all indices
     if (bestIndices[0] >= 8u) {
         uvec4 tmp = e0_7; e0_7 = e1_7; e1_7 = tmp;
         uint ptmp = pb0; pb0 = pb1; pb1 = ptmp;
@@ -259,10 +342,293 @@ void main() {
         writeBits(data, bitPos, bestIndices[t], 4u);
     }
 
+    outError = bestTotalError;
+    return data;
+}
+
+// Encode a block as BC7 Mode 1 (2 subsets, RGB 6-bit + shared p-bit, 3-bit indices).
+// Only valid for opaque blocks (all alpha = 255).
+// Returns packed 128-bit block in uvec4, and total SSD error via out parameter.
+uvec4 encodeMode1(uvec4 texels[16], out uint outError) {
+    uint bestError = 0xFFFFFFFFu;
+    uint bestPartition = 0u;
+    uvec4 bestData = uvec4(0u);
+
+    for (uint part = 0u; part < 64u; part++) {
+        // Build subset masks (bit i = 1 if texel i belongs to that subset)
+        uint mask0 = 0u;
+        uint mask1 = 0u;
+        for (uint t = 0u; t < 16u; t++) {
+            uint s = getSubset(part, t);
+            if (s == 0u) {
+                mask0 |= (1u << t);
+            } else {
+                mask1 |= (1u << t);
+            }
+        }
+
+        // PCA endpoint fitting for each subset (RGB only)
+        vec3 axis0 = computePcaAxisRgb(texels, mask0);
+        vec3 axis1 = computePcaAxisRgb(texels, mask1);
+
+        // Find min/max projection texels for each subset
+        uvec3 minCol0, maxCol0, minCol1, maxCol1;
+
+        // Subset 0
+        if (length(axis0) < 0.5) {
+            minCol0 = uvec3(255u);
+            maxCol0 = uvec3(0u);
+            for (uint t = 0u; t < 16u; t++) {
+                if (((mask0 >> t) & 1u) != 0u) {
+                    minCol0 = min(minCol0, texels[t].rgb);
+                    maxCol0 = max(maxCol0, texels[t].rgb);
+                }
+            }
+        } else {
+            vec3 mean0 = vec3(0.0);
+            uint cnt0 = 0u;
+            for (uint t = 0u; t < 16u; t++) {
+                if (((mask0 >> t) & 1u) != 0u) {
+                    mean0 += vec3(texels[t].rgb);
+                    cnt0++;
+                }
+            }
+            mean0 /= float(cnt0);
+            float projMin0 = 1e30;
+            float projMax0 = -1e30;
+            uint minIdx0 = 0u;
+            uint maxIdx0 = 0u;
+            for (uint t = 0u; t < 16u; t++) {
+                if (((mask0 >> t) & 1u) != 0u) {
+                    float proj = dot(vec3(texels[t].rgb) - mean0, axis0);
+                    if (proj < projMin0) { projMin0 = proj; minIdx0 = t; }
+                    if (proj > projMax0) { projMax0 = proj; maxIdx0 = t; }
+                }
+            }
+            minCol0 = texels[minIdx0].rgb;
+            maxCol0 = texels[maxIdx0].rgb;
+        }
+
+        // Subset 1
+        if (length(axis1) < 0.5) {
+            minCol1 = uvec3(255u);
+            maxCol1 = uvec3(0u);
+            for (uint t = 0u; t < 16u; t++) {
+                if (((mask1 >> t) & 1u) != 0u) {
+                    minCol1 = min(minCol1, texels[t].rgb);
+                    maxCol1 = max(maxCol1, texels[t].rgb);
+                }
+            }
+        } else {
+            vec3 mean1 = vec3(0.0);
+            uint cnt1 = 0u;
+            for (uint t = 0u; t < 16u; t++) {
+                if (((mask1 >> t) & 1u) != 0u) {
+                    mean1 += vec3(texels[t].rgb);
+                    cnt1++;
+                }
+            }
+            mean1 /= float(cnt1);
+            float projMin1 = 1e30;
+            float projMax1 = -1e30;
+            uint minIdx1 = 0u;
+            uint maxIdx1 = 0u;
+            for (uint t = 0u; t < 16u; t++) {
+                if (((mask1 >> t) & 1u) != 0u) {
+                    float proj = dot(vec3(texels[t].rgb) - mean1, axis1);
+                    if (proj < projMin1) { projMin1 = proj; minIdx1 = t; }
+                    if (proj > projMax1) { projMax1 = proj; maxIdx1 = t; }
+                }
+            }
+            minCol1 = texels[minIdx1].rgb;
+            maxCol1 = texels[maxIdx1].rgb;
+        }
+
+        // Try both shared p-bit values (0 and 1) for each subset independently
+        // Mode 1 has 1 shared p-bit per subset (2 p-bits total)
+        for (uint pbitCombo = 0u; pbitCombo < 4u; pbitCombo++) {
+            uint pbit0 = pbitCombo & 1u;
+            uint pbit1 = (pbitCombo >> 1u) & 1u;
+
+            // Quantize to 6-bit, reconstruct to 8-bit with shared p-bit
+            // Mode 1: 6 color bits + 1 p-bit = 7-bit value
+            // Dequant: (7bit << 1) | (7bit >> 6) = 8-bit
+            uvec3 ep0q, ep1q, ep2q, ep3q;  // 6-bit quantized
+            uvec3 ep0f, ep1f, ep2f, ep3f;  // full 8-bit reconstructed
+
+            for (uint ch = 0u; ch < 3u; ch++) {
+                // Subset 0 endpoints
+                ep0q[ch] = (minCol0[ch] >> 2u) & 0x3Fu;
+                ep1q[ch] = (maxCol0[ch] >> 2u) & 0x3Fu;
+                uint v0 = (ep0q[ch] << 1u) | pbit0;
+                uint v1 = (ep1q[ch] << 1u) | pbit0;
+                ep0f[ch] = (v0 << 1u) | (v0 >> 6u);
+                ep1f[ch] = (v1 << 1u) | (v1 >> 6u);
+
+                // Subset 1 endpoints
+                ep2q[ch] = (minCol1[ch] >> 2u) & 0x3Fu;
+                ep3q[ch] = (maxCol1[ch] >> 2u) & 0x3Fu;
+                uint v2 = (ep2q[ch] << 1u) | pbit1;
+                uint v3 = (ep3q[ch] << 1u) | pbit1;
+                ep2f[ch] = (v2 << 1u) | (v2 >> 6u);
+                ep3f[ch] = (v3 << 1u) | (v3 >> 6u);
+            }
+
+            // Compute 3-bit indices and total error
+            uint totalError = 0u;
+            uint indices[16];
+            for (uint t = 0u; t < 16u; t++) {
+                uint s = getSubset(part, t);
+                uvec3 epA = (s == 0u) ? ep0f : ep2f;
+                uvec3 epB = (s == 0u) ? ep1f : ep3f;
+
+                uint bestIdx = 0u;
+                uint bestDist = 0xFFFFFFFFu;
+                for (uint idx = 0u; idx < 8u; idx++) {
+                    uint w = WEIGHTS3[idx];
+                    uint dist = 0u;
+                    for (uint ch = 0u; ch < 3u; ch++) {
+                        uint interp = (epA[ch] * (64u - w) + epB[ch] * w + 32u) >> 6u;
+                        int diff = int(texels[t][ch]) - int(interp);
+                        dist += uint(diff * diff);
+                    }
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        bestIdx = idx;
+                    }
+                }
+                indices[t] = bestIdx;
+                totalError += bestDist;
+            }
+
+            // Early exit if this partition+pbit is already worse
+            if (totalError >= bestError) continue;
+
+            // Anchor fix-up
+            // Subset 0 anchor: always texel 0 (MSB must be 0, i.e. index < 4)
+            // Subset 1 anchor: ANCHOR2[part] (MSB must be 0, i.e. index < 4)
+            uint anchor1 = ANCHOR2[part];
+
+            // Copy endpoints and indices for fix-up (work on copies)
+            uvec3 fe0 = ep0q;
+            uvec3 fe1 = ep1q;
+            uvec3 fe2 = ep2q;
+            uvec3 fe3 = ep3q;
+            uint fixedIndices[16];
+            for (uint t = 0u; t < 16u; t++) {
+                fixedIndices[t] = indices[t];
+            }
+
+            // Fix subset 0: if index[0] >= 4, swap endpoints and invert indices
+            if (fixedIndices[0] >= 4u) {
+                uvec3 tmp = fe0; fe0 = fe1; fe1 = tmp;
+                for (uint t = 0u; t < 16u; t++) {
+                    if (getSubset(part, t) == 0u) {
+                        fixedIndices[t] = 7u - fixedIndices[t];
+                    }
+                }
+            }
+
+            // Fix subset 1: if index[anchor1] >= 4, swap endpoints and invert indices
+            if (fixedIndices[anchor1] >= 4u) {
+                uvec3 tmp = fe2; fe2 = fe3; fe3 = tmp;
+                for (uint t = 0u; t < 16u; t++) {
+                    if (getSubset(part, t) == 1u) {
+                        fixedIndices[t] = 7u - fixedIndices[t];
+                    }
+                }
+            }
+
+            // Pack Mode 1 block
+            uvec4 data = uvec4(0u);
+            uint bitPos = 0u;
+
+            // Mode 1: bit pattern = 00000010 -> write 0b10 = 2 in 2 bits
+            writeBits(data, bitPos, 2u, 2u);
+
+            // Partition index (6 bits)
+            writeBits(data, bitPos, part, 6u);
+
+            // Endpoints: R0,R1,R2,R3 (each 6 bits)
+            writeBits(data, bitPos, fe0.r, 6u);
+            writeBits(data, bitPos, fe1.r, 6u);
+            writeBits(data, bitPos, fe2.r, 6u);
+            writeBits(data, bitPos, fe3.r, 6u);
+            // G0,G1,G2,G3
+            writeBits(data, bitPos, fe0.g, 6u);
+            writeBits(data, bitPos, fe1.g, 6u);
+            writeBits(data, bitPos, fe2.g, 6u);
+            writeBits(data, bitPos, fe3.g, 6u);
+            // B0,B1,B2,B3
+            writeBits(data, bitPos, fe0.b, 6u);
+            writeBits(data, bitPos, fe1.b, 6u);
+            writeBits(data, bitPos, fe2.b, 6u);
+            writeBits(data, bitPos, fe3.b, 6u);
+
+            // P-bits: P0 (subset 0), P1 (subset 1)
+            writeBits(data, bitPos, pbit0, 1u);
+            writeBits(data, bitPos, pbit1, 1u);
+
+            // Indices (46 bits total):
+            // Anchor texels (texel 0 and ANCHOR2[part]) get 2 bits (MSB omitted)
+            // All other texels get 3 bits
+            for (uint t = 0u; t < 16u; t++) {
+                if (t == 0u || t == anchor1) {
+                    writeBits(data, bitPos, fixedIndices[t] & 0x3u, 2u);
+                } else {
+                    writeBits(data, bitPos, fixedIndices[t], 3u);
+                }
+            }
+
+            bestError = totalError;
+            bestPartition = part;
+            bestData = data;
+        }
+    }
+
+    outError = bestError;
+    return bestData;
+}
+
+void main() {
+    uint bx = gl_GlobalInvocationID.x;
+    uint by = gl_GlobalInvocationID.y;
+    if (bx >= blocksX || by >= blocksY) return;
+
+    // Load 4x4 block
+    uvec4 texels[16];
+    uint baseX = bx * 4u;
+    uint baseY = by * 4u;
+    for (uint j = 0u; j < 4u; j++) {
+        for (uint i = 0u; i < 4u; i++) {
+            texels[j * 4u + i] = loadPixel(baseX + i, baseY + j);
+        }
+    }
+
+    // Check if block is fully opaque (all alpha = 255)
+    bool allOpaque = true;
+    for (uint t = 0u; t < 16u; t++) {
+        if (texels[t].a != 255u) { allOpaque = false; break; }
+    }
+
+    // Encode Mode 6 (always)
+    uint mode6Error;
+    uvec4 mode6Data = encodeMode6(texels, mode6Error);
+
+    // Encode Mode 1 (only for opaque blocks)
+    uvec4 finalData = mode6Data;
+    if (allOpaque) {
+        uint mode1Error;
+        uvec4 mode1Data = encodeMode1(texels, mode1Error);
+        if (mode1Error < mode6Error) {
+            finalData = mode1Data;
+        }
+    }
+
     // Write output
     uint blockIdx = (by * blocksX + bx) * 4u;
-    blocks[blockIdx + 0u] = data.x;
-    blocks[blockIdx + 1u] = data.y;
-    blocks[blockIdx + 2u] = data.z;
-    blocks[blockIdx + 3u] = data.w;
+    blocks[blockIdx + 0u] = finalData.x;
+    blocks[blockIdx + 1u] = finalData.y;
+    blocks[blockIdx + 2u] = finalData.z;
+    blocks[blockIdx + 3u] = finalData.w;
 }
