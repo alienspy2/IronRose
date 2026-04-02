@@ -37,7 +37,7 @@ namespace IronRose.AssetPipeline
     public class RoseCache
     {
         private const uint Magic = 0x45534F52; // "ROSE"
-        private const int FormatVersion = 9; // v9: Material.blendMode
+        private const int FormatVersion = 10; // v10: BC7 PCA endpoint fitting + Mode 1
 
         // Custom format ID for BC6H (not in Veldrid 4.9 PixelFormat enum)
         private const int FormatBC6H_UFloat = 1000;
@@ -458,7 +458,7 @@ namespace IronRose.AssetPipeline
                 }
 
                 sw.Stop();
-                Debug.Log($"[RoseCache]     BC compress done: {mipData.Length} mips, {sw.ElapsedMilliseconds}ms" +
+Debug.Log($"[RoseCache]     BC compress done: {mipData.Length} mips, {sw.ElapsedMilliseconds}ms" +
                           (_gpuCompressor != null ? " (GPU)" : " (CPU)"));
 
                 return (mipData, veldridFormat);

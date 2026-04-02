@@ -78,6 +78,7 @@ IronRose.sln
 | [SharpGLTF](https://github.com/vpenades/SharpGLTF) | glTF/glb 모델 임포트 |
 | [AssimpNet](https://github.com/assimp/assimp-net) | 범용 3D 모델 임포트 |
 | [SixLabors.ImageSharp](https://github.com/SixLabors/ImageSharp) | 이미지 로딩/처리, 폰트 렌더링 |
+| [Compressonator](https://github.com/GPUOpen-Tools/compressonator) (CLI) | BC7/BC5 텍스처 압축 (AMD, MIT License) |
 
 ---
 
