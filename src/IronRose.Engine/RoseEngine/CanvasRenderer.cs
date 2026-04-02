@@ -148,20 +148,15 @@ namespace RoseEngine
                 screenRect.x + screenRect.width * (rt != null ? rt.pivot.x : 0.5f),
                 screenRect.y + screenRect.height * (rt != null ? rt.pivot.y : 0.5f));
 
+            // Record vertex position before this node + children render
+            int vtxBefore = needsTransform ? drawList.VtxBuffer.Size : 0;
+
             // Render all IUIRenderable components on this GO
             foreach (var comp in go.InternalComponents)
             {
                 if (comp is IUIRenderable renderable && !comp._isDestroyed)
                 {
-                    int vtxBefore = drawList.VtxBuffer.Size;
                     renderable.OnRenderUI(drawList, screenRect);
-
-                    if (needsTransform)
-                    {
-                        int vtxAfter = drawList.VtxBuffer.Size;
-                        TransformVertices(drawList, vtxBefore, vtxAfter, pivotScreen,
-                            hasRotation ? -rotRad : 0f, ls.x, ls.y);
-                    }
                 }
             }
 
@@ -184,6 +179,14 @@ namespace RoseEngine
             for (int i = 0; i < t.childCount; i++)
             {
                 RenderNode(drawList, t.GetChild(i).gameObject, localRect, childOx, childOy, scale);
+            }
+
+            // Apply transform to this node's own + all children's vertices
+            if (needsTransform)
+            {
+                int vtxAfter = drawList.VtxBuffer.Size;
+                TransformVertices(drawList, vtxBefore, vtxAfter, pivotScreen,
+                    hasRotation ? -rotRad : 0f, ls.x, ls.y);
             }
         }
 

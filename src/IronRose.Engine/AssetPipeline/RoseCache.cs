@@ -556,14 +556,26 @@ namespace IronRose.AssetPipeline
         {
             try
             {
-                // Resolve and cache CLI path
+                // Resolve and cache CLI path (platform-specific)
                 if (_compressonatorCliPath == null)
                 {
-                    var cliPath = Path.Combine(ProjectContext.EngineRoot, "externalTools", "compressonatorcli", "compressonatorcli-bin");
+                    string platformDir, exeName;
+                    if (OperatingSystem.IsWindows())
+                    {
+                        platformDir = "windows";
+                        exeName = "compressonatorcli.exe";
+                    }
+                    else
+                    {
+                        platformDir = "linux";
+                        exeName = "compressonatorcli-bin";
+                    }
+
+                    var cliPath = Path.Combine(ProjectContext.EngineRoot, "externalTools", "compressonatorcli", platformDir, exeName);
                     if (File.Exists(cliPath))
                     {
                         _compressonatorCliPath = cliPath;
-                        _compressonatorLibPath = Path.Combine(ProjectContext.EngineRoot, "externalTools", "compressonatorcli", "pkglibs");
+                        _compressonatorLibPath = Path.Combine(ProjectContext.EngineRoot, "externalTools", "compressonatorcli", platformDir, "pkglibs");
                         Debug.Log($"[RoseCache] Compressonator CLI found: {cliPath}");
                     }
                     else
@@ -603,14 +615,17 @@ namespace IronRose.AssetPipeline
                         CreateNoWindow = true
                     };
 
-                    // Add bin dir, pkglibs, qt to LD_LIBRARY_PATH (matches launcher script)
-                    var binDir = Path.GetDirectoryName(_compressonatorCliPath)!;
-                    var qtDir = Path.Combine(binDir, "qt");
-                    string ldPaths = $"{binDir}:{_compressonatorLibPath}:{qtDir}";
-                    string existingLdPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH") ?? "";
-                    startInfo.Environment["LD_LIBRARY_PATH"] = string.IsNullOrEmpty(existingLdPath)
-                        ? ldPaths
-                        : $"{ldPaths}:{existingLdPath}";
+                    // Linux: set LD_LIBRARY_PATH (matches launcher script)
+                    if (!OperatingSystem.IsWindows())
+                    {
+                        var binDir = Path.GetDirectoryName(_compressonatorCliPath)!;
+                        var qtDir = Path.Combine(binDir, "qt");
+                        string ldPaths = $"{binDir}:{_compressonatorLibPath}:{qtDir}";
+                        string existingLdPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH") ?? "";
+                        startInfo.Environment["LD_LIBRARY_PATH"] = string.IsNullOrEmpty(existingLdPath)
+                            ? ldPaths
+                            : $"{ldPaths}:{existingLdPath}";
+                    }
 
                     using var process = Process.Start(startInfo);
                     if (process == null)
