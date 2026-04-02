@@ -2,8 +2,9 @@
 // @file    RoseCache.cs
 // @brief   에셋(텍스처, 메시)을 바이너리 캐시 파일로 저장/로드하여 임포트 속도를 높인다.
 //          FormatVersion 9: Material.blendMode 직렬화 추가.
-// @deps    IronRose.Engine (GpuTextureCompressor, MeshImportResult, RoseMetadata),
-//          RoseEngine (Material, Texture2D, Color, BlendMode, Mesh, Vector2/3/4, BoneWeight)
+// @deps    IronRose.Engine (GpuTextureCompressor, MeshImportResult, RoseMetadata, ProjectContext),
+//          RoseEngine (Material, Texture2D, Color, BlendMode, Mesh, Vector2/3/4, BoneWeight),
+//          SixLabors.ImageSharp (PNG 임시 파일 저장용)
 // @exports
 //   class RoseCache
 //     SetGpuCompressor(GpuTextureCompressor?): void         — GPU 텍스처 압축기 설정
@@ -18,6 +19,8 @@
 //          Material 직렬화 순서: blendMode(byte) -> color -> emission -> PBR floats -> textures
 //          Store 계열 메서드는 temp file + atomic rename 패턴으로 동시 접근 안전성을 보장한다.
 //          Load/HasValidCache는 FileShare.ReadWrite|Delete로 열어 쓰기 중 읽기를 허용한다.
+//          텍스처 압축 우선순위: (1) Compressonator CLI → (2) GPU Vulkan → (3) CPU BCnEncoder.NET
+//          Compressonator CLI는 externalTools/compressonatorcli/에서 자동 탐지하며, 없으면 폴백.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -28,8 +31,11 @@ using BCnEncoder.Encoder;
 using BCnEncoder.Shared;
 using IronRose.Engine;
 using RoseEngine;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using Veldrid;
 using BcPixelFormat = BCnEncoder.Encoder.PixelFormat;
+using Color = RoseEngine.Color;
 using Debug = RoseEngine.EditorDebug;
 
 namespace IronRose.AssetPipeline
@@ -47,6 +53,10 @@ namespace IronRose.AssetPipeline
         // GPU texture compressor (set from EngineCore)
         private static GpuTextureCompressor? _gpuCompressor;
         public static void SetGpuCompressor(GpuTextureCompressor? compressor) => _gpuCompressor = compressor;
+
+        // Compressonator CLI path cache: null = not yet checked, "" = checked but not found
+        private static string? _compressonatorCliPath;
+        private static string? _compressonatorLibPath;
 
         public RoseCache(string cacheRoot)
         {
@@ -424,8 +434,40 @@ namespace IronRose.AssetPipeline
 
                 byte[][] mipData;
 
-                if (_gpuCompressor != null)
+                // 1순위: Compressonator CLI (Mode 0~7 전체 탐색, 최고 품질)
+                var cliResult = CompressWithCompressonator(rgbaData, width, height, isNormalMap);
+                if (cliResult != null)
                 {
+                    if (generateMipmaps)
+                    {
+                        // CLI로 각 mip level 개별 압축
+                        var mipChain = GenerateMipChain(rgbaData, width, height);
+                        mipData = new byte[mipChain.Count][];
+                        mipData[0] = cliResult; // mip0는 이미 압축됨
+                        for (int i = 1; i < mipChain.Count; i++)
+                        {
+                            var (mipRgba, mw, mh) = mipChain[i];
+                            var mipResult = CompressWithCompressonator(mipRgba, mw, mh, isNormalMap);
+                            if (mipResult != null)
+                            {
+                                mipData[i] = mipResult;
+                            }
+                            else
+                            {
+                                // CLI가 중간에 실패하면 나머지는 CPU 폴백
+                                var fallback = CompressWithCpuFallback(mipRgba, mw, mh, isNormalMap);
+                                mipData[i] = fallback[0];
+                            }
+                        }
+                    }
+                    else
+                    {
+                        mipData = new byte[][] { cliResult };
+                    }
+                }
+                else if (_gpuCompressor != null)
+                {
+                    // 2순위: GPU 경로
                     if (generateMipmaps)
                     {
                         // GPU path: hardware mipmap generation → BC compress each mip
@@ -453,13 +495,13 @@ namespace IronRose.AssetPipeline
                 }
                 else
                 {
-                    // CPU fallback (BCnEncoder.NET) — mip0 only
+                    // 3순위: CPU 폴백 (BCnEncoder.NET)
                     mipData = CompressWithCpuFallback(rgbaData, width, height, isNormalMap);
                 }
 
                 sw.Stop();
-                Debug.Log($"[RoseCache]     BC compress done: {mipData.Length} mips, {sw.ElapsedMilliseconds}ms" +
-                          (_gpuCompressor != null ? " (GPU)" : " (CPU)"));
+                string compressSource = cliResult != null ? "CLI" : (_gpuCompressor != null ? "GPU" : "CPU");
+                Debug.Log($"[RoseCache]     BC compress done: {mipData.Length} mips, {sw.ElapsedMilliseconds}ms ({compressSource})");
 
                 return (mipData, veldridFormat);
             }
@@ -508,6 +550,127 @@ namespace IronRose.AssetPipeline
             }
 
             return mips;
+        }
+
+        private static byte[]? CompressWithCompressonator(byte[] rgbaData, int width, int height, bool isNormalMap)
+        {
+            try
+            {
+                // Resolve and cache CLI path
+                if (_compressonatorCliPath == null)
+                {
+                    var cliPath = Path.Combine(ProjectContext.EngineRoot, "externalTools", "compressonatorcli", "compressonatorcli");
+                    if (File.Exists(cliPath))
+                    {
+                        _compressonatorCliPath = cliPath;
+                        _compressonatorLibPath = Path.Combine(ProjectContext.EngineRoot, "externalTools", "compressonatorcli", "pkglibs");
+                        Debug.Log($"[RoseCache] Compressonator CLI found: {cliPath}");
+                    }
+                    else
+                    {
+                        _compressonatorCliPath = "";
+                        _compressonatorLibPath = "";
+                        Debug.Log("[RoseCache] Compressonator CLI not found, will use fallback compressors");
+                    }
+                }
+
+                if (_compressonatorCliPath == "")
+                    return null;
+
+                // Save RGBA data as temporary PNG
+                string tempId = Guid.NewGuid().ToString("N");
+                string tempInputPath = Path.Combine(Path.GetTempPath(), $"rosecache_{tempId}_input.png");
+                string tempOutputPath = Path.Combine(Path.GetTempPath(), $"rosecache_{tempId}_output.dds");
+
+                try
+                {
+                    using (var image = Image.LoadPixelData<Rgba32>(rgbaData, width, height))
+                    {
+                        image.SaveAsPng(tempInputPath);
+                    }
+
+                    // Run Compressonator CLI
+                    string format = isNormalMap ? "BC5" : "BC7";
+                    int numThreads = Environment.ProcessorCount;
+
+                    var startInfo = new ProcessStartInfo
+                    {
+                        FileName = _compressonatorCliPath,
+                        Arguments = $"-fd {format} -Quality 1.0 -NumThreads {numThreads} -silent \"{tempInputPath}\" \"{tempOutputPath}\"",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true
+                    };
+
+                    // Add pkglibs to LD_LIBRARY_PATH
+                    string existingLdPath = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH") ?? "";
+                    startInfo.Environment["LD_LIBRARY_PATH"] = string.IsNullOrEmpty(existingLdPath)
+                        ? _compressonatorLibPath!
+                        : $"{_compressonatorLibPath}:{existingLdPath}";
+
+                    using var process = Process.Start(startInfo);
+                    if (process == null)
+                        return null;
+
+                    bool exited = process.WaitForExit(60000);
+                    if (!exited)
+                    {
+                        Debug.LogWarning("[RoseCache] Compressonator CLI timed out (60s)");
+                        try { process.Kill(); } catch { }
+                        return null;
+                    }
+
+                    if (process.ExitCode != 0)
+                    {
+                        string stderr = process.StandardError.ReadToEnd();
+                        Debug.LogWarning($"[RoseCache] Compressonator CLI failed (exit {process.ExitCode}): {stderr}");
+                        return null;
+                    }
+
+                    if (!File.Exists(tempOutputPath))
+                    {
+                        Debug.LogWarning("[RoseCache] Compressonator CLI did not produce output DDS file");
+                        return null;
+                    }
+
+                    // Parse DDS file: extract raw BC data
+                    byte[] ddsBytes = File.ReadAllBytes(tempOutputPath);
+                    if (ddsBytes.Length < 128)
+                    {
+                        Debug.LogWarning("[RoseCache] Compressonator CLI output DDS too small");
+                        return null;
+                    }
+
+                    // FourCC is at offset 84: magic(4) + ddsd_size(4) + flags(4) + height(4) + width(4)
+                    // + pitch(4) + depth(4) + mipcount(4) + reserved[11](44) + pf_size(4) + pf_flags(4) = 84
+                    uint fourcc = BitConverter.ToUInt32(ddsBytes, 84);
+                    int dataOffset = 128; // magic(4) + header(124)
+                    if (fourcc == 0x30315844) // "DX10" little-endian
+                        dataOffset += 20;
+
+                    if (ddsBytes.Length <= dataOffset)
+                    {
+                        Debug.LogWarning("[RoseCache] Compressonator CLI output DDS has no data after header");
+                        return null;
+                    }
+
+                    byte[] bcData = new byte[ddsBytes.Length - dataOffset];
+                    Array.Copy(ddsBytes, dataOffset, bcData, 0, bcData.Length);
+                    return bcData;
+                }
+                finally
+                {
+                    // Cleanup temp files
+                    try { if (File.Exists(tempInputPath)) File.Delete(tempInputPath); } catch { }
+                    try { if (File.Exists(tempOutputPath)) File.Delete(tempOutputPath); } catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[RoseCache] Compressonator CLI error: {ex.Message}");
+                return null;
+            }
         }
 
         private static byte[][] CompressWithCpuFallback(byte[] rgbaData, int width, int height, bool isNormalMap)
