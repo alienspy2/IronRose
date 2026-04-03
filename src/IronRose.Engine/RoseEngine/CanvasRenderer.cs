@@ -13,6 +13,8 @@
 //     static float GetCanvasScaleFor(...)   — GO의 조상 Canvas scaleFactor 반환
 // @note    IsInteractive는 호출하는 쪽(Game View/Scene View)에서 설정해야 한다.
 //          기본값 true로 standalone 실행 시 게임 UI가 정상 작동한다.
+//          RenderAll 내부 PushClipRect는 intersect=true로 호출하여,
+//          외부에서 설정된 클리핑 영역(Scene View 패널 경계 등)을 존중한다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -83,7 +85,8 @@ namespace RoseEngine
             // Clip to game view image area
             drawList.PushClipRect(
                 new SNVector2(screenX, screenY),
-                new SNVector2(screenX + screenW, screenY + screenH));
+                new SNVector2(screenX + screenW, screenY + screenH),
+                true);
 
             foreach (var canvas in _sorted)
             {
