@@ -1,3 +1,23 @@
+// ------------------------------------------------------------
+// @file    AssetDatabase.cs
+// @brief   프로젝트 에셋의 GUID 매핑, 로딩, 임포트, 캐싱을 관리하는 중앙 에셋 데이터베이스.
+//          ScanAssets()로 프로젝트 디렉토리를 스캔하고, Load/LoadByGuid로 에셋을 로드한다.
+// @deps    IronRose.Engine/EngineCore, IronRose.Engine/ProjectContext, IronRose.Engine.Editor/EditorDebug,
+//          RoseMetadata, RoseCache, SubAssetPath,
+//          MeshImporter, GltfMeshImporter, TextureImporter, FontImporter, MaterialImporter
+// @exports
+//   class AssetDatabase : IAssetDatabase
+//     ScanAssets(string): void              — 프로젝트 에셋 스캔 및 GUID 등록
+//     GetPathFromGuid(string): string?      — GUID → 파일 경로
+//     GetGuidFromPath(string): string?      — 파일 경로 → GUID
+//     Load<T>(string): T?                   — 경로로 에셋 로드
+//     LoadByGuid<T>(string): T?             — GUID로 에셋 로드
+//     Reimport(string): void                — 에셋 재임포트
+//     AssetCount: int                       — 등록된 에셋 수
+//     ProjectDirty: bool                    — 프로젝트 변경 여부
+// @note    ScanAssets 루프에서 100개 파일마다 EngineCore.PumpWindowEvents()를 호출하여
+//          OS "응답 없음" 방지. FileSystemWatcher로 런타임 에셋 변경 감지.
+// ------------------------------------------------------------
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -108,6 +128,7 @@ namespace IronRose.AssetPipeline
                 return;
             }
 
+            int fileCount = 0;
             foreach (var ext in SupportedExtensions)
             {
                 var files = Directory.GetFiles(projectPath, $"*{ext}", SearchOption.AllDirectories);
@@ -126,6 +147,9 @@ namespace IronRose.AssetPipeline
                             _guidToPath[sub.guid] = subPath;
                         }
                     }
+
+                    if (++fileCount % 100 == 0)
+                        EngineCore.PumpWindowEvents();
                 }
             }
 

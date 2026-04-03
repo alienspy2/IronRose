@@ -1,3 +1,22 @@
+// ------------------------------------------------------------
+// @file    ImGuiOverlay.cs
+// @brief   ImGui 오버레이 최상위 컨트롤러. 패널 라이프사이클, 컨텍스트/입력/렌더링 담당.
+//          RT 관리는 ImGuiRenderTargetManager, 레이아웃은 ImGuiLayoutManager에 위임.
+// @deps    IronRose.Engine/EngineCore, IronRose.Engine/ProjectContext,
+//          IronRose.Rendering/GraphicsManager, IronRose.Rendering/VeldridImGuiRenderer,
+//          IronRose.Engine.Editor.ImGuiEditor.Panels/*, IronRose.Engine.Editor.SceneView/*
+// @exports
+//   class ImGuiOverlay : IDisposable
+//     Initialize(IWindow, GraphicsDevice, ...): void — ImGui 컨텍스트 및 렌더러 초기화
+//     Update(double, IWindow): void                  — 입력 상태 업데이트
+//     Render(CommandList): void                      — ImGui 프레임 렌더
+//     Toggle(): void                                 — 오버레이 표시/숨김 토글
+//     IsVisible: bool                                — 오버레이 표시 상태
+//     ImGuiRenderer: VeldridImGuiRenderer?            — 내부 렌더러 접근
+// @note    ProbeGlyphRanges()는 폰트 글리프 범위를 디스크 캐시(FontGlyphCache/)에 저장하여
+//          두 번째 실행부터 CPU-집약적 프로브를 건너뜀.
+//          Initialize 폰트 루프에서 EngineCore.PumpWindowEvents()를 호출하여 OS "응답 없음" 방지.
+// ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -8,6 +27,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using ImGuiNET;
 using SixLabors.Fonts;
+using IronRose.Engine;
 using IronRose.Engine.Editor.ImGuiEditor.Panels;
 using IronRose.Engine.Editor.SceneView;
 using IronRose.Rendering;
@@ -270,6 +290,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 var fbPath = Path.Combine(fontsDir, fbFile);
                 if (!File.Exists(fbPath)) continue;
                 var ranges = ProbeGlyphRanges(fbPath);
+                EngineCore.PumpWindowEvents();
                 if (ranges == null) continue;
                 var handle = GCHandle.Alloc(ranges, GCHandleType.Pinned);
                 _fallbackGlyphRangeHandles.Add(handle);
@@ -2624,11 +2645,15 @@ namespace IronRose.Engine.Editor.ImGuiEditor
 
         // ── Font Glyph Probing ──
 
-        /// <summary>TTF 파일을 읽어 _unicodeBlocks 중 실제 글리프가 있는 블록만 ushort[] 범위로 반환.</summary>
+        /// <summary>TTF 파일을 읽어 _unicodeBlocks 중 실제 글리프가 있는 블록만 ushort[] 범위로 반환. 결과를 디스크 캐시.</summary>
         private static ushort[]? ProbeGlyphRanges(string fontPath)
         {
             try
             {
+                // 캐시 확인
+                var cached = LoadGlyphRangeCache(fontPath);
+                if (cached != null) return cached;
+
                 var collection = new FontCollection();
                 var family = collection.Add(fontPath);
                 var slFont = family.CreateFont(16, SixLabors.Fonts.FontStyle.Regular);
@@ -2647,11 +2672,89 @@ namespace IronRose.Engine.Editor.ImGuiEditor
 
                 if (ranges.Count == 0) return null;
                 ranges.Add(0); // terminator
-                return ranges.ToArray();
+                var result = ranges.ToArray();
+
+                // 캐시 저장
+                SaveGlyphRangeCache(fontPath, result);
+
+                return result;
             }
             catch
             {
                 return null;
+            }
+        }
+
+        /// <summary>폰트 글리프 범위 캐시 파일 경로를 반환합니다.</summary>
+        private static string GetGlyphCachePath(string fontPath)
+        {
+            var cacheDir = Path.Combine(ProjectContext.CachePath, "FontGlyphCache");
+            var fontName = Path.GetFileNameWithoutExtension(fontPath);
+            return Path.Combine(cacheDir, fontName + ".bin");
+        }
+
+        /// <summary>캐시에서 글리프 범위를 로드합니다. 폰트 파일이 변경되었으면 null을 반환합니다.</summary>
+        private static ushort[]? LoadGlyphRangeCache(string fontPath)
+        {
+            try
+            {
+                if (!ProjectContext.IsProjectLoaded) return null;
+
+                var cachePath = GetGlyphCachePath(fontPath);
+                if (!File.Exists(cachePath)) return null;
+
+                var fontInfo = new FileInfo(fontPath);
+                using var reader = new BinaryReader(File.OpenRead(cachePath));
+
+                // 헤더: 폰트 파일 크기(long) + LastWriteTimeUtc ticks(long)
+                var cachedSize = reader.ReadInt64();
+                var cachedTicks = reader.ReadInt64();
+
+                if (cachedSize != fontInfo.Length || cachedTicks != fontInfo.LastWriteTimeUtc.Ticks)
+                    return null;
+
+                var count = reader.ReadInt32();
+                if (count <= 0 || count > 1000) return null; // 안전 검사
+
+                var ranges = new ushort[count];
+                for (int i = 0; i < count; i++)
+                    ranges[i] = reader.ReadUInt16();
+
+                return ranges;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>글리프 범위를 디스크 캐시에 저장합니다.</summary>
+        private static void SaveGlyphRangeCache(string fontPath, ushort[] ranges)
+        {
+            try
+            {
+                if (!ProjectContext.IsProjectLoaded) return;
+
+                var cachePath = GetGlyphCachePath(fontPath);
+                var cacheDir = Path.GetDirectoryName(cachePath)!;
+                if (!Directory.Exists(cacheDir))
+                    Directory.CreateDirectory(cacheDir);
+
+                var fontInfo = new FileInfo(fontPath);
+                using var writer = new BinaryWriter(File.Create(cachePath));
+
+                // 헤더
+                writer.Write(fontInfo.Length);
+                writer.Write(fontInfo.LastWriteTimeUtc.Ticks);
+
+                // 데이터
+                writer.Write(ranges.Length);
+                foreach (var r in ranges)
+                    writer.Write(r);
+            }
+            catch
+            {
+                // 캐시 저장 실패는 무시 — 다음 실행 시 다시 프로브
             }
         }
 

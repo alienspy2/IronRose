@@ -23,6 +23,7 @@
 //     ScriptDemoTypes: Type[] (static)    — Scripts에서 발견된 MonoBehaviour 데모 타입 목록
 //     ShowEditor(): void                  — 에디터 표시
 //     RequestQuit(): void                 — 종료 요청
+//     PumpWindowEvents(): void (internal static) — 초기화 중 OS "응답 없음" 방지용 GLFW 이벤트 펌핑
 // @note    ProcessEngineKeys()에서 ESC 키로 커서 잠금 임시 해제 (에디터만).
 //          UpdateImGuiInputState()에서 Game View 클릭으로 커서 잠금 재진입.
 //          InitInput()에서 Cursor.Initialize() 호출.
@@ -513,6 +514,13 @@ namespace IronRose.Engine
 
             // Multi-Viewport: 메인 CL submit 후 보조 뷰포트 렌더 (공유 버퍼 충돌 방지)
             _imguiOverlay?.RenderSecondaryViewports();
+        }
+
+        /// <summary>초기화 중 OS "응답 없음" 방지를 위해 GLFW 이벤트를 펌핑합니다.</summary>
+        internal static void PumpWindowEvents()
+        {
+            try { Silk.NET.GLFW.GlfwProvider.GLFW.Value.PollEvents(); }
+            catch { /* 초기화 단계에서는 무시 */ }
         }
 
         public void Shutdown()
