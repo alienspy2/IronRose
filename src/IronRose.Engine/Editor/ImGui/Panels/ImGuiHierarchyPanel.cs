@@ -1,3 +1,17 @@
+// ------------------------------------------------------------
+// @file    ImGuiHierarchyPanel.cs
+// @brief   씬의 GameObject 트리를 Hierarchy 패널에 표시한다. 드래그앤드롭 재배치,
+//          멀티셀렉트, 검색 필터, Prefab/Canvas Edit Mode 필터링을 지원한다.
+// @deps    IronRose.Engine.Editor/EditorState, IronRose.Engine.Editor/EditorSelection,
+//          IronRose.Engine.Editor/UndoUtility, IronRose.Engine.Editor/CanvasEditMode,
+//          IronRose.Engine.Editor/UndoSystem, RoseEngine/SceneManager
+// @exports
+//   class ImGuiHierarchyPanel : IEditorPanel
+//     Draw(): void                              — Hierarchy 패널 렌더링
+//     Instance: ImGuiHierarchyPanel?            — 싱글턴 접근
+// @note    Canvas Edit Mode 시 roots를 Canvas GO 하나로 교체하여 하위만 표시.
+//          루트 레벨 드롭/삭제도 Prefab Edit Mode와 동일하게 차단.
+// ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -166,6 +180,17 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                             parent = parent.parent;
                         }
                         _needScroll = true;
+                    }
+                }
+
+                // Canvas Edit Mode: Canvas GO를 유일한 루트로 표시
+                if (EditorState.IsEditingCanvas && EditorState.EditingCanvasGoId.HasValue)
+                {
+                    var canvasGo = UndoUtility.FindGameObjectById(EditorState.EditingCanvasGoId.Value);
+                    if (canvasGo != null)
+                    {
+                        roots.Clear();
+                        roots.Add(canvasGo);
                     }
                 }
 
@@ -709,7 +734,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             ImGui.InvisibleButton("##root_drop", new SNVector2(-1, remainH));
 
             // Prefab Edit Mode에서는 루트 레벨 조작 차단
-            bool blockRootLevel = EditorState.IsEditingPrefab;
+            bool blockRootLevel = EditorState.IsEditingPrefab || EditorState.IsEditingCanvas;
 
             // ── Context menu (빈 공간 우클릭 → 루트에 생성) ──
             if (!blockRootLevel && ImGui.BeginPopupContextItem("##ctx_root"))
@@ -834,7 +859,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     newSiblingIdx--;
 
                 // Prefab Edit Mode에서 루트 레벨(parent==null)로의 이동 차단
-                if (EditorState.IsEditingPrefab && !newParentId.HasValue)
+                if ((EditorState.IsEditingPrefab || EditorState.IsEditingCanvas) && !newParentId.HasValue)
                     continue;
 
                 // 변경사항 없으면 스킵
@@ -866,7 +891,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         private void ExecuteRootDrop(List<int> draggedIds)
         {
             // Prefab Edit Mode에서 루트 레벨 드롭 차단
-            if (EditorState.IsEditingPrefab) return;
+            if (EditorState.IsEditingPrefab || EditorState.IsEditingCanvas) return;
 
             // 트리 순서로 정렬하여 상대적 순서 유지
             var sortedIds = draggedIds

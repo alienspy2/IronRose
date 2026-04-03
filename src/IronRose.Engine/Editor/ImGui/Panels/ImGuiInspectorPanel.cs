@@ -1,3 +1,16 @@
+// ------------------------------------------------------------
+// @file    ImGuiInspectorPanel.cs
+// @brief   선택된 GameObject/Asset의 컴포넌트와 속성을 Inspector 패널에 표시하고 편집한다.
+//          컴포넌트별 Edit 버튼(Edit Collider, Edit Canvas, Edit Animation)도 여기서 렌더링한다.
+// @deps    IronRose.Engine.Editor/EditorState, IronRose.Engine.Editor/CanvasEditMode,
+//          IronRose.Engine.Editor/EditorSelection, IronRose.Engine.Editor/UndoSystem,
+//          IronRose.AssetPipeline, IronRose.Rendering
+// @exports
+//   class ImGuiInspectorPanel : IEditorPanel
+//     Draw(): void                              — Inspector 패널 렌더링
+// @note    "Edit Canvas" 버튼은 Canvas 컴포넌트에 대해 CanvasEditMode.Enter/Exit를 토글한다.
+//          "Edit Collider" 패턴과 동일하게 녹색 하이라이트로 활성 상태를 표시.
+// ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -864,6 +877,27 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     if (ImGui.Button("Edit Collider"))
                         EditorState.IsEditingCollider = !EditorState.IsEditingCollider;
                     if (editing)
+                        ImGui.PopStyleColor(2);
+                }
+
+                // "Edit Canvas" toggle button for Canvas components
+                if (comp is RoseEngine.Canvas)
+                {
+                    bool editingCanvas = EditorState.IsEditingCanvas
+                        && EditorState.EditingCanvasGoId == selected.GetInstanceID();
+                    if (editingCanvas)
+                    {
+                        ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.2f, 0.7f, 0.3f, 1f));
+                        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new System.Numerics.Vector4(0.3f, 0.8f, 0.4f, 1f));
+                    }
+                    if (ImGui.Button("Edit Canvas"))
+                    {
+                        if (editingCanvas)
+                            CanvasEditMode.Exit();
+                        else
+                            CanvasEditMode.Enter(selected);
+                    }
+                    if (editingCanvas)
                         ImGui.PopStyleColor(2);
                 }
 

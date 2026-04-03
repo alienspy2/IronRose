@@ -1,4 +1,4 @@
-// ------------------------------------------------------------
+﻿// ------------------------------------------------------------
 // @file    ImGuiOverlay.cs
 // @brief   ImGui 오버레이 최상위 컨트롤러. 패널 라이프사이클, 컨텍스트/입력/렌더링 담당.
 //          RT 관리는 ImGuiRenderTargetManager, 레이아웃은 ImGuiLayoutManager에 위임.
@@ -1208,11 +1208,68 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         /// </summary>
         private void DrawPrefabOverlaysInSceneView()
         {
-            if (!EditorState.IsEditingPrefab) return;
             if (_sceneView == null) return;
+
+            // Canvas Edit Mode breadcrumb
+            if (EditorState.IsEditingCanvas)
+                DrawCanvasBreadcrumbChild();
+
+            if (!EditorState.IsEditingPrefab) return;
 
             DrawPrefabBreadcrumbChild();
             DrawPrefabVariantTreeChild();
+        }
+
+        /// <summary>Canvas Edit Mode Breadcrumb: Scene View 이미지 좌상단에 child window로 배치.</summary>
+        private void DrawCanvasBreadcrumbChild()
+        {
+            var imgMin = _sceneView!.ImageScreenMin;
+            var imgMax = _sceneView.ImageScreenMax;
+            if (imgMax.X - imgMin.X < 1 || imgMax.Y - imgMin.Y < 1) return;
+
+            string sceneName = "Scene";
+            var scene = RoseEngine.SceneManager.GetActiveScene();
+            if (!string.IsNullOrEmpty(scene.name))
+                sceneName = scene.name;
+
+            string canvasName = "Canvas";
+            if (EditorState.EditingCanvasGoId.HasValue)
+            {
+                var go = UndoUtility.FindGameObjectById(EditorState.EditingCanvasGoId.Value);
+                if (go != null) canvasName = go.name;
+            }
+
+            const float pad = 6f;
+            const float childPadX = 8f;
+            const float childPadY = 4f;
+            var bcScreenPos = new Vector2(imgMin.X + pad, imgMin.Y + pad);
+
+            ImGui.SetCursorScreenPos(bcScreenPos);
+
+            float maxWidth = imgMax.X - imgMin.X - pad * 2;
+            ImGui.PushStyleColor(ImGuiCol.ChildBg,
+                new Vector4(0.18f, 0.25f, 0.12f, 0.92f));
+            ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(childPadX, childPadY));
+            ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 4f);
+
+            if (ImGui.BeginChild("##CanvasBreadcrumb", new Vector2(maxWidth, 0),
+                    ImGuiChildFlags.AutoResizeX | ImGuiChildFlags.AutoResizeY
+                    | ImGuiChildFlags.AlwaysAutoResize,
+                    ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
+            {
+                ImGui.TextDisabled(sceneName);
+                ImGui.SameLine();
+                ImGui.TextDisabled(">");
+                ImGui.SameLine();
+                ImGui.TextColored(new Vector4(0.5f, 0.9f, 0.4f, 1.0f), canvasName);
+
+                ImGui.SameLine(0, 20);
+                if (ImGui.SmallButton("Back##canvas_bc"))
+                    CanvasEditMode.Exit();
+            }
+            ImGui.EndChild();
+            ImGui.PopStyleVar(2);
+            ImGui.PopStyleColor();
         }
 
         /// <summary>Breadcrumb: Scene View 이미지 좌상단에 child window로 배치.</summary>
@@ -2149,11 +2206,119 @@ namespace IronRose.Engine.Editor.ImGuiEditor
 
         // ── Scene View input & rendering ──
 
+        /// <summary>Canvas Edit Mode 전용 입력 처리.</summary>
+        private void UpdateCanvasEditInput(float deltaTime)
+        {
+            if (_sceneView == null) return;
+
+            // 기즈모 업데이트
+            var selectedGo = EditorSelection.SelectedGameObject;
+            bool hasRectTransform = selectedGo?.GetComponent<RoseEngine.RectTransform>() != null;
+            bool isRectTool = _sceneView.SelectedTool == TransformTool.Rect;
+            bool useUI2DGizmo = hasRectTransform
+                && (_sceneView.SelectedTool == TransformTool.Translate
+                    || _sceneView.SelectedTool == TransformTool.Rotate
+                    || _sceneView.SelectedTool == TransformTool.Scale);
+
+            if (isRectTool && hasRectTransform && _rectGizmoEditor != null)
+                _rectGizmoEditor.Update(_sceneView);
+            else if (useUI2DGizmo && _uiTransformGizmo != null)
+                _uiTransformGizmo.Update(_sceneView);
+
+            if (!_sceneView.IsImageHovered) return;
+
+            var io = ImGui.GetIO();
+
+            // ── 마우스 휠: 줌 ──
+            if (MathF.Abs(io.MouseWheel) > 0.001f)
+            {
+                float oldZoom = CanvasEditMode.ViewZoom;
+                float zoomFactor = io.MouseWheel > 0 ? 1.15f : 1f / 1.15f;
+                float newZoom = CanvasEditMode.ClampZoom(oldZoom * zoomFactor);
+
+                // 포인트 줌: 마우스 위치 기준
+                var viewCenter = new Vector2(
+                    (_sceneView.ImageScreenMin.X + _sceneView.ImageScreenMax.X) * 0.5f,
+                    (_sceneView.ImageScreenMin.Y + _sceneView.ImageScreenMax.Y) * 0.5f);
+                var mouseOffset = io.MousePos - viewCenter - CanvasEditMode.ViewOffset;
+                CanvasEditMode.ViewOffset -= mouseOffset * (newZoom / oldZoom - 1f);
+
+                CanvasEditMode.ViewZoom = newZoom;
+            }
+
+            // ── MMB 드래그: 패닝 ──
+            if (io.MouseDown[2])
+            {
+                CanvasEditMode.ViewOffset += io.MouseDelta;
+            }
+
+            // ── F 키: 포커스 / 전체 뷰 리셋 ──
+            bool fKeyPressed = ImGui.IsKeyPressed(ImGuiKey.F)
+                && !ImGui.IsKeyDown(ImGuiKey.ModCtrl)
+                && !ImGui.IsKeyDown(ImGuiKey.ModShift)
+                && !ImGui.IsKeyDown(ImGuiKey.ModAlt);
+
+            if (fKeyPressed)
+                CanvasEditMode.ResetView();
+
+            // ── LMB 클릭: UI 요소 선택 ──
+            bool gizmoInteracting = (_rectGizmoEditor?.IsDragging ?? false)
+                || (_uiTransformGizmo?.IsDragging ?? false);
+
+            if (io.MouseClicked[0] && !io.KeyAlt && !io.MouseDown[1] && !io.MouseDown[2] && !gizmoInteracting)
+            {
+                var min = _sceneView.ImageScreenMin;
+                var max = _sceneView.ImageScreenMax;
+                float imgW = max.X - min.X;
+                float imgH = max.Y - min.Y;
+
+                var uiHit = RoseEngine.CanvasRenderer.HitTest(
+                    io.MousePos.X, io.MousePos.Y, min.X, min.Y, imgW, imgH);
+                if (uiHit != null)
+                {
+                    int id = uiHit.GetInstanceID();
+                    if (io.KeyCtrl)
+                        EditorSelection.ToggleSelect(id);
+                    else
+                        EditorSelection.Select(id);
+                }
+                else if (!io.KeyCtrl)
+                {
+                    EditorSelection.Clear();
+                }
+            }
+        }
+
         private void UpdateSceneViewInput(float deltaTime)
         {
             if (_sceneView == null || _editorCamera == null) return;
 
             _sceneView.ProcessShortcuts();
+
+            // Canvas Edit Mode 카메라 상태 관리
+            if (EditorState.IsEditingCanvas)
+            {
+                // 최초 진입 시 카메라 상태 저장
+                if (EditorState.SavedCanvasCameraPosition == null)
+                {
+                    EditorState.SavedCanvasCameraPosition = _editorCamera.Position;
+                    EditorState.SavedCanvasCameraRotation = _editorCamera.Rotation;
+                    EditorState.SavedCanvasCameraPivot = _editorCamera.Pivot;
+                }
+                UpdateCanvasEditInput(deltaTime);
+                return;
+            }
+
+            // Canvas Edit Mode 퇴출 후 카메라 복원
+            if (EditorState.SavedCanvasCameraPosition.HasValue)
+            {
+                _editorCamera.Position = EditorState.SavedCanvasCameraPosition.Value;
+                _editorCamera.Rotation = EditorState.SavedCanvasCameraRotation!.Value;
+                _editorCamera.Pivot = EditorState.SavedCanvasCameraPivot!.Value;
+                EditorState.SavedCanvasCameraPosition = null;
+                EditorState.SavedCanvasCameraRotation = null;
+                EditorState.SavedCanvasCameraPivot = null;
+            }
 
             // Auto-disable Edit Collider mode when selection is cleared or has no collider
             if (EditorState.IsEditingCollider)
@@ -2457,6 +2622,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         public void RenderSceneView(CommandList cl)
         {
             if (!IsVisible || _sceneRenderer == null || _editorCamera == null || _sceneView == null)
+                return;
+
+            // Canvas Edit Mode: 3D 씬 렌더링 불필요 (ImGui DrawList 기반 2D 렌더링)
+            if (EditorState.IsEditingCanvas)
                 return;
 
             var mode = _sceneView.SelectedRenderMode;

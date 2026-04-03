@@ -135,6 +135,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             if (_layoutStableFrames <= LayoutWarmupFrames)
                 return (swapchainW, swapchainH);
 
+            // Canvas Edit Mode: 3D RT 불필요, 최소 크기 반환
+            if (EditorState.IsEditingCanvas)
+                return (MinRTSize, MinRTSize);
+
             if (_imageAreaSize.X >= MinRTSize && _imageAreaSize.Y >= MinRTSize)
                 return ((uint)_imageAreaSize.X, (uint)_imageAreaSize.Y);
 
@@ -165,7 +169,11 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 var contentSize = ImGui.GetContentRegionAvail();
                 _imageAreaSize = contentSize;
 
-                if (_textureId != IntPtr.Zero && contentSize.X > 1 && contentSize.Y > 1)
+                if (EditorState.IsEditingCanvas)
+                {
+                    DrawCanvasEditView(contentSize);
+                }
+                else if (_textureId != IntPtr.Zero && contentSize.X > 1 && contentSize.Y > 1)
                 {
                     ImGui.Image(_textureId, contentSize);
                     _isImageHovered = ImGui.IsItemHovered();
@@ -271,6 +279,13 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 4);
             ImGui.AlignTextToFramePadding();
+
+            if (EditorState.IsEditingCanvas)
+            {
+                DrawCanvasEditToolbar();
+                ImGui.PopStyleVar();
+                return;
+            }
 
             // Render mode combo
             ImGui.SetNextItemWidth(110);
@@ -579,6 +594,226 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             "rendered" => 3,
             _ => 1,
         };
+
+        // ── Canvas Edit Mode ──
+
+        private void DrawCanvasEditView(Vector2 contentSize)
+        {
+            _imageAreaSize = contentSize;
+
+            ImGui.InvisibleButton("##canvas_edit_area", contentSize);
+            _isImageHovered = ImGui.IsItemHovered();
+            _imageScreenMin = ImGui.GetItemRectMin();
+            _imageScreenMax = ImGui.GetItemRectMax();
+
+            var dl = ImGui.GetWindowDrawList();
+
+            dl.PushClipRect(_imageScreenMin, _imageScreenMax, true);
+
+            // 어두운 배경
+            uint bgColor = ImGui.GetColorU32(new Vector4(0.15f, 0.15f, 0.15f, 1f));
+            dl.AddRectFilled(_imageScreenMin, _imageScreenMax, bgColor);
+
+            // Canvas 영역 계산 (aspect ratio + zoom + offset)
+            float viewW = contentSize.X;
+            float viewH = contentSize.Y;
+            var (canvasScreenMin, canvasScreenMax) = CalculateCanvasRect(viewW, viewH);
+
+            // 체커보드 배경
+            DrawCheckerboard(dl, canvasScreenMin, canvasScreenMax);
+
+            // Canvas UI 렌더링
+            float canvasW = canvasScreenMax.X - canvasScreenMin.X;
+            float canvasH = canvasScreenMax.Y - canvasScreenMin.Y;
+            if (canvasW > 0 && canvasH > 0)
+            {
+                RoseEngine.CanvasRenderer.IsInteractive = false;
+                RoseEngine.CanvasRenderer.RenderAll(dl, canvasScreenMin.X, canvasScreenMin.Y, canvasW, canvasH);
+                RoseEngine.CanvasRenderer.IsInteractive = true;
+            }
+
+            // Canvas 영역 테두리
+            uint borderColor = ImGui.GetColorU32(new Vector4(0.6f, 0.6f, 0.6f, 1f));
+            dl.AddRect(canvasScreenMin, canvasScreenMax, borderColor, 0f, ImDrawFlags.None, 1f);
+
+            // 해상도 정보
+            var (resW, resH) = GetCanvasResolution();
+            string resText = $"{resW} x {resH} ({EditorState.CanvasEditAspectRatio})";
+            var textPos = new Vector2(canvasScreenMin.X, canvasScreenMax.Y + 4f);
+            dl.AddText(textPos, ImGui.GetColorU32(new Vector4(0.7f, 0.7f, 0.7f, 1f)), resText);
+
+            dl.PopClipRect();
+
+            DrawGizmoOverlay?.Invoke();
+            DrawPrefabOverlay?.Invoke();
+        }
+
+        private (Vector2 min, Vector2 max) CalculateCanvasRect(float viewW, float viewH)
+        {
+            var (resW, resH) = GetCanvasResolution();
+            float canvasAspect = (float)resW / resH;
+
+            float fitW, fitH;
+            float viewAspect = viewW / viewH;
+            if (canvasAspect > viewAspect)
+            {
+                fitW = viewW * 0.9f;
+                fitH = fitW / canvasAspect;
+            }
+            else
+            {
+                fitH = viewH * 0.9f;
+                fitW = fitH * canvasAspect;
+            }
+
+            float zoomedW = fitW * CanvasEditMode.ViewZoom;
+            float zoomedH = fitH * CanvasEditMode.ViewZoom;
+
+            float centerX = _imageScreenMin.X + viewW * 0.5f + CanvasEditMode.ViewOffset.X;
+            float centerY = _imageScreenMin.Y + viewH * 0.5f + CanvasEditMode.ViewOffset.Y;
+
+            var min = new Vector2(centerX - zoomedW * 0.5f, centerY - zoomedH * 0.5f);
+            var max = new Vector2(centerX + zoomedW * 0.5f, centerY + zoomedH * 0.5f);
+            return (min, max);
+        }
+
+        private static (int w, int h) GetCanvasResolution()
+        {
+            string ar = EditorState.CanvasEditAspectRatio;
+            if (ar == "Custom")
+                return (EditorState.CanvasEditCustomWidth, EditorState.CanvasEditCustomHeight);
+
+            float ratioW = 16f, ratioH = 9f;
+            switch (ar)
+            {
+                case "16:9":  ratioW = 16f; ratioH = 9f; break;
+                case "16:10": ratioW = 16f; ratioH = 10f; break;
+                case "4:3":   ratioW = 4f;  ratioH = 3f; break;
+                case "32:9":  ratioW = 32f; ratioH = 9f; break;
+            }
+
+            int baseH = 1080;
+            if (EditorState.EditingCanvasGoId.HasValue)
+            {
+                var go = UndoUtility.FindGameObjectById(EditorState.EditingCanvasGoId.Value);
+                var canvas = go?.GetComponent<RoseEngine.Canvas>();
+                if (canvas != null)
+                    baseH = (int)canvas.referenceResolution.y;
+            }
+
+            int h = baseH;
+            int w = (int)(h * ratioW / ratioH);
+            return (w, h);
+        }
+
+        private static void DrawCheckerboard(ImDrawListPtr dl, Vector2 min, Vector2 max)
+        {
+            const float tileSize = 16f;
+            uint col1 = ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 1f));
+            uint col2 = ImGui.GetColorU32(new Vector4(0.30f, 0.30f, 0.30f, 1f));
+
+            dl.PushClipRect(min, max, true);
+
+            for (float y = min.Y; y < max.Y; y += tileSize)
+            {
+                for (float x = min.X; x < max.X; x += tileSize)
+                {
+                    int ix = (int)((x - min.X) / tileSize);
+                    int iy = (int)((y - min.Y) / tileSize);
+                    uint col = ((ix + iy) % 2 == 0) ? col1 : col2;
+
+                    var tileMin = new Vector2(x, y);
+                    var tileMax = new Vector2(
+                        MathF.Min(x + tileSize, max.X),
+                        MathF.Min(y + tileSize, max.Y));
+                    dl.AddRectFilled(tileMin, tileMax, col);
+                }
+            }
+
+            dl.PopClipRect();
+        }
+
+        private void DrawCanvasEditToolbar()
+        {
+            // Aspect ratio 드롭다운
+            string[] aspectNames = { "16:9", "16:10", "4:3", "32:9", "Custom" };
+            int currentIdx = Array.IndexOf(aspectNames, EditorState.CanvasEditAspectRatio);
+            if (currentIdx < 0) currentIdx = 0;
+
+            ImGui.SetNextItemWidth(90);
+            if (ImGui.Combo("##AspectRatio", ref currentIdx, aspectNames, aspectNames.Length))
+            {
+                EditorState.CanvasEditAspectRatio = aspectNames[currentIdx];
+                EditorState.Save();
+            }
+
+            if (EditorState.CanvasEditAspectRatio == "Custom")
+            {
+                ImGui.SameLine();
+                int cw = EditorState.CanvasEditCustomWidth;
+                ImGui.SetNextItemWidth(60);
+                if (ImGui.InputInt("##CW", ref cw, 0))
+                {
+                    EditorState.CanvasEditCustomWidth = Math.Max(cw, 1);
+                    EditorState.Save();
+                }
+                ImGui.SameLine();
+                ImGui.TextUnformatted("x");
+                ImGui.SameLine();
+                int ch = EditorState.CanvasEditCustomHeight;
+                ImGui.SetNextItemWidth(60);
+                if (ImGui.InputInt("##CH", ref ch, 0))
+                {
+                    EditorState.CanvasEditCustomHeight = Math.Max(ch, 1);
+                    EditorState.Save();
+                }
+            }
+
+            ImGui.SameLine();
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 12);
+
+            // Transform tools
+            bool isTranslate = _selectedToolIdx == 0;
+            bool isRotate = _selectedToolIdx == 1;
+            bool isScale = _selectedToolIdx == 2;
+            bool isRect = _selectedToolIdx == 3;
+
+            if (ToolButton("W", isTranslate)) _selectedToolIdx = 0;
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Translate (W)");
+            ImGui.SameLine();
+            if (ToolButton("E", isRotate)) _selectedToolIdx = 1;
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Rotate (E)");
+            ImGui.SameLine();
+            if (ToolButton("R", isScale)) _selectedToolIdx = 2;
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Scale (R)");
+            ImGui.SameLine();
+            if (ToolButton("T", isRect)) _selectedToolIdx = 3;
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Rect (T)");
+
+            // 줌 비율
+            ImGui.SameLine();
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 12);
+            ImGui.TextUnformatted($"{(int)(CanvasEditMode.ViewZoom * 100)}%");
+
+            // Overlays
+            ImGui.SameLine();
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 12);
+            if (ImGui.Button("Overlays##canvas"))
+                ImGui.OpenPopup("##canvas_overlay_popup");
+            if (ImGui.BeginPopup("##canvas_overlay_popup"))
+            {
+                bool debugRects = RoseEngine.CanvasRenderer.DebugDrawRects;
+                if (ImGui.Checkbox("Debug Rects", ref debugRects))
+                    RoseEngine.CanvasRenderer.DebugDrawRects = debugRects;
+                ImGui.EndPopup();
+            }
+
+            // Back 버튼
+            ImGui.SameLine();
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 12);
+            if (ImGui.Button("Back"))
+                CanvasEditMode.Exit();
+        }
 
     }
 }
