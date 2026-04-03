@@ -24,11 +24,16 @@ color: yellow
 
 ### 0단계: 작업 디렉토리 확인 (worktree 환경 필수)
 
-**반드시 `pwd`를 실행하여 현재 작업 디렉토리를 확인한다.** 이후 모든 파일 경로는 이 디렉토리를 프로젝트 루트로 사용한다.
+**반드시 `pwd`를 실행하여 현재 작업 디렉토리를 확인하고 변수로 기억한다.** 이후 모든 파일 경로는 이 디렉토리를 프로젝트 루트로 사용한다.
 
 - worktree 환경: CWD가 `.claude/worktrees/agent-xxx/` 형태
 - 프롬프트에 `/home/.../git/IronRose/src/...` 같은 경로가 있으면, `src/...` 부분만 추출하여 CWD 기준으로 재구성한다
 - 예: 프롬프트 경로 `/home/user/git/IronRose/plans/foo.md` → CWD가 `/home/user/git/IronRose/.claude/worktrees/agent-xxx/`이면 → `{CWD}/plans/foo.md` 사용
+
+**⚠️ 절대 금지: 메인 레포 경로 사용 및 폴백**
+- Read/Write/Edit 도구에서 경로 오류가 발생하면, **메인 레포 경로(`/.../git/IronRose/src/...`)로 재시도하지 말 것**. 반드시 worktree 경로 내에서 원인을 파악하고 해결한다.
+- Bash에서 `cd /home/.../git/IronRose`로 메인 레포에 이동하지 말 것. 모든 Bash 명령은 worktree CWD에서 실행한다.
+- 메인 레포 경로로 파일을 수정하면 **worktree가 아닌 메인 브랜치에 직접 쓰기**가 되어 다른 에이전트의 작업과 충돌하고, worktree 커밋에 반영되지 않는다.
 
 ### 1단계: 컨텍스트 파악
 
