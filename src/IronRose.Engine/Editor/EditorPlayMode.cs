@@ -4,7 +4,8 @@
 // @deps    RoseEngine/SceneManager, RoseEngine/SceneSerializer, RoseEngine/Application,
 //          RoseEngine/Time, RoseEngine/Debug, RoseEngine/Cursor, RoseEngine/Input,
 //          RoseEngine/PhysicsManager, RoseEngine/Animator, RoseEngine/Object,
-//          IronRose.Engine.Editor/EditorSelection, IronRose.Engine.Editor/UndoSystem
+//          IronRose.Engine.Editor/EditorSelection, IronRose.Engine.Editor/EditorState,
+//          IronRose.Engine.Editor/CanvasEditMode, IronRose.Engine.Editor/UndoSystem
 // @exports
 //   enum PlayModeState { Edit, Playing, Paused }
 //   static class EditorPlayMode
@@ -60,6 +61,10 @@ namespace IronRose.Engine.Editor
         public static void EnterPlayMode()
         {
             if (State != PlayModeState.Edit) return;
+
+            // Canvas Edit Mode 중 Play 진입 시 자동 퇴출
+            if (EditorState.IsEditingCanvas)
+                CanvasEditMode.Exit();
 
             // Play mode 진입 전 콜백 (예: FileSystemWatcher 중단)
             OnBeforeEnterPlayMode?.Invoke();

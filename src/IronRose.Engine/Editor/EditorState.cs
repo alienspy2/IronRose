@@ -2,7 +2,7 @@
 // @file    EditorState.cs
 // @brief   에디터 상태 영속화 (.rose_editor_state.toml).
 //          마지막 씬 경로, 창 위치/크기, UI 스케일, 스냅 설정,
-//          패널 가시성, ImGui 레이아웃, 프리팹 편집 모드 상태를 저장/복원한다.
+//          패널 가시성, ImGui 레이아웃, 프리팹 편집 모드, Canvas 편집 모드 상태를 저장/복원한다.
 // @deps    IronRose.Engine/ProjectContext, IronRose.Engine/TomlConfig, RoseEngine/Debug
 // @exports
 //   static class EditorState
@@ -15,9 +15,15 @@
 //     ImGuiLayoutData: string?                  — ImGui 독 레이아웃 INI 데이터
 //     PanelFeedback: bool                       — Feedback 패널 가시성
 //     IsEditingPrefab: bool                     — 프리팹 편집 모드 여부
+//     IsEditingCanvas: bool                     — Canvas 편집 모드 여부
+//     EditingCanvasGoId: int?                   — 편집 중인 Canvas GO instance ID
+//     CanvasEditAspectRatio: string             — Canvas Edit Mode aspect ratio 프리셋
+//     CanvasEditCustomWidth/Height: int         — Custom aspect ratio 너비/높이
+//     SavedCanvasCameraPosition/Rotation/Pivot  — Canvas 진입 전 카메라 상태 백업
 //     Load(): void                              — 상태 파일 로드
 //     Save(): void                              — 상태 파일 저장
 //     UpdateLastScene(string?): void            — 씬 경로 업데이트 + 저장
+//     CleanupCanvasEditMode(): void             — 종료 시 Canvas 편집 상태 정리
 //     CleanupPrefabEditMode(): void             — 종료 시 프리팹 편집 상태 정리
 //   class PrefabEditContext (internal)           — 프리팹 편집 스택 한 레벨 컨텍스트
 // @note    경로 저장 시 ProjectRoot 기준 상대 경로로 변환하여 저장.
@@ -98,6 +104,27 @@ namespace IronRose.Engine.Editor
         internal static List<IUndoAction>? SavedUndoStack;
         internal static List<IUndoAction>? SavedRedoStack;
         internal static Dictionary<string, int>? SavedGoIdMap;
+
+        // ── Canvas Edit Mode ──
+
+        /// <summary>Canvas 편집 모드 활성화 여부.</summary>
+        public static bool IsEditingCanvas { get; set; } = false;
+
+        /// <summary>현재 편집 중인 Canvas의 GameObject instance ID.</summary>
+        public static int? EditingCanvasGoId { get; set; }
+
+        // Canvas Edit Mode 뷰 설정 (영속화)
+        /// <summary>Canvas Edit Mode aspect ratio 프리셋 이름.</summary>
+        public static string CanvasEditAspectRatio { get; set; } = "16:9";
+        /// <summary>Custom aspect ratio 너비.</summary>
+        public static int CanvasEditCustomWidth { get; set; } = 1920;
+        /// <summary>Custom aspect ratio 높이.</summary>
+        public static int CanvasEditCustomHeight { get; set; } = 1080;
+
+        // EditorCamera 상태 저장 (Canvas Edit Mode 진입/퇴출용)
+        internal static RoseEngine.Vector3? SavedCanvasCameraPosition;
+        internal static RoseEngine.Quaternion? SavedCanvasCameraRotation;
+        internal static RoseEngine.Vector3? SavedCanvasCameraPivot;
 
         // Panel visibility
         public static bool PanelHierarchy { get; set; } = true;
@@ -193,6 +220,16 @@ namespace IronRose.Engine.Editor
                 PanelProjectSettings = panels.GetBool("project_settings", PanelProjectSettings);
             }
 
+            var canvasEdit = config.GetSection("canvas_edit");
+            if (canvasEdit != null)
+            {
+                var ar = canvasEdit.GetString("aspect_ratio", "");
+                if (!string.IsNullOrEmpty(ar))
+                    CanvasEditAspectRatio = ar;
+                CanvasEditCustomWidth = Math.Max(canvasEdit.GetInt("custom_width", CanvasEditCustomWidth), 1);
+                CanvasEditCustomHeight = Math.Max(canvasEdit.GetInt("custom_height", CanvasEditCustomHeight), 1);
+            }
+
             var layout = config.GetSection("imgui_layout");
             if (layout != null)
             {
@@ -240,6 +277,11 @@ namespace IronRose.Engine.Editor
                 toml += $"feedback = {BoolStr(PanelFeedback)}\n";
                 toml += $"project_settings = {BoolStr(PanelProjectSettings)}\n";
 
+                toml += "\n[canvas_edit]\n";
+                toml += $"aspect_ratio = \"{CanvasEditAspectRatio}\"\n";
+                toml += $"custom_width = {CanvasEditCustomWidth}\n";
+                toml += $"custom_height = {CanvasEditCustomHeight}\n";
+
                 if (!string.IsNullOrEmpty(ImGuiLayoutData))
                 {
                     toml += "\n[imgui_layout]\n";
@@ -263,6 +305,19 @@ namespace IronRose.Engine.Editor
             if (string.IsNullOrEmpty(scenePath)) return;
             LastScenePath = scenePath;
             Save();
+        }
+
+        /// <summary>
+        /// 앱 종료 시 Canvas Edit Mode 상태 정리.
+        /// </summary>
+        public static void CleanupCanvasEditMode()
+        {
+            if (!IsEditingCanvas) return;
+            IsEditingCanvas = false;
+            EditingCanvasGoId = null;
+            SavedCanvasCameraPosition = null;
+            SavedCanvasCameraRotation = null;
+            SavedCanvasCameraPivot = null;
         }
 
         /// <summary>
