@@ -2608,40 +2608,11 @@ namespace IronRose.Engine.Cli
 
         /// <summary>
         /// typeName 문자열로부터 Component Type을 찾는다.
-        /// 검색 순서: 1) RoseEngine 네임스페이스 (엔진 내장), 2) Scripts 어셈블리.
+        /// SceneSerializer의 컴포넌트 타입 캐시를 재사용하여 fullName/shortName 양쪽을 검색한다.
         /// </summary>
         private static Type? ResolveComponentType(string typeName)
         {
-            // 1. 엔진 내장 타입 (RoseEngine 네임스페이스)
-            var engineAssembly = typeof(Component).Assembly;
-            foreach (var type in engineAssembly.GetTypes())
-            {
-                if (type.Name == typeName && typeof(Component).IsAssignableFrom(type))
-                    return type;
-            }
-
-            // 2. Scripts 어셈블리 (collectible ALC)
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                var asmName = asm.GetName().Name;
-                if (asmName != null && asmName.Contains("Scripts", StringComparison.OrdinalIgnoreCase))
-                {
-                    try
-                    {
-                        foreach (var type in asm.GetTypes())
-                        {
-                            if (type.Name == typeName && typeof(Component).IsAssignableFrom(type))
-                                return type;
-                        }
-                    }
-                    catch (ReflectionTypeLoadException)
-                    {
-                        // collectible ALC 해제 후 접근 시 발생 가능 -- 무시
-                    }
-                }
-            }
-
-            return null;
+            return SceneSerializer.ResolveComponentTypeFromCache(typeName);
         }
 
         /// <summary>GO를 트리 노드로 변환 (재귀). 메인 스레드에서 호출.</summary>

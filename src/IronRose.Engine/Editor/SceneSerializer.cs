@@ -19,6 +19,7 @@
 //     SaveVariantPrefab(GameObject, string, string): void           -- Variant 프리팹 저장
 //     ApplyOverrides(List<GameObject>, TomlTableArray): void        -- Variant 오버라이드 적용
 //     InvalidateComponentTypeCache(): void                          -- 핫 리로드 후 캐시 무효화
+//     ResolveComponentTypeFromCache(string): Type?                   -- typeName(fullName/shortName)으로 Component 타입 검색
 // @note    벡터/쿼터니언/컬러 변환은 TomlConvert 정적 메서드로 위임한다.
 //          직렬화(Save) 시 Toml.FromModel(), 역직렬화(Load) 시 TomlConfig를 사용한다.
 //          SerializeComponent/DeserializeComponent 내부의 TomlTable 직접 사용은 Phase 5에서 전환 예정.
@@ -2054,6 +2055,29 @@ namespace IronRose.Engine.Editor
             _componentTypeCache = cache;
             _shortNameToFullName = shortNameMap;
             return cache;
+        }
+
+        /// <summary>
+        /// typeName(fullName 또는 shortName)으로 Component 타입을 검색한다.
+        /// GetComponentTypeCache() 캐시를 사용하므로 모든 비-System 어셈블리를 탐색한다.
+        /// </summary>
+        internal static Type? ResolveComponentTypeFromCache(string typeName)
+        {
+            var cache = GetComponentTypeCache();
+
+            // 1. fullName 매칭
+            if (cache.TryGetValue(typeName, out var type))
+                return type;
+
+            // 2. shortName → fullName 매핑
+            if (_shortNameToFullName != null &&
+                _shortNameToFullName.TryGetValue(typeName, out var fullName))
+            {
+                if (cache.TryGetValue(fullName, out var resolved))
+                    return resolved;
+            }
+
+            return null;
         }
 
         // ================================================================
