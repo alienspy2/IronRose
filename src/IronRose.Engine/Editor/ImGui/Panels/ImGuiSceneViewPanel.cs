@@ -9,6 +9,7 @@
 //     void Draw()                — 패널 렌더링
 //     void ProcessShortcuts()    — 키보드 단축키 처리
 //     (uint,uint) GetRenderTargetSize(...)  — RT 크기 계산
+//     (Vector2,Vector2) CalculateCanvasRect(float,float) — 줌/오프셋 적용된 캔버스 스크린 영역 계산 (internal)
 // @note    Canvas UI 오버레이 렌더링 시 CanvasRenderer.IsInteractive를 false로 설정하여
 //          Scene View에서 게임 UI 입력이 처리되지 않도록 한다.
 // ------------------------------------------------------------
@@ -648,7 +649,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             DrawPrefabOverlay?.Invoke();
         }
 
-        private (Vector2 min, Vector2 max) CalculateCanvasRect(float viewW, float viewH)
+        internal (Vector2 min, Vector2 max) CalculateCanvasRect(float viewW, float viewH)
         {
             var (resW, resH) = GetCanvasResolution();
             float canvasAspect = (float)resW / resH;

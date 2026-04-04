@@ -2267,13 +2267,13 @@ namespace IronRose.Engine.Editor.ImGuiEditor
 
             if (io.MouseClicked[0] && !io.KeyAlt && !io.MouseDown[1] && !io.MouseDown[2] && !gizmoInteracting)
             {
-                var min = _sceneView.ImageScreenMin;
-                var max = _sceneView.ImageScreenMax;
-                float imgW = max.X - min.X;
-                float imgH = max.Y - min.Y;
+                var imgSize = _sceneView.ImageScreenMax - _sceneView.ImageScreenMin;
+                var (canvasMin, canvasMax) = _sceneView.CalculateCanvasRect(imgSize.X, imgSize.Y);
+                float canvasW = canvasMax.X - canvasMin.X;
+                float canvasH = canvasMax.Y - canvasMin.Y;
 
                 var uiHit = RoseEngine.CanvasRenderer.HitTest(
-                    io.MousePos.X, io.MousePos.Y, min.X, min.Y, imgW, imgH);
+                    io.MousePos.X, io.MousePos.Y, canvasMin.X, canvasMin.Y, canvasW, canvasH);
                 if (uiHit != null)
                 {
                     int id = uiHit.GetInstanceID();
