@@ -573,8 +573,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         public void ProcessShortcuts()
         {
             var io = ImGui.GetIO();
-            // Skip when text input is active, camera fly mode (RMB), or modifiers held
+            // Skip when text input is active, camera fly mode (RMB), modifiers held,
+            // or Scene View is not focused/hovered
             if (io.WantTextInput || io.MouseDown[1] || io.KeyCtrl || io.KeyAlt) return;
+            if (!_isWindowFocused && !_isImageHovered) return;
 
             if (ImGui.IsKeyPressed(ImGuiKey.W)) _selectedToolIdx = 0;
             if (ImGui.IsKeyPressed(ImGuiKey.E)) _selectedToolIdx = 1;
@@ -620,8 +622,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             float viewH = contentSize.Y;
             var (canvasScreenMin, canvasScreenMax) = CalculateCanvasRect(viewW, viewH);
 
-            // 체커보드 배경
-            DrawCheckerboard(dl, canvasScreenMin, canvasScreenMax);
+            // 체커보드 배경 (visible 영역만 그려 draw buffer 초과 방지)
+            DrawCheckerboard(dl, canvasScreenMin, canvasScreenMax, _imageScreenMin, _imageScreenMax);
 
             // Canvas UI 렌더링
             float canvasW = canvasScreenMax.X - canvasScreenMin.X;
@@ -707,20 +709,33 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             return (w, h);
         }
 
-        private static void DrawCheckerboard(ImDrawListPtr dl, Vector2 min, Vector2 max)
+        private static void DrawCheckerboard(ImDrawListPtr dl, Vector2 min, Vector2 max, Vector2 clipMin, Vector2 clipMax)
         {
             const float tileSize = 16f;
             uint col1 = ImGui.GetColorU32(new Vector4(0.25f, 0.25f, 0.25f, 1f));
             uint col2 = ImGui.GetColorU32(new Vector4(0.30f, 0.30f, 0.30f, 1f));
 
+            // Clamp iteration to visible area to avoid generating millions of tiles when zoomed in
+            float visMinX = MathF.Max(min.X, clipMin.X);
+            float visMinY = MathF.Max(min.Y, clipMin.Y);
+            float visMaxX = MathF.Min(max.X, clipMax.X);
+            float visMaxY = MathF.Min(max.Y, clipMax.Y);
+            if (visMinX >= visMaxX || visMinY >= visMaxY) return;
+
+            // Use integer indices to avoid floating-point accumulation errors
+            int startIx = (int)MathF.Floor((visMinX - min.X) / tileSize);
+            int startIy = (int)MathF.Floor((visMinY - min.Y) / tileSize);
+            int endIx = (int)MathF.Ceiling((visMaxX - min.X) / tileSize);
+            int endIy = (int)MathF.Ceiling((visMaxY - min.Y) / tileSize);
+
             dl.PushClipRect(min, max, true);
 
-            for (float y = min.Y; y < max.Y; y += tileSize)
+            for (int iy = startIy; iy < endIy; iy++)
             {
-                for (float x = min.X; x < max.X; x += tileSize)
+                float y = min.Y + iy * tileSize;
+                for (int ix = startIx; ix < endIx; ix++)
                 {
-                    int ix = (int)((x - min.X) / tileSize);
-                    int iy = (int)((y - min.Y) / tileSize);
+                    float x = min.X + ix * tileSize;
                     uint col = ((ix + iy) % 2 == 0) ? col1 : col2;
 
                     var tileMin = new Vector2(x, y);

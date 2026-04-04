@@ -522,39 +522,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 BeginRename(selectedId.Value);
             }
 
-            // ── Alt+Shift+A → Active 토글 (멀티셀렉트 지원) ──
-            var io = ImGui.GetIO();
-            if (io.KeyAlt && io.KeyShift && ImGui.IsKeyPressed(ImGuiKey.A))
-            {
-                var selectedIds = EditorSelection.SelectedGameObjectIds;
-                if (selectedIds.Count > 0)
-                {
-                    // 첫 번째 선택 오브젝트의 activeSelf를 기준으로 토글 방향 결정
-                    var firstGo = UndoUtility.FindGameObjectById(selectedIds.First());
-                    if (firstGo != null)
-                    {
-                        bool newActive = !firstGo.activeSelf;
-                        var actions = new List<IUndoAction>();
-
-                        foreach (var id in selectedIds)
-                        {
-                            var go = UndoUtility.FindGameObjectById(id);
-                            if (go == null) continue;
-                            bool oldActive = go.activeSelf;
-                            go.SetActive(newActive);
-                            actions.Add(new SetActiveAction(
-                                $"Toggle Active {go.name}", id, oldActive, newActive));
-                        }
-
-                        if (actions.Count == 1)
-                            UndoSystem.Record(actions[0]);
-                        else if (actions.Count > 1)
-                            UndoSystem.Record(new CompoundUndoAction("Toggle Active", actions));
-
-                        SceneManager.GetActiveScene().isDirty = true;
-                    }
-                }
-            }
+            // Alt+Shift+A → Active 토글은 UpdateSceneViewInput (ImGuiOverlay)에서 전역 처리
         }
 
         // ================================================================

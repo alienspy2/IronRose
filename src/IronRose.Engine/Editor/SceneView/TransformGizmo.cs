@@ -89,7 +89,7 @@ namespace IronRose.Engine.Editor.SceneView
             if (!_meshesUploaded) return;
 
             var selectedGo = EditorSelection.SelectedGameObject;
-            if (selectedGo == null || IsPrefabChildLocked(selectedGo))
+            if (selectedGo == null || !selectedGo.activeInHierarchy || IsPrefabChildLocked(selectedGo))
             {
                 _hoveredAxis = GizmoAxis.None;
                 _activeAxis = GizmoAxis.None;
@@ -353,7 +353,7 @@ namespace IronRose.Engine.Editor.SceneView
             if (!_meshesUploaded) return;
 
             var selectedGo = EditorSelection.SelectedGameObject;
-            if (selectedGo == null || IsPrefabChildLocked(selectedGo)) return;
+            if (selectedGo == null || !selectedGo.activeInHierarchy || IsPrefabChildLocked(selectedGo)) return;
 
             var transform = selectedGo.transform;
             var objPos = transform.position;

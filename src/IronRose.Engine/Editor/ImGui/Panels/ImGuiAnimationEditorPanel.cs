@@ -19,7 +19,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
     public class ImGuiAnimationEditorPanel : IEditorPanel
     {
         private bool _isOpen;
+        private bool _isWindowFocused;
         public bool IsOpen { get => _isOpen; set => _isOpen = value; }
+        public bool IsWindowFocused => _isWindowFocused;
 
         // ── Current clip ──
         private AnimationClip? _clip;
@@ -201,8 +203,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             PanelMaximizer.DrawTabContextMenu("Animation Editor");
             if (animVisible)
             {
+                _isWindowFocused = ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows);
+
                 // Shortcuts only when window focused
-                if (ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows))
+                if (_isWindowFocused)
                     ProcessShortcuts();
 
                 DrawMenuBar();

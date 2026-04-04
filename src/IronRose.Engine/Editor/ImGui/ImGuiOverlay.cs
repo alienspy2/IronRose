@@ -1621,8 +1621,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 UpdateWindowTitle();
             }
 
-            if (ctrl && !shift && ImGui.IsKeyPressed(ImGuiKey.Z)) UndoSystem.PerformUndo();
-            if (ctrl && shift && ImGui.IsKeyPressed(ImGuiKey.Z)) UndoSystem.PerformRedo();
+            // Animation Editor 포커스 시 자체 Undo/Redo 처리하므로 전역 스킵 (이중 실행 방지)
+            bool animFocused = _animEditor != null && _animEditor.IsWindowFocused;
+            if (!animFocused && ctrl && !shift && ImGui.IsKeyPressed(ImGuiKey.Z)) UndoSystem.PerformUndo();
+            if (!animFocused && ctrl && shift && ImGui.IsKeyPressed(ImGuiKey.Z)) UndoSystem.PerformRedo();
             if (ctrl && !shift && ImGui.IsKeyPressed(ImGuiKey.N)) NewScene();
             if (ctrl && !shift && ImGui.IsKeyPressed(ImGuiKey.O)) OpenScene();
             if (ctrl && !shift && ImGui.IsKeyPressed(ImGuiKey.S)) SaveScene();
@@ -2211,9 +2213,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         {
             if (_sceneView == null) return;
 
-            // 기즈모 업데이트
+            // 기즈모 업데이트 (비활성 GO는 기즈모 스킵)
             var selectedGo = EditorSelection.SelectedGameObject;
-            bool hasRectTransform = selectedGo?.GetComponent<RoseEngine.RectTransform>() != null;
+            bool isActiveGo = selectedGo != null && selectedGo.activeInHierarchy;
+            bool hasRectTransform = isActiveGo && selectedGo!.GetComponent<RoseEngine.RectTransform>() != null;
             bool isRectTool = _sceneView.SelectedTool == TransformTool.Rect;
             bool useUI2DGizmo = hasRectTransform
                 && (_sceneView.SelectedTool == TransformTool.Translate
@@ -2295,6 +2298,38 @@ namespace IronRose.Engine.Editor.ImGuiEditor
 
             _sceneView.ProcessShortcuts();
 
+            // ── Alt+Shift+A → Active 토글 (Scene View 공통, 멀티셀렉트 지원) ──
+            if (ImGui.GetIO().KeyAlt && ImGui.GetIO().KeyShift && ImGui.IsKeyPressed(ImGuiKey.A))
+                {
+                    var selectedIds = EditorSelection.SelectedGameObjectIds;
+                    if (selectedIds.Count > 0)
+                    {
+                        var firstGo = UndoUtility.FindGameObjectById(selectedIds.First());
+                        if (firstGo != null)
+                        {
+                            bool newActive = !firstGo.activeSelf;
+                            var actions = new List<IUndoAction>();
+
+                            foreach (var id in selectedIds)
+                            {
+                                var go = UndoUtility.FindGameObjectById(id);
+                                if (go == null) continue;
+                                bool oldActive = go.activeSelf;
+                                go.SetActive(newActive);
+                                actions.Add(new SetActiveAction(
+                                    $"Toggle Active {go.name}", id, oldActive, newActive));
+                            }
+
+                            if (actions.Count == 1)
+                                UndoSystem.Record(actions[0]);
+                            else if (actions.Count > 1)
+                                UndoSystem.Record(new CompoundUndoAction("Toggle Active", actions));
+
+                            RoseEngine.SceneManager.GetActiveScene().isDirty = true;
+                        }
+                    }
+                }
+
             // Canvas Edit Mode 카메라 상태 관리
             if (EditorState.IsEditingCanvas)
             {
@@ -2330,8 +2365,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor
 
             // Determine if selected object is a UI element (has RectTransform)
             var selectedGo = EditorSelection.SelectedGameObject;
-            bool hasRectTransform = selectedGo != null
-                && selectedGo.GetComponent<RoseEngine.RectTransform>() != null;
+            bool isActiveGo = selectedGo != null && selectedGo.activeInHierarchy;
+            bool hasRectTransform = isActiveGo
+                && selectedGo!.GetComponent<RoseEngine.RectTransform>() != null;
             bool isRectTool = _sceneView.SelectedTool == TransformTool.Rect;
             bool useUI2DGizmo = hasRectTransform
                 && (_sceneView.SelectedTool == TransformTool.Translate
@@ -2607,7 +2643,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             if (_sceneView == null) return;
 
             var selGo = EditorSelection.SelectedGameObject;
-            bool hasRT = selGo?.GetComponent<RoseEngine.RectTransform>() != null;
+            if (selGo == null || !selGo.activeInHierarchy) return;
+
+            bool hasRT = selGo.GetComponent<RoseEngine.RectTransform>() != null;
             var tool = _sceneView.SelectedTool;
 
             if (tool == TransformTool.Rect && hasRT && _rectGizmoEditor != null)
