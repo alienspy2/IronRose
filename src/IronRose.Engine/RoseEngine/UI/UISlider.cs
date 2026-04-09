@@ -9,6 +9,7 @@
 //     Action<float>? onValueChanged    — 값 변경 시 호출되는 콜백
 //     void OnRenderUI(...)             — 렌더링 + 입력 처리
 // @note    CanvasRenderer.IsInteractive가 false이면 입력을 무시하고 렌더링만 수행한다.
+//          겹친 UI에서는 CanvasRenderer.IsHitOrAncestorOfHit()으로 최상위 히트 대상만 드래그 시작 허용.
 // ------------------------------------------------------------
 using System;
 using ImGuiNET;
@@ -99,7 +100,9 @@ namespace RoseEngine
             bool inRect = mousePos.X >= screenRect.x && mousePos.X <= screenRect.xMax &&
                           mousePos.Y >= screenRect.y && mousePos.Y <= screenRect.yMax;
 
-            if (inRect && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+            // 겹친 UI가 있을 때 최상위 히트 대상만 드래그 시작 허용 (드래그 중에는 계속 허용)
+            bool isHitTarget = CanvasRenderer.IsHitOrAncestorOfHit(gameObject);
+            if (inRect && isHitTarget && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
                 _isDragging = true;
 
             if (_isDragging)

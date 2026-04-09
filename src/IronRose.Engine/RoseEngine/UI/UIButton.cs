@@ -8,6 +8,7 @@
 //     Action? onClick          — 클릭 시 호출되는 콜백
 //     void OnRenderUI(...)     — 렌더링 + 입력 처리
 // @note    CanvasRenderer.IsInteractive가 false이면 입력을 무시하고 렌더링만 수행한다.
+//          겹친 UI에서는 CanvasRenderer.IsHitOrAncestorOfHit()으로 최상위 히트 대상만 입력 처리.
 // ------------------------------------------------------------
 using System;
 using ImGuiNET;
@@ -49,9 +50,12 @@ namespace RoseEngine
             else
             {
                 var mousePos = ImGui.GetMousePos();
-                _isHovered = interactable &&
+                bool inRect = interactable &&
                     mousePos.X >= screenRect.x && mousePos.X <= screenRect.xMax &&
                     mousePos.Y >= screenRect.y && mousePos.Y <= screenRect.yMax;
+
+                // 겹친 UI가 있을 때 최상위 히트 대상만 입력을 처리
+                _isHovered = inRect && CanvasRenderer.IsHitOrAncestorOfHit(gameObject);
 
                 _isPressed = _isHovered && ImGui.IsMouseDown(ImGuiMouseButton.Left);
 

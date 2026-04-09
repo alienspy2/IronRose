@@ -10,6 +10,7 @@
 //     void OnRenderUI(...)              — 렌더링 + 입력 처리
 // @note    CanvasRenderer.IsInteractive가 false이면 포커스 획득을 무시하고 렌더링만 수행한다.
 //          Play Mode에서만 입력 모드에 진입한다.
+//          겹친 UI에서는 CanvasRenderer.IsHitOrAncestorOfHit()으로 최상위 히트 대상만 포커스 획득 허용.
 // ------------------------------------------------------------
 using System;
 using ImGuiNET;
@@ -93,9 +94,12 @@ namespace RoseEngine
                 bool inRect = mousePos.X >= screenRect.x && mousePos.X <= screenRect.xMax &&
                               mousePos.Y >= screenRect.y && mousePos.Y <= screenRect.yMax;
 
+                // 겹친 UI가 있을 때 최상위 히트 대상만 포커스 획득 허용
+                bool isHitTarget = CanvasRenderer.IsHitOrAncestorOfHit(gameObject);
+
                 if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
                 {
-                    if (inRect)
+                    if (inRect && isHitTarget)
                     {
                         if (!_isFocused)
                         {

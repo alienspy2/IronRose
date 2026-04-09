@@ -5,16 +5,19 @@
 // @deps    Canvas, RectTransform, IUIRenderable, Texture2D, UIScrollView, UILayoutGroup
 // @exports
 //   static class CanvasRenderer
-//     static bool IsInteractive             — UI 입력 처리 활성화 여부 (Scene View에서 false)
-//     static bool DebugDrawRects            — 디버그 Rect 아웃라인 표시
-//     static void RenderAll(...)            — 모든 활성 Canvas를 sortingOrder 순으로 렌더
-//     static GameObject? HitTest(...)       — 스크린 좌표에서 최상위 UI GO 반환
-//     static void CollectHitsInRect(...)    — 사각형 영역과 겹치는 UI GO 수집
-//     static float GetCanvasScaleFor(...)   — GO의 조상 Canvas scaleFactor 반환
+//     static bool IsInteractive               — UI 입력 처리 활성화 여부 (Scene View에서 false)
+//     static bool DebugDrawRects              — 디버그 Rect 아웃라인 표시
+//     static GameObject? CurrentHitGameObject — 현재 프레임 히트 테스트 결과 GO
+//     static bool IsHitOrAncestorOfHit(GO)    — GO가 히트 대상이거나 히트 GO의 조상인지 확인
+//     static void RenderAll(...)              — 모든 활성 Canvas를 sortingOrder 순으로 렌더
+//     static GameObject? HitTest(...)         — 스크린 좌표에서 최상위 UI GO 반환
+//     static void CollectHitsInRect(...)      — 사각형 영역과 겹치는 UI GO 수집
+//     static float GetCanvasScaleFor(...)     — GO의 조상 Canvas scaleFactor 반환
 // @note    IsInteractive는 호출하는 쪽(Game View/Scene View)에서 설정해야 한다.
 //          기본값 true로 standalone 실행 시 게임 UI가 정상 작동한다.
-//          RenderAll 내부 PushClipRect는 intersect=true로 호출하여,
-//          외부에서 설정된 클리핑 영역(Scene View 패널 경계 등)을 존중한다.
+//          RenderAll 시작 시 HitTest를 수행하여 CurrentHitGameObject를 갱신한다.
+//          각 UI 컴포넌트는 IsHitOrAncestorOfHit()으로 입력 처리 자격을 확인하여,
+//          겹친 UI에서 최상위 요소만 입력을 받는다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -42,6 +45,24 @@ namespace RoseEngine
 
         /// <summary>현재 렌더링 중인 Canvas의 scale factor. RenderNode 순회 중에만 유효.</summary>
         internal static float CurrentCanvasScale { get; private set; } = 1f;
+
+        /// <summary>
+        /// 현재 프레임에서 마우스 히트 테스트로 결정된 최상위 UI GameObject.
+        /// RenderAll() 시작 시점에 갱신된다. UI 컴포넌트가 입력 처리 전에 이 값을 참조하여
+        /// 자기 GO가 히트 대상인지 확인한다.
+        /// </summary>
+        internal static GameObject? CurrentHitGameObject { get; private set; }
+
+        /// <summary>
+        /// 주어진 GO가 현재 히트된 GO이거나, 히트된 GO의 조상인지 확인.
+        /// UI 컴포넌트가 입력을 처리해도 되는지 판단할 때 사용한다.
+        /// </summary>
+        internal static bool IsHitOrAncestorOfHit(GameObject go)
+        {
+            if (CurrentHitGameObject == null) return false;
+            if (CurrentHitGameObject == go) return true;
+            return CurrentHitGameObject.transform.IsChildOf(go.transform);
+        }
 
         private static readonly List<Canvas> _sorted = new();
         private static readonly Dictionary<Texture2D, IntPtr> _textureBindings = new();
@@ -72,7 +93,22 @@ namespace RoseEngine
         /// </summary>
         public static void RenderAll(ImDrawListPtr drawList, float screenX, float screenY, float screenW, float screenH)
         {
-            if (Canvas._allCanvases.Count == 0) return;
+            if (Canvas._allCanvases.Count == 0)
+            {
+                CurrentHitGameObject = null;
+                return;
+            }
+
+            // 렌더링 전에 마우스 히트 테스트를 수행하여 현재 프레임의 히트 GO를 결정
+            if (IsInteractive)
+            {
+                var mousePos = ImGui.GetMousePos();
+                CurrentHitGameObject = HitTest(mousePos.X, mousePos.Y, screenX, screenY, screenW, screenH);
+            }
+            else
+            {
+                CurrentHitGameObject = null;
+            }
 
             _sorted.Clear();
             foreach (var c in Canvas._allCanvases)

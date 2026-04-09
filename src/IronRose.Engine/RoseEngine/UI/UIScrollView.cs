@@ -9,6 +9,7 @@
 //     void OnRenderUI(...)     — 렌더링 + 입력 처리
 // @note    CanvasRenderer.IsInteractive가 false이면 스크롤/드래그 입력을 무시하고
 //          스크롤바 렌더링만 수행한다.
+//          겹친 UI에서는 CanvasRenderer.IsHitOrAncestorOfHit()으로 최상위 히트 대상만 스크롤/드래그 허용.
 // ------------------------------------------------------------
 using System;
 using ImGuiNET;
@@ -55,9 +56,11 @@ namespace RoseEngine
                           mousePos.Y >= screenRect.y && mousePos.Y <= screenRect.yMax;
 
             bool interactive = CanvasRenderer.IsInteractive;
+            // 겹친 UI가 있을 때 최상위 히트 대상만 스크롤 입력 허용
+            bool isHitTarget = CanvasRenderer.IsHitOrAncestorOfHit(gameObject);
 
             // Mouse wheel scrolling
-            if (interactive && inRect)
+            if (interactive && inRect && isHitTarget)
             {
                 var wheel = ImGui.GetIO().MouseWheel;
                 if (Math.Abs(wheel) > 0.01f)
@@ -85,7 +88,8 @@ namespace RoseEngine
 
                 if (interactive)
                 {
-                    if (hoverThumb && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                    // 드래그 시작은 히트 대상일 때만 허용 (드래그 중에는 계속 허용)
+                    if (hoverThumb && isHitTarget && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
                     {
                         _isDraggingV = true;
                         _dragStartOffset = mousePos.Y - thumbY;
@@ -123,7 +127,8 @@ namespace RoseEngine
 
                 if (interactive)
                 {
-                    if (hoverThumb && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                    // 드래그 시작은 히트 대상일 때만 허용 (드래그 중에는 계속 허용)
+                    if (hoverThumb && isHitTarget && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
                     {
                         _isDraggingH = true;
                         _dragStartOffset = mousePos.X - thumbX;
