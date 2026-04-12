@@ -592,6 +592,18 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                             if (ImGui.MenuItem("Project", null, ref p))
                                 _project.IsOpen = p;
 
+                            bool ps = _projectSettings!.IsOpen;
+                            if (ImGui.MenuItem("Project Settings", null, ref ps))
+                                _projectSettings.IsOpen = ps;
+
+                            bool sc = _scripts!.IsOpen;
+                            if (ImGui.MenuItem("Scripts", null, ref sc))
+                                _scripts.IsOpen = sc;
+
+                            bool fb2 = _feedback!.IsOpen;
+                            if (ImGui.MenuItem("Feedback", null, ref fb2))
+                                _feedback.IsOpen = fb2;
+
                             ImGui.EndMenu();
                         }
 
@@ -613,20 +625,19 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                             ImGui.EndMenu();
                         }
 
-                        ImGui.Separator();
+                        // Asset
+                        if (ImGui.BeginMenu("Asset"))
+                        {
+                            bool se2 = _spriteEditor!.IsOpen;
+                            if (ImGui.MenuItem("Sprite Editor", null, ref se2))
+                                _spriteEditor.IsOpen = se2;
 
-                        // Standalone items (categories with only 1 item)
-                        bool ps = _projectSettings!.IsOpen;
-                        if (ImGui.MenuItem("Project Settings", null, ref ps))
-                            _projectSettings.IsOpen = ps;
+                            bool ae2 = _animEditor!.IsOpen;
+                            if (ImGui.MenuItem("Animation Editor", null, ref ae2))
+                                _animEditor.IsOpen = ae2;
 
-                        bool ae2 = _animEditor!.IsOpen;
-                        if (ImGui.MenuItem("Animation Editor", null, ref ae2))
-                            _animEditor.IsOpen = ae2;
-
-                        bool sc = _scripts!.IsOpen;
-                        if (ImGui.MenuItem("Scripts", null, ref sc))
-                            _scripts.IsOpen = sc;
+                            ImGui.EndMenu();
+                        }
 
                         ImGui.EndMenu();
                     }
@@ -718,18 +729,6 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                     bool tt = _textureTool!.IsOpen;
                     if (ImGui.MenuItem("Texture Tool", null, ref tt))
                         _textureTool.IsOpen = tt;
-
-                    bool se = _spriteEditor!.IsOpen;
-                    if (ImGui.MenuItem("Sprite Editor", null, ref se))
-                        _spriteEditor.IsOpen = se;
-
-                    bool ae = _animEditor!.IsOpen;
-                    if (ImGui.MenuItem("Animation Editor", null, ref ae))
-                        _animEditor.IsOpen = ae;
-
-                    bool fb = _feedback!.IsOpen;
-                    if (ImGui.MenuItem("Feedback", null, ref fb))
-                        _feedback.IsOpen = fb;
 
                     ImGui.EndMenu();
                 }

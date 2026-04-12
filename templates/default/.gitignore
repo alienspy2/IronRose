@@ -21,3 +21,6 @@ Thumbs.db
 # Generated workspace & solution (engine+game combined, local only)
 *.code-workspace
 *.sln
+
+# Feedback
+feedback/
