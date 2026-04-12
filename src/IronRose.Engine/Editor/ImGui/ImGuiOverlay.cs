@@ -573,37 +573,52 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                     // Windows submenu
                     if (ImGui.BeginMenu("Windows"))
                     {
-                        bool h = _hierarchy!.IsOpen;
-                        if (ImGui.MenuItem("Hierarchy", null, ref h))
-                            _hierarchy.IsOpen = h;
+                        // General
+                        if (ImGui.BeginMenu("General"))
+                        {
+                            bool h = _hierarchy!.IsOpen;
+                            if (ImGui.MenuItem("Hierarchy", null, ref h))
+                                _hierarchy.IsOpen = h;
 
-                        bool i = _inspector!.IsOpen;
-                        if (ImGui.MenuItem("Inspector", null, ref i))
-                            _inspector.IsOpen = i;
+                            bool i = _inspector!.IsOpen;
+                            if (ImGui.MenuItem("Inspector", null, ref i))
+                                _inspector.IsOpen = i;
 
+                            bool c = _console!.IsOpen;
+                            if (ImGui.MenuItem("Console", null, ref c))
+                                _console.IsOpen = c;
+
+                            bool p = _project!.IsOpen;
+                            if (ImGui.MenuItem("Project", null, ref p))
+                                _project.IsOpen = p;
+
+                            ImGui.EndMenu();
+                        }
+
+                        // Scene
+                        if (ImGui.BeginMenu("Scene"))
+                        {
+                            bool sv = _sceneView!.IsOpen;
+                            if (ImGui.MenuItem("Scene View", null, ref sv))
+                                _sceneView.IsOpen = sv;
+
+                            bool gv = _gameView!.IsOpen;
+                            if (ImGui.MenuItem("Game View", null, ref gv))
+                                _gameView.IsOpen = gv;
+
+                            bool se = _sceneEnvironment!.IsOpen;
+                            if (ImGui.MenuItem("Scene Environment", null, ref se))
+                                _sceneEnvironment.IsOpen = se;
+
+                            ImGui.EndMenu();
+                        }
+
+                        ImGui.Separator();
+
+                        // Standalone items (categories with only 1 item)
                         bool ps = _projectSettings!.IsOpen;
                         if (ImGui.MenuItem("Project Settings", null, ref ps))
                             _projectSettings.IsOpen = ps;
-
-                        bool se = _sceneEnvironment!.IsOpen;
-                        if (ImGui.MenuItem("Scene Environment", null, ref se))
-                            _sceneEnvironment.IsOpen = se;
-
-                        bool c = _console!.IsOpen;
-                        if (ImGui.MenuItem("Console", null, ref c))
-                            _console.IsOpen = c;
-
-                        bool gv = _gameView!.IsOpen;
-                        if (ImGui.MenuItem("Game View", null, ref gv))
-                            _gameView.IsOpen = gv;
-
-                        bool sv = _sceneView!.IsOpen;
-                        if (ImGui.MenuItem("Scene View", null, ref sv))
-                            _sceneView.IsOpen = sv;
-
-                        bool p = _project!.IsOpen;
-                        if (ImGui.MenuItem("Project", null, ref p))
-                            _project.IsOpen = p;
 
                         bool ae2 = _animEditor!.IsOpen;
                         if (ImGui.MenuItem("Animation Editor", null, ref ae2))
