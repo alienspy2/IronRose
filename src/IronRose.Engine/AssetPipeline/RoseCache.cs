@@ -21,6 +21,9 @@
 //          Load/HasValidCache는 FileShare.ReadWrite|Delete로 열어 쓰기 중 읽기를 허용한다.
 //          텍스처 압축 우선순위: (1) Compressonator CLI → (2) GPU Vulkan → (3) CPU BCnEncoder.NET
 //          Compressonator CLI는 externalTools/compressonatorcli/에서 자동 탐지하며, 없으면 폴백.
+//          Texture quality (meta): High=BC7 Q1.0, Medium=BC7 Q0.6, Low=BC3(자체가 빠름).
+//          BC3는 GPU 경로 미지원이라 CLI 실패 시 CPU 폴백을 사용한다. NormalMap/HDR/Panoramic은
+//          compression이 각각 BC5/BC6H로 고정되며 quality 오버라이드를 적용하지 않는다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -106,16 +109,22 @@ namespace IronRose.AssetPipeline
                 var sw = Stopwatch.StartNew();
                 var compression = GetMetaString(meta, "compression", "BC7");
                 var textureType = GetMetaString(meta, "texture_type", "Color");
+                var quality = GetMetaString(meta, "quality", "High");
                 var genMips = GetMetaBool(meta, "generate_mipmaps", false);
 
-                Debug.Log($"[RoseCache] Caching texture: {assetPath} ({texture.width}x{texture.height}, {compression}/{textureType}, mips={genMips})");
+                // quality가 master: Low면 compression을 BC3로 강제. NormalMap/HDR/Panoramic은
+                // 고정 포맷(BC5/BC6H)을 사용하므로 quality 오버라이드를 적용하지 않는다.
+                if (quality == "Low" && textureType != "NormalMap" && compression != "BC6H" && compression != "none")
+                    compression = "BC3";
+
+                Debug.Log($"[RoseCache] Caching texture: {assetPath} ({texture.width}x{texture.height}, {compression}/{textureType}/q={quality}, mips={genMips})");
 
                 using (var fs = File.Create(tempPath))
                 using (var writer = new BinaryWriter(fs))
                 {
                     WriteValidationHeader(writer, assetPath);
                     writer.Write((byte)2); // Texture
-                    WriteTexture(writer, texture, compression, textureType, genMips);
+                    WriteTexture(writer, texture, compression, textureType, genMips, quality);
                 }
 
                 File.Move(tempPath, cachePath, overwrite: true);
@@ -417,7 +426,7 @@ namespace IronRose.AssetPipeline
 
         private static (byte[][] mipData, Veldrid.PixelFormat format) CompressTexture(
             byte[] rgbaData, int width, int height, string compression, string textureType,
-            bool generateMipmaps = true)
+            bool generateMipmaps = true, string quality = "High")
         {
             if (compression == "none" || string.IsNullOrEmpty(compression) || RoseConfig.DontUseCompressTexture)
                 return (new[] { rgbaData }, Veldrid.PixelFormat.R8_G8_B8_A8_UNorm);
@@ -425,17 +434,42 @@ namespace IronRose.AssetPipeline
             try
             {
                 bool isNormalMap = textureType == "NormalMap";
-                Veldrid.PixelFormat veldridFormat = isNormalMap
-                    ? Veldrid.PixelFormat.BC5_UNorm
-                    : Veldrid.PixelFormat.BC7_UNorm;
+                bool isBc3 = compression == "BC3" && !isNormalMap;
+                Veldrid.PixelFormat veldridFormat;
+                string cliFormat;
+                if (isNormalMap)
+                {
+                    veldridFormat = Veldrid.PixelFormat.BC5_UNorm;
+                    cliFormat = "BC5";
+                }
+                else if (isBc3)
+                {
+                    veldridFormat = Veldrid.PixelFormat.BC3_UNorm;
+                    cliFormat = "BC3";
+                }
+                else
+                {
+                    veldridFormat = Veldrid.PixelFormat.BC7_UNorm;
+                    cliFormat = "BC7";
+                }
 
-                Debug.Log($"[RoseCache]     BC compress {textureType} {width}x{height} → {(isNormalMap ? "BC5" : "BC7")}...");
+                // Quality → Compressonator -Quality 값. BC3/BC5는 quality 값과 무관하게 빠르므로 1.0 고정.
+                double cliQuality = (isNormalMap || isBc3)
+                    ? 1.0
+                    : quality switch
+                    {
+                        "Medium" => 0.6,
+                        "Low"    => 0.6, // (BC7 + Low) 조합이 발생하면 Medium과 동일 취급 (StoreTexture에서 BC3로 전환되지만 방어적 처리)
+                        _        => 1.0, // High
+                    };
+
+                Debug.Log($"[RoseCache]     BC compress {textureType} {width}x{height} → {cliFormat} (q={quality} cli={cliQuality})...");
                 var sw = Stopwatch.StartNew();
 
                 byte[][] mipData;
 
                 // 1순위: Compressonator CLI (Mode 0~7 전체 탐색, 최고 품질)
-                var cliResult = CompressWithCompressonator(rgbaData, width, height, isNormalMap);
+                var cliResult = CompressWithCompressonator(rgbaData, width, height, cliFormat, cliQuality);
                 if (cliResult != null)
                 {
                     if (generateMipmaps)
@@ -447,7 +481,7 @@ namespace IronRose.AssetPipeline
                         for (int i = 1; i < mipChain.Count; i++)
                         {
                             var (mipRgba, mw, mh) = mipChain[i];
-                            var mipResult = CompressWithCompressonator(mipRgba, mw, mh, isNormalMap);
+                            var mipResult = CompressWithCompressonator(mipRgba, mw, mh, cliFormat, cliQuality);
                             if (mipResult != null)
                             {
                                 mipData[i] = mipResult;
@@ -455,7 +489,7 @@ namespace IronRose.AssetPipeline
                             else
                             {
                                 // CLI가 중간에 실패하면 나머지는 CPU 폴백
-                                var fallback = CompressWithCpuFallback(mipRgba, mw, mh, isNormalMap);
+                                var fallback = CompressWithCpuFallback(mipRgba, mw, mh, cliFormat);
                                 mipData[i] = fallback[0];
                             }
                         }
@@ -465,9 +499,9 @@ namespace IronRose.AssetPipeline
                         mipData = new byte[][] { cliResult };
                     }
                 }
-                else if (_gpuCompressor != null)
+                else if (_gpuCompressor != null && !isBc3)
                 {
-                    // 2순위: GPU 경로
+                    // 2순위: GPU 경로 (BC3는 GPU 경로 미지원 → CPU 폴백으로 내려감)
                     if (generateMipmaps)
                     {
                         // GPU path: hardware mipmap generation → BC compress each mip
@@ -496,11 +530,11 @@ namespace IronRose.AssetPipeline
                 else
                 {
                     // 3순위: CPU 폴백 (BCnEncoder.NET)
-                    mipData = CompressWithCpuFallback(rgbaData, width, height, isNormalMap);
+                    mipData = CompressWithCpuFallback(rgbaData, width, height, cliFormat);
                 }
 
                 sw.Stop();
-                string compressSource = cliResult != null ? "CLI" : (_gpuCompressor != null ? "GPU" : "CPU");
+                string compressSource = cliResult != null ? "CLI" : ((_gpuCompressor != null && !isBc3) ? "GPU" : "CPU");
                 Debug.Log($"[RoseCache]     BC compress done: {mipData.Length} mips, {sw.ElapsedMilliseconds}ms ({compressSource})");
 
                 return (mipData, veldridFormat);
@@ -552,7 +586,7 @@ namespace IronRose.AssetPipeline
             return mips;
         }
 
-        private static byte[]? CompressWithCompressonator(byte[] rgbaData, int width, int height, bool isNormalMap)
+        private static byte[]? CompressWithCompressonator(byte[] rgbaData, int width, int height, string format, double quality)
         {
             try
             {
@@ -602,13 +636,14 @@ namespace IronRose.AssetPipeline
                     }
 
                     // Run Compressonator CLI
-                    string format = isNormalMap ? "BC5" : "BC7";
                     int numThreads = Environment.ProcessorCount;
+                    // invariant culture 로 직렬화 (locale에 따른 "0,6" 방지)
+                    string qualityStr = quality.ToString("0.0##", System.Globalization.CultureInfo.InvariantCulture);
 
                     var startInfo = new ProcessStartInfo
                     {
                         FileName = _compressonatorCliPath,
-                        Arguments = $"-fd {format} -Quality 1.0 -NumThreads {numThreads} -silent \"{tempInputPath}\" \"{tempOutputPath}\"",
+                        Arguments = $"-fd {format} -Quality {qualityStr} -NumThreads {numThreads} -silent \"{tempInputPath}\" \"{tempOutputPath}\"",
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
@@ -691,9 +726,14 @@ namespace IronRose.AssetPipeline
             }
         }
 
-        private static byte[][] CompressWithCpuFallback(byte[] rgbaData, int width, int height, bool isNormalMap)
+        private static byte[][] CompressWithCpuFallback(byte[] rgbaData, int width, int height, string format)
         {
-            var bcFormat = isNormalMap ? CompressionFormat.Bc5 : CompressionFormat.Bc7;
+            var bcFormat = format switch
+            {
+                "BC5" => CompressionFormat.Bc5,
+                "BC3" => CompressionFormat.Bc3,
+                _     => CompressionFormat.Bc7,
+            };
             var encoder = new BcEncoder(bcFormat);
             encoder.OutputOptions.Quality = CompressionQuality.Balanced;
             encoder.OutputOptions.GenerateMipMaps = false;
@@ -704,7 +744,7 @@ namespace IronRose.AssetPipeline
         // ─── Texture Serialization ───────────────────────────
 
         private static void WriteTexture(BinaryWriter writer, Texture2D? tex,
-            string compression, string textureType, bool generateMipmaps = true)
+            string compression, string textureType, bool generateMipmaps = true, string quality = "High")
         {
             if (tex == null)
             {
@@ -754,7 +794,7 @@ namespace IronRose.AssetPipeline
             else if (tex._pixelData != null)
             {
                 (mipData, format) = CompressTexture(
-                    tex._pixelData, tex.width, tex.height, compression, textureType, generateMipmaps);
+                    tex._pixelData, tex.width, tex.height, compression, textureType, generateMipmaps, quality);
 
                 // 압축 결과를 텍스처 객체에도 반영하여, 리임포트 후 GPU 업로드가
                 // 캐시 로드와 동일한 경로(BC 압축)를 사용하도록 보장한다.

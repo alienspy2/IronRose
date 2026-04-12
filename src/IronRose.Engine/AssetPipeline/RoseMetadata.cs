@@ -143,6 +143,7 @@ namespace IronRose.AssetPipeline
                     ["type"] = "TextureImporter",
                     ["max_size"] = (long)2048,
                     ["compression"] = "BC7",
+                    ["quality"] = "High",
                     ["texture_type"] = "Color",
                     ["srgb"] = true,
                     ["filter_mode"] = "Bilinear",

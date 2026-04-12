@@ -2645,7 +2645,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 }
                 else
                 {
-                    DrawImporterCombo("compression", new[] { "BC7", "BC5", "none" }, "BC7");
+                    DrawImporterCombo("compression", new[] { "BC7", "BC5", "BC3", "none" }, "BC7");
                 }
                 DrawImporterCombo("texture_type", new[] { "Color", "NormalMap", "Sprite", "Panoramic" }, "Color");
 
@@ -2662,6 +2662,36 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     {
                         _editedImporter["srgb"] = false;
                         _hasChanges = true;
+                    }
+                }
+
+                // Color / Sprite: quality 옵션 (master). quality 변경 시 compression 자동 갱신.
+                // NormalMap은 BC5 고정이므로 quality UI를 노출하지 않는다.
+                if (!isNormalMap)
+                {
+                    DrawImporterCombo("quality", new[] { "High", "Medium", "Low" }, "High");
+
+                    if (_editedImporter != null)
+                    {
+                        var curQuality = _editedImporter.TryGetValue("quality", out var qv) ? qv?.ToString() : "High";
+                        var curComp2 = _editedImporter.TryGetValue("compression", out var cv3) ? cv3?.ToString() : null;
+                        if (curQuality == "Low")
+                        {
+                            if (curComp2 != "BC3" && curComp2 != "none")
+                            {
+                                _editedImporter["compression"] = "BC3";
+                                _hasChanges = true;
+                            }
+                        }
+                        else // High / Medium
+                        {
+                            // 이전에 Low로 인해 BC3가 되어 있었다면 BC7로 복원 (사용자가 명시적으로 BC3를 선택한 경우는 없음: Low 아닐 때)
+                            if (curComp2 == "BC3")
+                            {
+                                _editedImporter["compression"] = "BC7";
+                                _hasChanges = true;
+                            }
+                        }
                     }
                 }
             }
