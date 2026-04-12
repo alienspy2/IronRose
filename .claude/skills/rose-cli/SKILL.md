@@ -1,6 +1,6 @@
 ---
 name: rose-cli
-description: "IronRose 에디터 CLI 브릿지를 통해 실행 중인 엔진과 상호작용합니다. 씬 조회/편집, GameObject 생성/수정/삭제, Transform/Material/Light/Camera 조작, Play 모드 제어, 에셋 관리, 스프라이트 임포트 설정(9-slice border, pivot, PPU), UI 요소 생성/조작(Canvas, Text, Image, Panel, Button, Toggle, Slider, InputField, LayoutGroup, ScrollView), RectTransform 조작, UI 트리 조회, UI 디버깅, UI 정렬/분배, 스크린샷 등 140여 개의 명령을 지원합니다. 사용자가 CLI로 씬을 조작하거나, 오브젝트를 배치하거나, UI를 구성하거나, RectTransform을 설정하거나, 에디터 상태를 확인하거나, 프리팹을 다루거나, 렌더링 설정을 변경하거나, 텍스처를 스프라이트로 전환하려 할 때 이 스킬을 사용하세요. rose-cli, ironrose-cli, 씬 조작, 오브젝트 배치, 에디터 제어, UI 생성, Canvas, RectTransform, 앵커, 피벗, 스프라이트, 9slice, UI 디버깅 등의 키워드가 나오면 트리거합니다."
+description: "IronRose 에디터 CLI 브릿지를 통해 실행 중인 엔진과 상호작용합니다. 씬 조회/편집, GameObject 생성/수정/삭제, Transform/Material/Light/Camera 조작, Play 모드 제어, 에셋 관리, 스프라이트 임포트 설정(9-slice border, pivot, PPU, quality, compression), UI 요소 생성/조작(Canvas, Text, Image, Panel, Button, Toggle, Slider, InputField, LayoutGroup, ScrollView), RectTransform 조작, UI 트리 조회, UI 디버깅, UI 정렬/분배, 스크린샷 등 140여 개의 명령을 지원합니다. 사용자가 CLI로 씬을 조작하거나, 오브젝트를 배치하거나, UI를 구성하거나, RectTransform을 설정하거나, 에디터 상태를 확인하거나, 프리팹을 다루거나, 렌더링 설정을 변경하거나, 텍스처를 스프라이트로 전환하려 할 때 이 스킬을 사용하세요. rose-cli, ironrose-cli, 씬 조작, 오브젝트 배치, 에디터 제어, UI 생성, Canvas, RectTransform, 앵커, 피벗, 스프라이트, 9slice, UI 디버깅 등의 키워드가 나오면 트리거합니다."
 ---
 
 # IronRose CLI 브릿지

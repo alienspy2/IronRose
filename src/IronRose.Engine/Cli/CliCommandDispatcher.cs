@@ -2312,6 +2312,8 @@ namespace IronRose.Engine.Cli
                         ["filterMode"] = imp.TryGetValue("filter_mode", out var fm) ? fm?.ToString() : null,
                         ["wrapMode"] = imp.TryGetValue("wrap_mode", out var wm) ? wm?.ToString() : null,
                         ["srgb"] = imp.TryGetValue("srgb", out var sr) ? sr : null,
+                        ["quality"] = imp.TryGetValue("quality", out var ql) ? ql?.ToString() : null,
+                        ["compression"] = imp.TryGetValue("compression", out var cp) ? cp?.ToString() : null,
                     };
 
                     if (isSprite)
@@ -2525,6 +2527,60 @@ namespace IronRose.Engine.Cli
                     meta.importer["filter_mode"] = filter;
                     SaveMetaAndReimport(meta, path);
                     return JsonOk(new { path, filterMode = filter });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // sprite.set_quality -- 임포트 품질 설정 (High/Medium/Low).
+            //   High   → BC7 + Compressonator -Quality 1.0
+            //   Medium → BC7 + Compressonator -Quality 0.6
+            //   Low    → BC3 (빠름, quality 파라미터 무시)
+            // quality 변경 시 compression도 자동 갱신한다 (Inspector와 동일 동작).
+            // NormalMap/HDR/Panoramic은 BC5/BC6H 고정이므로 quality 적용 없음.
+            // ----------------------------------------------------------------
+            _handlers["sprite.set_quality"] = args =>
+            {
+                if (args.Length < 2)
+                    return JsonError("Usage: sprite.set_quality <assetPath|guid> <High|Medium|Low>");
+
+                var assetRef = args[0];
+                var quality = args[1];
+                if (quality != "High" && quality != "Medium" && quality != "Low")
+                    return JsonError("quality must be 'High', 'Medium', or 'Low'");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    var path = ResolveAssetPath(assetRef);
+                    if (path == null)
+                        return JsonError($"Asset not found: {assetRef}");
+
+                    var meta = RoseMetadata.LoadOrCreate(path);
+                    if (!IsTextureImporter(meta))
+                        return JsonError($"Not a texture asset: {path}");
+
+                    meta.importer["quality"] = quality;
+
+                    // quality 변경에 따른 compression 자동 갱신 (Inspector 로직과 동일).
+                    // NormalMap/HDR/Panoramic은 compression이 BC5/BC6H로 고정되어 있으므로 건드리지 않는다.
+                    var curType = meta.importer.TryGetValue("texture_type", out var tt) ? tt?.ToString() : "Color";
+                    if (curType != "NormalMap" && curType != "HDR" && curType != "Panoramic")
+                    {
+                        var curComp = meta.importer.TryGetValue("compression", out var cv) ? cv?.ToString() : null;
+                        if (quality == "Low")
+                        {
+                            if (curComp != "BC3" && curComp != "none")
+                                meta.importer["compression"] = "BC3";
+                        }
+                        else
+                        {
+                            if (curComp == "BC3")
+                                meta.importer["compression"] = "BC7";
+                        }
+                    }
+
+                    SaveMetaAndReimport(meta, path);
+                    var finalComp = meta.importer.TryGetValue("compression", out var fc) ? fc?.ToString() : null;
+                    return JsonOk(new { path, quality, compression = finalComp });
                 });
             };
 

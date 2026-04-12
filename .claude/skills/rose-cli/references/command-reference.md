@@ -610,7 +610,9 @@ assembly.info
 ```
 sprite.info <assetPath|guid>
 ```
-반환: `{ path, guid, textureType, isSprite, maxSize, filterMode, wrapMode, srgb, spriteMode, pixelsPerUnit, pivot, border, slices }`
+반환: `{ path, guid, textureType, isSprite, maxSize, filterMode, wrapMode, srgb, quality, compression, spriteMode, pixelsPerUnit, pivot, border, slices }`
+- `quality`: `High` / `Medium` / `Low` (Color·Sprite 타입에서만 의미 있음. NormalMap/HDR/Panoramic은 null이거나 무시됨)
+- `compression`: `BC7` / `BC5` / `BC6H` / `BC3` / `none`
 
 ### `sprite.set_type`
 텍스처를 스프라이트로 전환 (또는 반대). 스프라이트 전환 시 기본 설정 자동 적용 (mipmap off, Clamp, Single 모드).
@@ -656,6 +658,37 @@ sprite.set_filter <assetPath|guid> <Point|Bilinear|Trilinear>
 ```
 - 픽셀아트 스프라이트는 `Point`, 일반 스프라이트는 `Bilinear` 권장
 반환: `{ path, filterMode }`
+
+### `sprite.set_quality`
+텍스처 임포트 품질(속도/품질 트레이드오프) 설정. Color/Sprite 타입에서만 유효하며, NormalMap/HDR/Panoramic은 compression이 BC5/BC6H로 고정되어 영향을 받지 않는다.
+```
+sprite.set_quality <assetPath|guid> <High|Medium|Low>
+```
+품질별 매핑:
+- `High` — BC7 + Compressonator `-Quality 1.0` (가장 느림, 최고 품질)
+- `Medium` — BC7 + Compressonator `-Quality 0.6` (절충)
+- `Low` — BC3 (가장 빠름, quality 파라미터 무시)
+
+**자동 compression 갱신 (Inspector와 동일 동작):**
+- `Low`로 바꾸면 현재 compression이 `BC3`/`none`이 아닐 때 자동으로 `BC3`로 전환
+- `High`/`Medium`으로 바꾸면 현재 compression이 `BC3`이었다면 자동으로 `BC7`로 복원
+- 사용자가 명시적으로 설정한 `none` 등은 유지
+
+반환: `{ path, quality, compression }`
+
+**예:** `sprite.set_quality Assets/UI/panel.png Medium`
+
+**참고:** 기존 `.rose` 파일에 `quality` 필드가 없어도 기본값 `High`로 동작한다 (하위 호환).
+
+### `sprite.set_compression`
+텍스처 압축 방식을 직접 설정. 일반적으로는 `sprite.set_quality`를 우선 사용하고, 수동 제어가 필요할 때만 사용한다.
+```
+sprite.set_compression <assetPath|guid> <BC7|BC5|BC6H|none>
+```
+- NormalMap은 BC5, HDR/Panoramic은 BC6H가 권장 기본값
+- BC3는 `sprite.set_quality Low`로만 설정 가능 (직접 지정하려면 `.rose`를 Inspector에서 수정)
+
+반환: `{ path, compression }`
 
 ---
 
