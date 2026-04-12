@@ -79,8 +79,16 @@ namespace IronRose.RoseEditor
             // EditorState는 EngineCore.Initialize() 내부에서 로드됨
             if (EditorState.WindowW.HasValue)
             {
-                _window.Size = new Vector2D<int>(EditorState.WindowW.Value, EditorState.WindowH ?? 720);
-                _window.Position = new Vector2D<int>(EditorState.WindowX ?? 100, EditorState.WindowY ?? 100);
+                var size = new Vector2D<int>(EditorState.WindowW.Value, EditorState.WindowH ?? 720);
+                var pos = new Vector2D<int>(EditorState.WindowX ?? 100, EditorState.WindowY ?? 100);
+
+                // 멀티모니터에서 현재 창이 작은 모니터 위에 있으면 Size 설정 시 OS가 그 모니터
+                // 크기로 clamp 한다. Size → Position 순서를 두 번 반복해야 큰 모니터로 이동한 뒤
+                // 원하는 크기로 확장된다.
+                _window.Size = size;
+                _window.Position = pos;
+                _window.Size = size;
+                _window.Position = pos;
                 ValidateWindowPosition();
             }
 
