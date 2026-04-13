@@ -1,12 +1,13 @@
 // ------------------------------------------------------------
 // @file    ImGuiPreferencesPanel.cs
 // @brief   앱-레벨 사용자 Preferences 편집 UI. Edit > Preferences... 메뉴에서 열리며
-//          Appearance(Color Theme / UI Scale / Editor Font)와 Integrations(Enable Claude Usage)
+//          Appearance(Color Theme / UI Scale / Editor Font), Integrations(Enable Claude Usage),
+//          AI Asset Generation(토글 + 서버 URL + Health Check + Python Path + Refine Endpoint/Model)
 //          섹션을 제공한다.
 // @deps    IronRose.Engine/EditorPreferences, IronRose.Engine.Editor.ImGuiEditor/ImGuiTheme,
 //          IronRose.Engine.Editor.ImGuiEditor/EditorWidgets,
 //          IronRose.Engine.Editor.ImGuiEditor/PanelMaximizer,
-//          IronRose.Engine.Editor.ImGuiEditor.Panels/IEditorPanel, ImGuiNET
+//          IronRose.Engine.Editor.ImGuiEditor.Panels/IEditorPanel, ImGuiNET, System.Net.Http
 // @exports
 //   class ImGuiPreferencesPanel : IEditorPanel
 //     IsOpen: bool                      — 창 표시 여부 (런타임 전용, 세션 영속화 없음)
@@ -19,6 +20,8 @@
 // ------------------------------------------------------------
 using System;
 using ImGuiNET;
+using System.Net.Http;
+using System.Threading.Tasks;
 
 namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 {
@@ -43,6 +46,12 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         private static readonly string[] ThemeNames = { "Rose", "Dark", "Light" };
 
+        // Health Check 상태 캐시 (세션 전용, 영속화 없음)
+        private string _healthCheckLabel = "";      // 화면에 표시할 결과 라벨 ("OK", "Failed: ..." 등)
+        private uint _healthCheckColor = 0xFFFFFFFF; // 라벨 색상 (ImGui ABGR). 0 이면 TextUnformatted 기본색
+        private bool _healthCheckRunning = false;    // 중복 클릭 방지
+        private static readonly HttpClient _healthHttp = new() { Timeout = TimeSpan.FromSeconds(3) };
+
         public void Draw()
         {
             if (!IsOpen) return;
@@ -58,6 +67,11 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
                 if (ImGui.CollapsingHeader("Integrations", ImGuiTreeNodeFlags.DefaultOpen))
                     DrawIntegrations();
+
+                ImGui.Spacing();
+
+                if (ImGui.CollapsingHeader("AI Asset Generation", ImGuiTreeNodeFlags.DefaultOpen))
+                    DrawAiAssetGeneration();
             }
             ImGui.End();
         }
@@ -107,6 +121,137 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 EditorPreferences.Save();
             }
             ImGui.TextDisabled("When enabled, Fix buttons appear in the Feedback panel and invoke claude -p.");
+        }
+
+        private void DrawAiAssetGeneration()
+        {
+            // Enable 토글
+            bool enabled = EditorPreferences.EnableAiAssetGeneration;
+            string enableLabel = EditorWidgets.BeginPropertyRow("Enable AI Asset Generation");
+            if (ImGui.Checkbox(enableLabel, ref enabled))
+            {
+                EditorPreferences.EnableAiAssetGeneration = enabled;
+                EditorPreferences.Save();
+            }
+            ImGui.TextDisabled("When enabled, \"Generate with AI (Texture)...\" appears in the Asset Browser context menu.");
+
+            // 토글이 꺼지면 하위 위젯은 비활성화 (값 편집은 가능하되 시각적으로 disabled 표시)
+            ImGui.BeginDisabled(!enabled);
+
+            // AlienHS Server URL
+            {
+                string serverLabel = EditorWidgets.BeginPropertyRow("AlienHS Server URL");
+                string buf = EditorPreferences.AiAlienhsServerUrl ?? "";
+                if (ImGui.InputText(serverLabel, ref buf, 512))
+                {
+                    EditorPreferences.AiAlienhsServerUrl = buf;
+                    EditorPreferences.Save();
+                }
+            }
+
+            // Health Check 버튼 + 결과 라벨
+            {
+                string hcLabel = EditorWidgets.BeginPropertyRow("Health Check");
+                ImGui.BeginDisabled(_healthCheckRunning);
+                if (ImGui.Button(_healthCheckRunning ? "Checking...##healthcheck" : "Check##healthcheck"))
+                {
+                    RunHealthCheck(EditorPreferences.AiAlienhsServerUrl);
+                }
+                ImGui.EndDisabled();
+
+                if (!string.IsNullOrEmpty(_healthCheckLabel))
+                {
+                    ImGui.SameLine();
+                    if (_healthCheckColor != 0)
+                        ImGui.TextColored(ImGui.ColorConvertU32ToFloat4(_healthCheckColor), _healthCheckLabel);
+                    else
+                        ImGui.TextUnformatted(_healthCheckLabel);
+                }
+            }
+
+            // Python Path
+            {
+                string pyLabel = EditorWidgets.BeginPropertyRow("Python Path");
+                string buf = EditorPreferences.AiPythonPath ?? "";
+                if (ImGui.InputText(pyLabel, ref buf, 512))
+                {
+                    EditorPreferences.AiPythonPath = buf;
+                    EditorPreferences.Save();
+                }
+            }
+
+            // Refine Endpoint
+            {
+                string epLabel = EditorWidgets.BeginPropertyRow("Refine Endpoint");
+                string buf = EditorPreferences.AiRefineEndpoint ?? "";
+                if (ImGui.InputText(epLabel, ref buf, 256))
+                {
+                    EditorPreferences.AiRefineEndpoint = buf;
+                    EditorPreferences.Save();
+                }
+                ImGui.TextDisabled("Empty = CLI default.");
+            }
+
+            // Refine Model
+            {
+                string modelLabel = EditorWidgets.BeginPropertyRow("Refine Model");
+                string buf = EditorPreferences.AiRefineModel ?? "";
+                if (ImGui.InputText(modelLabel, ref buf, 256))
+                {
+                    EditorPreferences.AiRefineModel = buf;
+                    EditorPreferences.Save();
+                }
+                ImGui.TextDisabled("Empty = CLI default.");
+            }
+
+            ImGui.EndDisabled();
+        }
+
+        /// <summary>
+        /// AlienHS 서버의 루트 경로에 GET 요청을 보내 200이면 OK, 그 외는 Failed로 표시.
+        /// 3초 타임아웃. 백그라운드 Task에서 실행하며 결과는 다음 프레임 렌더에 반영된다.
+        /// </summary>
+        /// <param name="serverUrl">Preferences.AiAlienhsServerUrl 값.</param>
+        private void RunHealthCheck(string serverUrl)
+        {
+            if (_healthCheckRunning) return;
+            _healthCheckRunning = true;
+            _healthCheckLabel = "Checking...";
+            _healthCheckColor = 0xFFAAAAAA; // 회색
+
+            string url = (serverUrl ?? "").TrimEnd('/') + "/";
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    using var resp = await _healthHttp.GetAsync(url);
+                    int code = (int)resp.StatusCode;
+                    if (code == 200)
+                    {
+                        _healthCheckLabel = "OK";
+                        _healthCheckColor = 0xFF00FF00; // 녹색 (ABGR)
+                    }
+                    else
+                    {
+                        _healthCheckLabel = $"Failed: HTTP {code}";
+                        _healthCheckColor = 0xFF0000FF; // 빨강
+                    }
+                }
+                catch (TaskCanceledException)
+                {
+                    _healthCheckLabel = "Failed: timeout";
+                    _healthCheckColor = 0xFF0000FF;
+                }
+                catch (Exception ex)
+                {
+                    _healthCheckLabel = $"Failed: {ex.Message}";
+                    _healthCheckColor = 0xFF0000FF;
+                }
+                finally
+                {
+                    _healthCheckRunning = false;
+                }
+            });
         }
     }
 }
