@@ -20,11 +20,13 @@ IronRose 에디터에는 현재 세 종류의 설정이 존재한다.
 
 1. 사용자 전역(앱 레벨)에서 유지되는 Preferences 저장소를 도입한다. 프로젝트가 바뀌어도 유지된다.
 2. 에디터 UI(ImGui 창)에서 Preferences를 보고 편집할 수 있다.
-3. 초기 항목 두 가지를 지원한다.
-   - `color_theme` — 컬러 테마 선택 (확장 가능한 열거형)
-   - `enable_claude_usage` — Claude 연동 사용 여부 (bool)
-4. 새로운 preference 항목을 쉽게 추가할 수 있는 구조로 설계한다.
-5. 기존 `ProjectSettings` / `EditorState` / `ProjectContext`와 역할이 겹치지 않도록 경계를 명확히 한다.
+3. 초기 항목을 지원한다.
+   - `color_theme` — 컬러 테마 선택 (Rose/Dark/Light, **각 팔레트 실제 구현 포함**)
+   - `enable_claude_usage` — Claude 연동 사용 여부 (bool). 이 플래그는 **`ClaudeManager`(신규)를 통한 모든 Claude 관련 UI/기능의 가시성·동작 게이트**로 작동.
+   - `ui_scale`, `editor_font` — `EditorState`에서 **이동**하여 사용자 전역에서 관리.
+4. `ClaudeManager`(신규)를 도입하여 Claude 연동 호출을 일원화한다. 연동 방식은 **`claude -p` CLI만 사용**.
+5. 새로운 preference 항목을 쉽게 추가할 수 있는 구조로 설계한다.
+6. 기존 `ProjectSettings` / `EditorState` / `ProjectContext`와 역할이 겹치지 않도록 경계를 명확히 한다.
 
 ## 현재 상태
 
@@ -41,8 +43,13 @@ IronRose 에디터에는 현재 세 종류의 설정이 존재한다.
 
 - **`EditorState`** (`src/IronRose.Engine/Editor/EditorState.cs`)
   - 프로젝트 루트의 `.rose_editor_state.toml`을 관리. 창 위치, UI 스케일, 패널 가시성 등 세션 상태.
-  - `UiScale`, `EditorFont` 같은 "사용자 취향"으로 볼 수 있는 항목이 프로젝트별로 저장되는 문제가 있으나,
-    본 plan에서는 **마이그레이션하지 않는다** (미결 사항 참고).
+  - `UiScale`, `EditorFont`는 **본 plan에서 Preferences로 이동**한다. EditorState에서 해당 필드는 제거.
+
+- **`ImGuiFeedbackPanel`** (`src/IronRose.Engine/Editor/ImGui/Panels/ImGuiFeedbackPanel.cs`)
+  - `StartFix()` (line 317-402)에서 `claude -p --verbose --output-format stream-json`을
+    `Process.Start`로 직접 실행, stdin으로 `aca-fix: {content}` 전달. stream-json 출력 파싱까지 포함.
+  - 본 plan에서는 이 호출을 신규 `ClaudeManager`로 이관한다.
+  - 코드베이스 내 Claude 호출은 **이 파일이 유일**.
 
 ### UI 패턴
 
@@ -82,11 +89,12 @@ IronRose 에디터에는 현재 세 종류의 설정이 존재한다.
 - 역할: 앱 전역 사용자 Preferences의 메모리 표현 + 파일 I/O.
 - 대략의 구조 (세부 시그니처는 aca-archi가 확정).
 
-  - 속성: `ColorTheme`, `EnableClaudeUsage`.
-  - `ColorTheme`은 enum으로 정의 (`EditorColorTheme { Rose, Dark, Light }` 정도로 시작, 확장 가능).
-    - 초기 phase에서는 실제 테마 스위칭 구현 범위는 **enum 값 저장/로드 + `ImGuiTheme.Apply()`에 분기 추가** 수준.
-      새 테마 색상 정의는 이 plan의 범위를 넘으므로, 값 저장만 되도록 하고 실제 테마는
-      기본값(Rose)만 반영되어도 무방 (미결 사항 참고).
+  - 속성: `ColorTheme`, `EnableClaudeUsage`, `UiScale`, `EditorFont`.
+  - `ColorTheme`은 enum으로 정의 (`EditorColorTheme { Rose, Dark, Light }`, 확장 가능).
+    - **세 테마 모두 실제 팔레트를 구현**한다. `ImGuiTheme.Apply(EditorColorTheme)`가 enum에 따라
+      ImGuiStyle 색상을 분기 적용.
+  - `UiScale`(float), `EditorFont`(string)는 `EditorState`에서 이전. 기본값/유효 범위는 기존 값 유지
+    (UiScale 0.5~3.0, EditorFont는 기존 디폴트).
   - 정적 메서드: `Load()`, `Save()`.
   - 저장 방식: `ProjectContext.SaveLastProjectPath()`와 동일한 read-modify-write 패턴.
     기존 `[editor] last_project` 같은 섹션을 절대 덮어쓰지 않는다.
@@ -98,18 +106,46 @@ IronRose 에디터에는 현재 세 종류의 설정이 존재한다.
   last_project = "..."  # 기존, ProjectContext 관할
 
   [preferences]
-  color_theme = "rose"
+  color_theme = "rose"          # rose | dark | light
   enable_claude_usage = false
+  ui_scale = 1.0
+  editor_font = "..."
   ```
+
+  **`EditorState` 마이그레이션**: 첫 로드 시 `.rose_editor_state.toml`에 `ui_scale`/`editor_font` 키가
+  남아있다면 값을 읽어 Preferences로 이식 후 다음 `EditorState.Save()`부터 해당 키를 기록하지 않도록
+  한다 (필드 제거). 단일 사용자 환경이므로 복잡한 버전 마이그레이션은 불필요.
 
 #### 2. 초기화 흐름
 
 - 진입점: `Program.cs` 혹은 `ImGuiOverlay` 생성 직전.
 - `ProjectContext.Initialize()`와 **독립적으로** `EditorPreferences.Load()`가 호출되어야 한다
   (ProjectContext가 실패해도 Preferences는 로드되어야 하고, 역도 성립).
-- `ImGuiTheme.Apply()` 호출 시 `EditorPreferences.ColorTheme` 값을 참조하도록 수정.
+- `ImGuiTheme.Apply(EditorPreferences.ColorTheme)` 호출.
+- `EditorState.Load()` 직후 `ui_scale`/`editor_font` 마이그레이션 1회 처리.
 
 세부 호출 지점(어느 초기화 단계에 끼울지)은 aca-archi가 정한다.
+
+#### 2-1. `ClaudeManager` (신규)
+
+- 위치: `src/IronRose.Engine/Editor/ClaudeManager.cs` (정적 클래스).
+- 역할: Claude 연동 호출의 **단일 진입점**. 현재는 `aca-fix` 한 가지만 지원하지만 구조를 일반화.
+- API (대략, 세부는 archi가 확정).
+
+  - `bool IsEnabled => EditorPreferences.EnableClaudeUsage;`
+  - `Task RunFixAsync(string prompt, string workDir, Action<ClaudeStreamEvent> onEvent, CancellationToken ct)`
+    또는 기존 `ImGuiFeedbackPanel` 스트리밍 구조를 그대로 옮길 수 있는 콜백 시그니처.
+  - stream-json 파싱 로직(`ProcessStreamLine` 등)도 `ClaudeManager`로 이관.
+- 명령 실행은 **`claude -p --verbose --output-format stream-json`만** 허용. 다른 형태의 Claude 호출은
+  추가하지 않는다.
+- `IsEnabled == false`이면 호출 시도를 거부(즉시 예외 또는 no-op)하여 UI가 가드에 실패해도 보호.
+
+#### 2-2. `ImGuiFeedbackPanel` 가드
+
+- Fix 버튼, Fix 진행 상태 표시, 스트리밍 출력 영역 등 **Claude 관련 UI는 `ClaudeManager.IsEnabled`가
+  true일 때만 렌더링**. false일 때는 해당 위젯이 아예 보이지 않음(조건부 분기).
+- 기존 `StartFix()` 내부의 프로세스 실행/파싱 로직은 `ClaudeManager`로 이관하고, 패널은 결과 이벤트를
+  받아 UI 상태만 갱신.
 
 #### 3. UI: `ImGuiPreferencesPanel`
 
@@ -119,11 +155,13 @@ IronRose 에디터에는 현재 세 종류의 설정이 존재한다.
 - 섹션 구성 (`CollapsingHeader`로 그룹핑, 앞으로 항목이 늘어도 그대로 확장 가능).
 
   - **Appearance**
-    - `Color Theme`: Combo (enum 값 나열).
-    - 선택 변경 시 즉시 `ImGuiTheme.Apply()` 재호출 + `EditorPreferences.Save()`.
+    - `Color Theme`: Combo (Rose/Dark/Light).
+    - 선택 변경 시 즉시 `ImGuiTheme.Apply(...)` 재호출 + `EditorPreferences.Save()`.
+    - `UI Scale`: Slider (0.5~3.0). 변경 시 `Save()` + 기존 UiScale 적용 경로 트리거.
+    - `Editor Font`: Combo 또는 입력 (기존 EditorState의 폰트 선택 UI 로직 이관).
   - **Integrations**
-    - `Enable Claude Usage`: Checkbox.
-    - 변경 시 `EditorPreferences.Save()`.
+    - `Enable Claude Usage`: Checkbox. 변경 시 `Save()`.
+    - 토글 OFF → ON 시 즉시 피드백 패널의 Claude UI가 나타나고, ON → OFF 시 즉시 숨김.
 
 - **가시성 관리**: `ProjectSettings` 패널과 달리, Preferences 창의 on/off 상태는
   세션 간 영속화하지 않는다 (수동으로 여닫는 창). 따라서 `EditorState`에 새 `PanelPreferences`
@@ -136,12 +174,12 @@ IronRose 에디터에는 현재 세 종류의 설정이 존재한다.
 - 이유: `View > Windows`는 프로젝트 관련 창이 모여있고, Preferences는 앱 전역 성격이라 `Edit`이 더 적합.
   (업계 관행: VS Code, Rider도 `File/Edit > Preferences`에 배치.)
 
-#### 5. `enable_claude_usage` 의미
+#### 5. `enable_claude_usage` 게이트
 
-이 플래그는 Preferences 값만 관리한다. 실제 Claude 연동이 이 플래그를 어떻게 참조하는지는
-본 plan의 범위를 넘는다 (아직 Claude 연동 소비처 코드가 없음 — grep 결과 없음).
-**장래 Claude 연동 기능이 추가될 때 `EditorPreferences.EnableClaudeUsage`를 읽어 동작하도록**
-연결하면 된다. 현 plan에서는 "값이 저장/로드되고 UI로 편집된다"까지만 보장.
+- `ClaudeManager.IsEnabled`는 이 플래그를 그대로 반환.
+- `ImGuiFeedbackPanel`은 이 값으로 Claude 관련 UI를 조건부 렌더링.
+- `ClaudeManager` 호출 API는 `IsEnabled == false`일 때 실행을 거부.
+- 결과적으로 **UI와 실제 호출 양쪽에 게이트**가 걸림.
 
 #### 6. 확장 가이드라인 (주석으로 파일 상단에 명시)
 
@@ -158,22 +196,32 @@ IronRose 에디터에는 현재 세 종류의 설정이 존재한다.
 **신규 파일**
 - `src/IronRose.Engine/EditorPreferences.cs`
 - `src/IronRose.Engine/Editor/ImGui/Panels/ImGuiPreferencesPanel.cs`
+- `src/IronRose.Engine/Editor/ClaudeManager.cs`
 
 **수정 파일**
+- `src/IronRose.Engine/Editor/EditorState.cs`
+  - `UiScale`, `EditorFont` 필드 제거(또는 deprecated 처리하지 않고 완전 제거).
+  - Load 시 TOML에 남아있는 키를 읽어 `EditorPreferences`로 이식하는 1회성 마이그레이션 훅 추가.
 - `src/IronRose.Engine/Editor/ImGui/ImGuiOverlay.cs`
   - Preferences 패널 필드/생성/Draw 호출 추가.
   - `Edit` 메뉴에 `Preferences...` 항목 추가.
+  - UiScale/EditorFont 참조를 `EditorPreferences`로 갱신.
 - `src/IronRose.Engine/Editor/ImGui/ImGuiTheme.cs`
-  - `Apply()`를 `EditorPreferences.ColorTheme` 값에 따라 분기.
-  - 초기에는 Rose 테마만 실제 구현, 다른 값은 Rose로 폴백 (실제 Dark/Light 팔레트는 별도 작업).
+  - `Apply(EditorColorTheme)` 오버로드 추가, Rose/Dark/Light 팔레트 각각 실제 값으로 구현.
+- `src/IronRose.Engine/Editor/ImGui/Panels/ImGuiFeedbackPanel.cs`
+  - `StartFix()`의 Process 실행/stream-json 파싱 로직을 `ClaudeManager`로 이관.
+  - Claude 관련 UI(Fix 버튼, 진행/출력 영역)를 `ClaudeManager.IsEnabled` 분기로 감쌈.
 - `src/IronRose.Engine/RoseEditor/Program.cs` (혹은 에디터 초기화 진입점)
   - `EditorPreferences.Load()` 호출 삽입.
-- `making_log/` — 구현 후 시스템 문서 추가 (`_system-editor-preferences.md` 등).
+- `making_log/` — 구현 후 시스템 문서 추가 (`_system-editor-preferences.md`, `_system-claude-manager.md`).
 
 **기존 기능 영향**
 - `ProjectContext`의 `~/.ironrose/settings.toml` read/write는 기존처럼 `[editor]` 섹션만 건드리므로
   충돌 없음. `EditorPreferences`도 `[preferences]`만 수정하는 read-modify-write를 준수해야 함.
-- 기존 테마는 Rose 단일이었으므로 런타임 동작 변화 없음 (기본값이 Rose일 때).
+- 기존 EditorState 파일에 남아있는 `ui_scale`/`editor_font`는 첫 실행 시 Preferences로 이식되고
+  이후 EditorState에서는 기록되지 않음.
+- Claude 관련 UI는 기본값(`enable_claude_usage = false`)에서는 **보이지 않는다**. 기존 사용자가
+  Claude Fix 기능을 계속 쓰려면 Preferences에서 활성화해야 함 (릴리스 노트 필요).
 
 ## 대안 검토
 
@@ -199,21 +247,10 @@ IronRose 에디터에는 현재 세 종류의 설정이 존재한다.
 - 단점: "프로젝트별"이라는 `ProjectSettings`의 정의와 정면으로 충돌. 프로젝트가 바뀌면 사라짐.
 - 결론: **채택하지 않음**. 사용자 전역 요구와 맞지 않음.
 
-## 미결 사항
+## 결정된 사항 (유저 승인 완료)
 
-1. **실제 Dark/Light 테마 팔레트 구현 범위**
-   - 본 plan에서는 `ColorTheme` enum을 저장/로드하고 UI에서 선택할 수 있도록까지만 다룬다.
-   - Dark/Light 테마의 실제 색상 정의는 별도 plan으로 분리할 것을 권장.
-   - aca-archi 단계에서 "저장만 되고 실제 효과는 Rose만"으로 갈지, 최소한의 Dark 팔레트라도 같이 넣을지 결정 필요.
-
-2. **`UiScale`, `EditorFont`의 위치**
-   - 현재 `EditorState` (프로젝트별)에 있으나 본질적으로 사용자 취향이므로 Preferences가 더 맞다.
-   - 다만 마이그레이션은 호환성 이슈가 있고 본 plan의 목적("신규 시스템 추가")에서 벗어남.
-   - 본 plan에서는 **이동하지 않음**. 장래 별도 plan에서 다룰 것.
-
-3. **`enable_claude_usage`의 실제 연동 지점**
-   - 현재 Claude 연동 코드가 코드베이스에 없음. 본 plan은 "값 저장/편집"만 제공.
-   - Claude 연동 기능이 추가될 때 해당 기능 쪽 plan에서 이 값을 참조하도록 연결.
-
-4. **메뉴 위치 (`Edit > Preferences...` vs. `Tools > Preferences...`)**
-   - 현재 `Edit` 배치를 권장하나, 팀 선호가 `Tools`면 변경 가능.
+1. **Dark/Light 테마 팔레트 실제 구현 포함** — Rose/Dark/Light 세 테마 모두 실제 값으로 `ImGuiTheme.Apply` 분기.
+2. **`UiScale`, `EditorFont`를 Preferences로 이동** — EditorState에서 제거, 첫 로드 시 1회성 마이그레이션.
+3. **`ClaudeManager` 신규 + 피드백 패널 UI 게이트** — `claude -p` CLI 호출만 허용. `EnableClaudeUsage`가
+   false면 Fix 관련 UI가 보이지 않고 호출도 거부.
+4. **메뉴 위치: `Edit > Preferences...`**.
