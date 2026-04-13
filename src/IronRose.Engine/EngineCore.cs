@@ -31,6 +31,7 @@
 //          Initialize()에서 .reimport_all sentinel 파일을 ProjectRoot 기준으로 확인/삭제하여 ForceClearCache 설정.
 //          InitShaderCache()는 IsProjectLoaded=true일 때만 호출 (Startup Panel 크래시 방지).
 //          EditorState.Load()는 InitEditor() 이전에 호출되어야 ImGui 레이아웃/폰트/UI스케일이 올바르게 복원됨.
+//          EditorPreferences.Load()는 ProjectContext.Initialize() 직후 호출되어 테마/UI스케일/폰트를 복원.
 //          mid-session 프로젝트 전환은 지원하지 않음 (프로세스 = 프로젝트).
 //          InitApplication()에서 Application.InitializePaths() 및 PlayerPrefs.Initialize() 호출.
 //          Shutdown()에서 PlayerPrefs.Shutdown() 호출 (더티 상태면 자동 Save).
@@ -146,6 +147,9 @@ namespace IronRose.Engine
 
             // 프로젝트 컨텍스트 초기화 (EngineRoot 확정)
             ProjectContext.Initialize();
+
+            // 사용자 전역 Preferences 로드 (ProjectContext와 독립, 테마/UI스케일/폰트 복원용)
+            EditorPreferences.Load();
 
             // EditorDebug 초기화 -- EngineRoot 확정 후 즉시 호출
             RoseEngine.EditorDebug.Initialize(ProjectContext.EngineRoot);
