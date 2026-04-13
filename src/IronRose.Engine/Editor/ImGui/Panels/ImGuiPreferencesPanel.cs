@@ -4,6 +4,7 @@
 //          Appearance(Color Theme / UI Scale / Editor Font)와 Integrations(Enable Claude Usage)
 //          섹션을 제공한다.
 // @deps    IronRose.Engine/EditorPreferences, IronRose.Engine.Editor.ImGuiEditor/ImGuiTheme,
+//          IronRose.Engine.Editor.ImGuiEditor/EditorWidgets,
 //          IronRose.Engine.Editor.ImGuiEditor/PanelMaximizer,
 //          IronRose.Engine.Editor.ImGuiEditor.Panels/IEditorPanel, ImGuiNET
 // @exports
@@ -66,7 +67,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             // Color Theme
             int themeIdx = (int)EditorPreferences.ColorTheme;
             if (themeIdx < 0 || themeIdx >= ThemeNames.Length) themeIdx = 0;
-            if (ImGui.Combo("Color Theme", ref themeIdx, ThemeNames, ThemeNames.Length))
+            string themeLabel = EditorWidgets.BeginPropertyRow("Color Theme");
+            if (ImGui.Combo(themeLabel, ref themeIdx, ThemeNames, ThemeNames.Length))
             {
                 EditorPreferences.ColorTheme = (EditorColorTheme)themeIdx;
                 ImGuiTheme.Apply(EditorPreferences.ColorTheme);
@@ -75,7 +77,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
             // UI Scale
             float scale = EditorPreferences.UiScale;
-            if (ImGui.SliderFloat("UI Scale", ref scale, 0.5f, 3.0f, "%.2f"))
+            if (EditorWidgets.SliderFloatWithInput("preferences", "UI Scale", ref scale, 0.5f, 3.0f))
             {
                 scale = Math.Clamp(scale, 0.5f, 3.0f);
                 EditorPreferences.UiScale = scale;
@@ -86,7 +88,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             // Editor Font
             int fontIdx = Array.IndexOf(FontNames, EditorPreferences.EditorFont);
             if (fontIdx < 0) fontIdx = 0;
-            if (ImGui.Combo("Editor Font", ref fontIdx, FontNames, FontNames.Length))
+            string fontLabel = EditorWidgets.BeginPropertyRow("Editor Font");
+            if (ImGui.Combo(fontLabel, ref fontIdx, FontNames, FontNames.Length))
             {
                 EditorPreferences.EditorFont = FontNames[fontIdx];
                 EditorPreferences.Save();
@@ -97,7 +100,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         {
             // Enable Claude Usage
             bool enabled = EditorPreferences.EnableClaudeUsage;
-            if (ImGui.Checkbox("Enable Claude Usage", ref enabled))
+            string claudeLabel = EditorWidgets.BeginPropertyRow("Enable Claude Usage");
+            if (ImGui.Checkbox(claudeLabel, ref enabled))
             {
                 EditorPreferences.EnableClaudeUsage = enabled;
                 EditorPreferences.Save();
