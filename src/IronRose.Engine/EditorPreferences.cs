@@ -12,6 +12,11 @@
 //     EnableClaudeUsage: bool                   — Claude 연동 사용 여부 (기본 false)
 //     UiScale: float                            — UI 스케일 (기본 1.0, 0.5~3.0)
 //     EditorFont: string                        — 에디터 폰트명 (기본 "Roboto")
+//     EnableAiAssetGeneration: bool             — AI 이미지 생성 기능 전체 on/off (기본 true, 메뉴/다이얼로그 노출만 제어)
+//     AiAlienhsServerUrl: string                — AlienHS 서버 URL (기본 "http://localhost:25000")
+//     AiPythonPath: string                      — CLI 실행 파이썬 경로 (기본 "python")
+//     AiRefineEndpoint: string                  — 프롬프트 refine 엔드포인트 키 (기본 "")
+//     AiRefineModel: string                     — ComfyUI 모델 파일명 (기본 "")
 //     Load(): void                              — settings.toml [preferences] 로드
 //     Save(): void                              — settings.toml [preferences] 저장 (read-modify-write)
 //     MigrateFromEditorState(float?, string?): void — 레거시 EditorState 값 1회성 이전 훅
@@ -64,6 +69,21 @@ namespace IronRose.Engine
         /// <summary>에디터에서 사용할 폰트 이름.</summary>
         public static string EditorFont { get; set; } = "Roboto";
 
+        /// <summary>AI 이미지 생성 기능 on/off 토글. 끄면 Asset Browser 메뉴/다이얼로그가 숨겨진다.</summary>
+        public static bool EnableAiAssetGeneration { get; set; } = true;
+
+        /// <summary>AlienHS invoke-comfyui 서버 URL.</summary>
+        public static string AiAlienhsServerUrl { get; set; } = "http://localhost:25000";
+
+        /// <summary>CLI 실행에 사용할 Python 인터프리터 경로.</summary>
+        public static string AiPythonPath { get; set; } = "python";
+
+        /// <summary>프롬프트 refine 엔드포인트 키. 빈 문자열이면 CLI 기본값을 사용한다.</summary>
+        public static string AiRefineEndpoint { get; set; } = "";
+
+        /// <summary>ComfyUI 모델 파일명. 빈 문자열이면 CLI 기본값을 사용한다.</summary>
+        public static string AiRefineModel { get; set; } = "";
+
         /// <summary>글로벌 설정 디렉토리 (~/.ironrose/).</summary>
         private static string GlobalSettingsDir =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ironrose");
@@ -105,6 +125,25 @@ namespace IronRose.Engine
                 if (!string.IsNullOrEmpty(fontStr))
                     EditorFont = fontStr;
 
+                // enable_ai_asset_generation
+                EnableAiAssetGeneration = pref.GetBool("enable_ai_asset_generation", EnableAiAssetGeneration);
+
+                // ai_alienhs_server_url
+                var aiServerStr = pref.GetString("ai_alienhs_server_url", "");
+                if (!string.IsNullOrEmpty(aiServerStr))
+                    AiAlienhsServerUrl = aiServerStr;
+
+                // ai_python_path
+                var aiPyStr = pref.GetString("ai_python_path", "");
+                if (!string.IsNullOrEmpty(aiPyStr))
+                    AiPythonPath = aiPyStr;
+
+                // ai_refine_endpoint (빈 문자열도 허용 — 그대로 복원)
+                AiRefineEndpoint = pref.GetString("ai_refine_endpoint", AiRefineEndpoint) ?? "";
+
+                // ai_refine_model
+                AiRefineModel = pref.GetString("ai_refine_model", AiRefineModel) ?? "";
+
                 EditorDebug.Log($"[EditorPreferences] Loaded: {GlobalSettingsPath}");
             }
             catch (Exception ex)
@@ -138,6 +177,11 @@ namespace IronRose.Engine
                 pref.SetValue("enable_claude_usage", EnableClaudeUsage);
                 pref.SetValue("ui_scale", (double)UiScale);
                 pref.SetValue("editor_font", EditorFont);
+                pref.SetValue("enable_ai_asset_generation", EnableAiAssetGeneration);
+                pref.SetValue("ai_alienhs_server_url", AiAlienhsServerUrl);
+                pref.SetValue("ai_python_path", AiPythonPath);
+                pref.SetValue("ai_refine_endpoint", AiRefineEndpoint);
+                pref.SetValue("ai_refine_model", AiRefineModel);
 
                 config.SaveToFile(GlobalSettingsPath, "[EditorPreferences]");
                 EditorDebug.Log($"[EditorPreferences] Saved: {GlobalSettingsPath}");
