@@ -155,7 +155,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 ImGui.BeginDisabled(_healthCheckRunning);
                 if (ImGui.Button(_healthCheckRunning ? "Checking...##healthcheck" : "Check##healthcheck"))
                 {
-                    RunHealthCheck(EditorPreferences.AiAlienhsServerUrl);
+                    RunHealthCheck(EditorPreferences.AiAlienhsServerUrl ?? "");
                 }
                 ImGui.EndDisabled();
 
