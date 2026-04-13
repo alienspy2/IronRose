@@ -196,11 +196,6 @@ namespace IronRose.Engine.Editor
                 psi.ArgumentList.Add(EditorPreferences.AiComfyUrl);
             }
 
-            if (!string.IsNullOrWhiteSpace(EditorPreferences.AiRefineEndpoint))
-            {
-                psi.ArgumentList.Add("--endpoint");
-                psi.ArgumentList.Add(EditorPreferences.AiRefineEndpoint);
-            }
             if (!string.IsNullOrWhiteSpace(EditorPreferences.AiGenerationModel))
             {
                 psi.ArgumentList.Add("--model");
