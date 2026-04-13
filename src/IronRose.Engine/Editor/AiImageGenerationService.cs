@@ -30,6 +30,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using IronRose.Engine.Editor.ImGuiEditor;
 using RoseEngine;
+using Debug = RoseEngine.Debug;
 
 namespace IronRose.Engine.Editor
 {
@@ -86,7 +87,7 @@ namespace IronRose.Engine.Editor
             {
                 if (_inFlightPaths.Contains(key))
                 {
-                    EditorModal.EnqueueAlert($"AI image generation already in progress for:\n{finalPath}");
+                    Debug.LogWarning($"[AiImageGen] already in progress: {finalPath}");
                     return false;
                 }
                 _inFlightPaths.Add(key);
@@ -113,9 +114,9 @@ namespace IronRose.Engine.Editor
                 }
 
                 if (result.Success && !string.IsNullOrEmpty(result.AbsoluteOutputPath))
-                    EditorDebug.Log($"[AiImageGen] done: {result.AbsoluteOutputPath}");
+                    Debug.Log($"[AiImageGen] done: {result.AbsoluteOutputPath}");
                 else
-                    EditorDebug.LogWarning($"[AiImageGen] error: {result.Message}");
+                    Debug.LogWarning($"[AiImageGen] error: {result.Message}");
 
                 _pending.Enqueue(result);
             });
@@ -210,7 +211,7 @@ namespace IronRose.Engine.Editor
 
             psi.ArgumentList.Add("--json");
 
-            EditorDebug.Log($"[AiImageGen] {psi.FileName} " + string.Join(" ", psi.ArgumentList));
+            Debug.Log($"[AiImageGen] {psi.FileName} " + string.Join(" ", psi.ArgumentList));
 
             // 3) 프로세스 실행
             string stdout, stderr;

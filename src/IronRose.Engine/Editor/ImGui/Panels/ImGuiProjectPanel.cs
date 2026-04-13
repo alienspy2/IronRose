@@ -141,11 +141,11 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                         result.Request.Prompt,
                         result.Request.Refine,
                         result.Request.Alpha);
-                    EditorDebug.Log($"[AiImageGen] {result.Message}");
+                    RoseEngine.Debug.Log($"[AiImageGen] {result.Message}");
                 }
                 else
                 {
-                    EditorDebug.LogWarning($"[AiImageGen] {result.Message}");
+                    RoseEngine.Debug.LogWarning($"[AiImageGen] {result.Message}");
                 }
             });
 

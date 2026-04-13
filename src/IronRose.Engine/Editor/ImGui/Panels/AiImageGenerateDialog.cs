@@ -21,6 +21,7 @@ using System.IO;
 using System.Numerics;
 using ImGuiNET;
 using IronRose.Engine.Editor;
+using Debug = RoseEngine.Debug;
 
 namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 {
@@ -68,7 +69,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 _wantOpen = false;
             }
 
-            if (!ImGui.BeginPopupModal(PopupId, ImGuiWindowFlags.AlwaysAutoResize))
+            if (!ImGui.BeginPopupModal(PopupId, ImGuiWindowFlags.NoCollapse))
                 return;
 
             // Target folder (read-only display)
@@ -167,7 +168,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
                 if (AiImageGenerationService.Enqueue(req))
                 {
-                    EditorModal.EnqueueAlert($"AI image generation started: {resolved}.png\n(You can continue working; a notification will appear when done.)");
+                    Debug.Log($"[AiImageGen] started: {resolved}.png");
                 }
                 ImGui.CloseCurrentPopup();
             }
