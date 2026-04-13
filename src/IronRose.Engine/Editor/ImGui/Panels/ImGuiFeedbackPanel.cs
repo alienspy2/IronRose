@@ -2,9 +2,9 @@
 // @file    ImGuiFeedbackPanel.cs
 // @brief   사용자 피드백을 텍스트 파일로 저장/조회/삭제하는 에디터 패널.
 //          프로젝트 폴더의 feedback/ 디렉토리에 feedback_XX.txt 형식으로 저장한다.
-//          각 피드백 항목에 Fix 버튼을 제공하여 claude -p로 aca-fix 에이전트를 호출하고
+//          각 피드백 항목에 Fix 버튼을 제공하여 ClaudeManager로 aca-fix 에이전트를 호출하고
 //          stream-json 출력을 실시간 스트리밍 표시한다.
-// @deps    IronRose.Engine/ProjectContext
+// @deps    IronRose.Engine/ProjectContext, IronRose.Engine/Editor/ClaudeManager
 // @exports
 //   class ImGuiFeedbackPanel : IEditorPanel
 //     IsOpen: bool                — 패널 표시 여부
@@ -13,17 +13,17 @@
 //          feedback 폴더가 없으면 저장 시 자동 생성한다.
 //          창 크기 변경 시 입력 영역/목록 영역이 가용 공간에 맞게 리사이즈된다.
 //          각 feedback 항목은 CollapsingHeader로 접었다 펼 수 있으며 내용을 표시한다.
-//          Fix 기능은 claude CLI를 엔진 레포에서 실행하며, 한 번에 하나만 실행 가능하다.
+//          Fix 기능은 ClaudeManager를 통해 실행되며, ClaudeManager.IsEnabled(=EditorPreferences.EnableClaudeUsage)
+//          가 false일 때는 Fix/Stop 버튼과 출력 영역이 전혀 렌더링되지 않는다.
+//          한 번에 하나의 세션만 실행 가능하다 (_fixSession.IsRunning 기반 게이트).
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
 using ImGuiNET;
 using IronRose.Engine;
+using IronRose.Engine.Editor;
 using RoseEngine;
 using Vector2 = System.Numerics.Vector2;
 using Vector4 = System.Numerics.Vector4;
@@ -50,14 +50,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             public string Content;
         }
 
-        // --- Fix process state ---
+        // --- Fix session state (ClaudeManager 경유) ---
         private string? _fixingPath;                                         // 현재 Fix 중인 항목의 파일 경로
-        private System.Diagnostics.Process? _fixProcess;
-        private readonly StringBuilder _fixOutput = new();
-        private readonly object _fixOutputLock = new();
-        private volatile bool _fixRunning;
+        private ClaudeSession? _fixSession;
         private string _fixDisplayText = "";                                 // ImGui 표시용 캐시
-        private bool _fixOutputDirty;
 
         public void Draw()
         {
@@ -145,41 +141,45 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                         }
                         ImGui.PopStyleColor(3);
 
-                        // Fix button
-                        ImGui.SameLine();
-                        bool isThisFixing = _fixRunning && _fixingPath == _entries[i].FilePath;
-                        if (isThisFixing)
+                        // Fix button (ClaudeManager.IsEnabled 일 때만 렌더링)
+                        if (ClaudeManager.IsEnabled)
                         {
-                            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.7f, 0.2f, 0.2f, 0.6f));
-                            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.8f, 0.2f, 0.2f, 0.8f));
-                            ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.9f, 0.2f, 0.2f, 1.0f));
-                            if (ImGui.Button("Stop"))
+                            ImGui.SameLine();
+                            bool running = _fixSession?.IsRunning ?? false;
+                            bool isThisFixing = running && _fixingPath == _entries[i].FilePath;
+                            if (isThisFixing)
                             {
-                                StopFix();
+                                ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.7f, 0.2f, 0.2f, 0.6f));
+                                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.8f, 0.2f, 0.2f, 0.8f));
+                                ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.9f, 0.2f, 0.2f, 1.0f));
+                                if (ImGui.Button("Stop"))
+                                {
+                                    StopFix();
+                                }
+                                ImGui.PopStyleColor(3);
                             }
-                            ImGui.PopStyleColor(3);
-                        }
-                        else
-                        {
-                            bool disabled = _fixRunning; // 다른 항목이 Fix 중
-                            if (disabled) ImGui.BeginDisabled();
-
-                            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.2f, 0.4f, 0.7f, 0.5f));
-                            ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.3f, 0.5f, 0.8f, 0.7f));
-                            ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.3f, 0.5f, 0.9f, 1.0f));
-                            if (ImGui.Button("Fix"))
+                            else
                             {
-                                StartFix(i);
+                                bool disabled = running; // 다른 항목이 Fix 중
+                                if (disabled) ImGui.BeginDisabled();
+
+                                ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.2f, 0.4f, 0.7f, 0.5f));
+                                ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.3f, 0.5f, 0.8f, 0.7f));
+                                ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.3f, 0.5f, 0.9f, 1.0f));
+                                if (ImGui.Button("Fix"))
+                                {
+                                    StartFix(i);
+                                }
+                                ImGui.PopStyleColor(3);
+
+                                if (disabled) ImGui.EndDisabled();
                             }
-                            ImGui.PopStyleColor(3);
 
-                            if (disabled) ImGui.EndDisabled();
-                        }
-
-                        // Fix 출력 영역 (이 항목이 Fix 대상일 때)
-                        if (_fixingPath == _entries[i].FilePath)
-                        {
-                            DrawFixOutput();
+                            // Fix 출력 영역 (이 항목이 Fix 대상일 때)
+                            if (_fixingPath == _entries[i].FilePath)
+                            {
+                                DrawFixOutput();
+                            }
                         }
 
                         ImGui.Unindent(8f);
@@ -311,12 +311,14 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         }
 
         // -------------------------------------------------------
-        // Fix: claude -p 로 aca-fix 에이전트 호출
+        // Fix: ClaudeManager 로 aca-fix 에이전트 호출
         // -------------------------------------------------------
 
         private void StartFix(int index)
         {
-            if (_fixRunning || index < 0 || index >= _entries.Count) return;
+            if (!ClaudeManager.IsEnabled) return;
+            if (_fixSession != null && _fixSession.IsRunning) return;
+            if (index < 0 || index >= _entries.Count) return;
 
             var entry = _entries[index];
             var engineRoot = ProjectContext.EngineRoot;
@@ -326,186 +328,41 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 return;
             }
 
+            // 이전 세션이 남아있으면 정리 (Clear 없이 다른 항목 Fix로 전환하는 경우)
+            _fixSession?.Dispose();
+            _fixSession = null;
+
             _fixingPath = entry.FilePath;
-            _fixRunning = true;
-            lock (_fixOutputLock)
-            {
-                _fixOutput.Clear();
-                _fixDisplayText = "";
-                _fixOutputDirty = false;
-            }
+            _fixDisplayText = "";
 
             var prompt = $"aca-fix: {entry.Content}";
-
-            Task.Run(() =>
+            _fixSession = ClaudeManager.StartFix(prompt, engineRoot);
+            if (_fixSession == null)
             {
-                try
-                {
-                    var psi = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "claude",
-                        Arguments = "-p --verbose --output-format stream-json",
-                        RedirectStandardInput = true,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        WorkingDirectory = engineRoot,
-                    };
-
-                    _fixProcess = System.Diagnostics.Process.Start(psi);
-                    if (_fixProcess == null)
-                    {
-                        AppendFixOutput("[Error] Failed to start claude process.\n");
-                        _fixRunning = false;
-                        return;
-                    }
-
-                    // stdin 으로 프롬프트 전달 후 닫기
-                    _fixProcess.StandardInput.Write(prompt);
-                    _fixProcess.StandardInput.Close();
-
-                    // stderr 를 별도 태스크로 수집
-                    string stderr = "";
-                    var stderrTask = Task.Run(() =>
-                    {
-                        try { stderr = _fixProcess.StandardError.ReadToEnd(); }
-                        catch { /* ignore */ }
-                    });
-
-                    // stdout 을 한 줄씩 읽으며 스트리밍 파싱
-                    string? line;
-                    while ((line = _fixProcess.StandardOutput.ReadLine()) != null)
-                    {
-                        ProcessStreamLine(line);
-                    }
-
-                    _fixProcess.WaitForExit();
-                    stderrTask.Wait(TimeSpan.FromSeconds(5));
-
-                    if (_fixProcess.ExitCode != 0 && !string.IsNullOrWhiteSpace(stderr))
-                    {
-                        AppendFixOutput($"\n[stderr] {stderr}");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    AppendFixOutput($"\n[Error] {ex.Message}");
-                }
-                finally
-                {
-                    _fixRunning = false;
-                    try { _fixProcess?.Dispose(); } catch { /* ignore */ }
-                    _fixProcess = null;
-                }
-            });
+                _statusMessage = "Error: Failed to start claude process.";
+                _fixingPath = null;
+            }
         }
 
         private void StopFix()
         {
-            if (_fixProcess != null)
-            {
-                try
-                {
-                    if (!_fixProcess.HasExited)
-                        _fixProcess.Kill(entireProcessTree: true);
-                }
-                catch { /* ignore */ }
-            }
-            _fixRunning = false;
-        }
-
-        private void AppendFixOutput(string text)
-        {
-            if (string.IsNullOrEmpty(text)) return;
-            lock (_fixOutputLock)
-            {
-                _fixOutput.Append(text);
-                _fixOutputDirty = true;
-            }
-        }
-
-        /// <summary>stream-json 라인을 파싱하여 텍스트 청크를 추출한다.</summary>
-        private void ProcessStreamLine(string line)
-        {
-            if (string.IsNullOrWhiteSpace(line)) return;
-
-            try
-            {
-                using var doc = JsonDocument.Parse(line);
-                var root = doc.RootElement;
-
-                if (!root.TryGetProperty("type", out var typeEl)) return;
-                var type = typeEl.GetString();
-
-                switch (type)
-                {
-                    // Anthropic streaming: 토큰 단위 텍스트 델타
-                    case "content_block_delta":
-                        if (root.TryGetProperty("delta", out var delta) &&
-                            delta.TryGetProperty("text", out var deltaText))
-                        {
-                            AppendFixOutput(deltaText.GetString() ?? "");
-                        }
-                        break;
-
-                    // Claude Code: 어시스턴트 메시지 (content 배열)
-                    case "assistant":
-                        if (root.TryGetProperty("message", out var msg) &&
-                            msg.TryGetProperty("content", out var content) &&
-                            content.ValueKind == JsonValueKind.Array)
-                        {
-                            foreach (var block in content.EnumerateArray())
-                            {
-                                if (block.TryGetProperty("type", out var bt) &&
-                                    bt.GetString() == "text" &&
-                                    block.TryGetProperty("text", out var blockText))
-                                {
-                                    AppendFixOutput(blockText.GetString() ?? "");
-                                }
-                            }
-                        }
-                        break;
-
-                    // 최종 결과
-                    case "result":
-                        if (root.TryGetProperty("result", out var result) &&
-                            result.ValueKind == JsonValueKind.String)
-                        {
-                            lock (_fixOutputLock)
-                            {
-                                if (_fixOutput.Length == 0)
-                                    _fixOutput.Append(result.GetString());
-                                _fixOutputDirty = true;
-                            }
-                        }
-                        break;
-                }
-            }
-            catch
-            {
-                // JSON이 아닌 라인은 그대로 표시
-                AppendFixOutput(line);
-                AppendFixOutput("\n");
-            }
+            _fixSession?.Stop();
         }
 
         private void DrawFixOutput()
         {
+            if (_fixSession == null) return;
+
             // 백그라운드 스레드에서 갱신된 텍스트를 UI 스레드로 복사
-            lock (_fixOutputLock)
-            {
-                if (_fixOutputDirty)
-                {
-                    _fixDisplayText = _fixOutput.ToString();
-                    _fixOutputDirty = false;
-                }
-            }
+            var snap = _fixSession.SnapshotOutput(out bool dirty);
+            if (dirty) _fixDisplayText = snap ?? "";
 
             ImGui.Spacing();
 
+            bool running = _fixSession.IsRunning;
+
             // 상태 표시
-            if (_fixRunning)
+            if (running)
             {
                 ImGui.TextColored(new Vector4(0.4f, 0.8f, 1.0f, 1.0f), "Running...");
             }
@@ -515,13 +372,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 ImGui.SameLine();
                 if (ImGui.SmallButton("Clear"))
                 {
+                    _fixSession?.Dispose();
+                    _fixSession = null;
                     _fixingPath = null;
-                    lock (_fixOutputLock)
-                    {
-                        _fixOutput.Clear();
-                        _fixDisplayText = "";
-                        _fixOutputDirty = false;
-                    }
+                    _fixDisplayText = "";
                     return;
                 }
             }
@@ -536,7 +390,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 ImGui.PopTextWrapPos();
 
                 // 실행 중일 때 자동 스크롤
-                if (_fixRunning)
+                if (running)
                 {
                     ImGui.SetScrollHereY(1.0f);
                 }
