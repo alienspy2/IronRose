@@ -12,6 +12,9 @@
 // @note    FileName 프리뷰는 매 프레임 ResolveUniqueFileName을 호출해 suffix 충돌 회피 후 확정 이름을 표시.
 //          Generate 버튼 클릭 직후 다시 Resolve하여 찰나의 경쟁 조건 최소화.
 //          히스토리 클릭 시 Style/Prompt만 복사하고 토글은 건드리지 않는다.
+//          Open() 시 Style/Prompt는 AiImageHistory.LastInputs로 복원하여
+//          성공/실패 무관하게 직전 입력을 유지한다.
+//          Generate 클릭 시점에 AiImageHistory.RecordLastInputs를 호출해 입력을 즉시 영속화한다.
 // ------------------------------------------------------------
 using System;
 using System.IO;
@@ -44,8 +47,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         public void Open(string targetFolderAbsPath)
         {
             _targetFolderAbs = Path.GetFullPath(targetFolderAbsPath);
-            _stylePrompt = "";
-            _prompt = "";
+            var inputs = AiImageHistory.LastInputs;
+            _stylePrompt = inputs.StylePrompt;
+            _prompt = inputs.Prompt;
             _fileName = "new_texture";
             var toggles = AiImageHistory.LastToggles;
             _refine = toggles.Refine;
@@ -148,6 +152,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             ImGui.BeginDisabled(!canGenerate);
             if (ImGui.Button("Generate", new Vector2(120, 0)))
             {
+                // 성공/실패 무관하게 Generate 버튼이 눌린 순간의 입력을 영속화.
+                // Trim 없이 사용자가 친 그대로 저장해 다음 오픈 시 동일한 필드 상태를 복원한다.
+                AiImageHistory.RecordLastInputs(_stylePrompt ?? "", _prompt ?? "");
+
                 string resolved = AiImageGenerationService.ResolveUniqueFileName(_targetFolderAbs, _fileName.Trim());
                 var req = new AiImageGenerationRequest(
                     TargetFolderAbsPath: _targetFolderAbs,

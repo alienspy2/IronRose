@@ -2,7 +2,8 @@
 // @file    AiImageHistory.cs
 // @brief   프로젝트별 AI 이미지 생성 히스토리 저장소.
 //          <ProjectRoot>/memory/ai_image_history.json에 최근 5건의
-//          (style_prompt, prompt)와 마지막 (refine, alpha) 토글을 영속화한다.
+//          (style_prompt, prompt), 마지막 (refine, alpha) 토글, 그리고
+//          마지막으로 Generate 버튼을 눌렀을 때의 입력값(style_prompt, prompt)을 영속화한다.
 // @deps    IronRose.Engine/ProjectContext, RoseEngine/EditorDebug, System.Text.Json
 // @exports
 //   record AiImageHistoryEntry(string StylePrompt, string Prompt)
@@ -10,10 +11,13 @@
 //     Load(): void                                         — 프로젝트 로드 직후 1회 호출
 //     Entries: IReadOnlyList<AiImageHistoryEntry>           — 최신이 index 0
 //     LastToggles: (bool Refine, bool Alpha)                — 기본 (true, false)
+//     LastInputs: (string StylePrompt, string Prompt)       — 기본 ("", "")
 //     RecordSuccess(string, string, bool, bool): void       — 생성 성공 시 호출, 즉시 flush
+//     RecordLastInputs(string, string): void                — Generate 클릭 시 성공/실패 무관하게 호출, 즉시 flush
 // @note    동시성: 내부 lock으로 직렬화. UI 스레드에서 Entries 스냅샷을 얻어 반복.
 //          프로젝트 전환 시 Load() 재호출하면 상태가 초기화된다.
-//          빈 prompt는 기록 대상에서 제외. 중복(정확 일치)은 앞으로 승격(LRU).
+//          빈 prompt는 히스토리 기록 대상에서 제외. 중복(정확 일치)은 앞으로 승격(LRU).
+//          LastInputs는 빈 문자열도 그대로 저장 (사용자가 친 값을 그대로 보존).
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -33,6 +37,7 @@ namespace IronRose.Engine.Editor
         private const int MaxEntries = 5;
         private static readonly List<AiImageHistoryEntry> _entries = new();
         private static (bool Refine, bool Alpha) _lastToggles = (true, false);
+        private static (string StylePrompt, string Prompt) _lastInputs = ("", "");
         private static readonly object _lock = new();
 
         private static readonly JsonSerializerOptions _jsonOpt = new()
@@ -55,6 +60,15 @@ namespace IronRose.Engine.Editor
         }
 
         /// <summary>
+        /// 마지막 Generate 클릭 시의 입력값 (StylePrompt, Prompt). 성공/실패 무관하게 저장된다.
+        /// 기본 ("", ""). Load 실패 또는 last_inputs 키 부재 시에도 이 기본값.
+        /// </summary>
+        public static (string StylePrompt, string Prompt) LastInputs
+        {
+            get { lock (_lock) return _lastInputs; }
+        }
+
+        /// <summary>
         /// 프로젝트가 로드된 경우 memory/ai_image_history.json을 읽어 메모리로 올린다.
         /// IsProjectLoaded == false이면 no-op.
         /// </summary>
@@ -64,6 +78,7 @@ namespace IronRose.Engine.Editor
             {
                 _entries.Clear();
                 _lastToggles = (true, false);
+                _lastInputs = ("", "");
 
                 if (!ProjectContext.IsProjectLoaded)
                     return;
@@ -94,6 +109,13 @@ namespace IronRose.Engine.Editor
 
                     if (dto.LastToggles != null)
                         _lastToggles = (dto.LastToggles.Refine, dto.LastToggles.Alpha);
+
+                    if (dto.LastInputs != null)
+                    {
+                        _lastInputs = (
+                            dto.LastInputs.StylePrompt ?? "",
+                            dto.LastInputs.Prompt ?? "");
+                    }
 
                     EditorDebug.Log($"[AiImageHistory] Loaded {_entries.Count} entries from {path}");
                 }
@@ -130,6 +152,19 @@ namespace IronRose.Engine.Editor
             }
         }
 
+        /// <summary>
+        /// Generate 버튼 클릭 시 호출. 성공/실패와 무관하게 사용자가 친 입력 그대로 저장한다.
+        /// 빈 문자열도 그대로 저장 (사용자가 의도적으로 비운 상태도 보존).
+        /// </summary>
+        public static void RecordLastInputs(string stylePrompt, string prompt)
+        {
+            lock (_lock)
+            {
+                _lastInputs = (stylePrompt ?? "", prompt ?? "");
+                SaveLocked();
+            }
+        }
+
         private static void SaveLocked()
         {
             if (!ProjectContext.IsProjectLoaded) return;
@@ -152,6 +187,11 @@ namespace IronRose.Engine.Editor
                         Refine = _lastToggles.Refine,
                         Alpha = _lastToggles.Alpha,
                     },
+                    LastInputs = new InputsDto
+                    {
+                        StylePrompt = _lastInputs.StylePrompt,
+                        Prompt = _lastInputs.Prompt,
+                    },
                 };
                 var json = JsonSerializer.Serialize(dto, _jsonOpt);
                 File.WriteAllText(path, json);
@@ -173,6 +213,9 @@ namespace IronRose.Engine.Editor
 
             [JsonPropertyName("last_toggles")]
             public TogglesDto LastToggles { get; set; } = new();
+
+            [JsonPropertyName("last_inputs")]
+            public InputsDto LastInputs { get; set; } = new();
         }
 
         private sealed class EntryDto
@@ -185,6 +228,12 @@ namespace IronRose.Engine.Editor
         {
             [JsonPropertyName("refine")] public bool Refine { get; set; } = true;
             [JsonPropertyName("alpha")] public bool Alpha { get; set; } = false;
+        }
+
+        private sealed class InputsDto
+        {
+            [JsonPropertyName("style_prompt")] public string StylePrompt { get; set; } = "";
+            [JsonPropertyName("prompt")] public string Prompt { get; set; } = "";
         }
     }
 }
