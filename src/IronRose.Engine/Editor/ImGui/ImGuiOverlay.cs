@@ -70,6 +70,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         private ImGuiScriptsPanel? _scripts;
         private ImGuiFeedbackPanel? _feedback;
         private ImGuiStartupPanel? _startupPanel;
+        private ImGuiPreferencesPanel? _preferencesPanel;
 
         // Property windows (고정 Inspector)
         private readonly List<ImGuiPropertyWindow> _propertyWindows = new();
@@ -370,6 +371,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             _scripts = new ImGuiScriptsPanel();
             _feedback = new ImGuiFeedbackPanel();
             _startupPanel = new ImGuiStartupPanel();
+            _preferencesPanel = new ImGuiPreferencesPanel();
             _inspector.AnimEditor = _animEditor;
 
             // EditorBridge에 overlay 참조 등록
@@ -425,6 +427,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             PanelMaximizer.Register("Animation Editor", _animEditor);
             PanelMaximizer.Register("Scripts", _scripts);
             PanelMaximizer.Register("Feedback", _feedback);
+            PanelMaximizer.Register("Preferences", _preferencesPanel);
 
             // Restore saved panel visibility (only if layout was loaded, not first-time default)
             if (!_layoutManager.NeedsLayout)
@@ -453,6 +456,20 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             if (!IsVisible) return;
 
             ImGui.SetCurrentContext(_context);
+
+            // ── Preferences 역동기화 ──
+            // Preferences 패널에서 변경된 UiScale/EditorFont 값을 Overlay 로컬 상태와 맞춘다.
+            // (Color Theme은 Preferences 패널이 직접 ImGuiTheme.Apply를 호출하므로 여기선 다루지 않음.)
+            if (Math.Abs(_uiScale - EditorPreferences.UiScale) > 0.0001f)
+            {
+                _uiScale = EditorPreferences.UiScale;
+                ImGui.GetIO().FontGlobalScale = _uiScale;
+            }
+            if (_currentFont != EditorPreferences.EditorFont)
+            {
+                _currentFont = EditorPreferences.EditorFont;
+            }
+
             _inputHandler?.Update(deltaTime, _window.Size.X, _window.Size.Y);
             ImGui.NewFrame();
             PushCurrentFont();
@@ -563,6 +580,11 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                         UndoSystem.PerformUndo();
                     if (ImGui.MenuItem(redoLabel, "Ctrl+Shift+Z", false, rDesc != null))
                         UndoSystem.PerformRedo();
+
+                    ImGui.Separator();
+
+                    if (ImGui.MenuItem("Preferences..."))
+                        _preferencesPanel!.IsOpen = true;
 
                     ImGui.EndMenu();
                 }
@@ -765,6 +787,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             _animEditor?.Draw();
             _scripts?.Draw();
             _feedback?.Draw();
+            _preferencesPanel?.Draw();
 
             // ── Property windows (고정 Inspector) ──
             DrawPropertyWindows();
