@@ -2,12 +2,13 @@
 // @file    ImGuiPreferencesPanel.cs
 // @brief   앱-레벨 사용자 Preferences 편집 UI. Edit > Preferences... 메뉴에서 열리며
 //          Appearance(Color Theme / UI Scale / Editor Font), Integrations(Enable Claude Usage),
-//          AI Asset Generation(토글 + 서버 URL + Health Check + Python Path + Refine Endpoint/Model)
-//          섹션을 제공한다.
+//          AI Asset Generation(토글 + 서버 URL + Server Health Check + Comfy URL 오버라이드 +
+//          Python Path + Python Health Check + Refine Endpoint/Model) 섹션을 제공한다.
 // @deps    IronRose.Engine/EditorPreferences, IronRose.Engine.Editor.ImGuiEditor/ImGuiTheme,
 //          IronRose.Engine.Editor.ImGuiEditor/EditorWidgets,
 //          IronRose.Engine.Editor.ImGuiEditor/PanelMaximizer,
-//          IronRose.Engine.Editor.ImGuiEditor.Panels/IEditorPanel, ImGuiNET, System.Net.Http
+//          IronRose.Engine.Editor.ImGuiEditor.Panels/IEditorPanel, ImGuiNET, System.Net.Http,
+//          System.Diagnostics.Process, System.ComponentModel.Win32Exception
 // @exports
 //   class ImGuiPreferencesPanel : IEditorPanel
 //     IsOpen: bool                      — 창 표시 여부 (런타임 전용, 세션 영속화 없음)
@@ -19,8 +20,11 @@
 //          창 가시성은 세션 간 영속화하지 않는다 (EditorState에 PanelPreferences 필드 없음).
 // ------------------------------------------------------------
 using System;
+using System.ComponentModel;
+using System.Diagnostics;
 using ImGuiNET;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace IronRose.Engine.Editor.ImGuiEditor.Panels
@@ -46,11 +50,16 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         private static readonly string[] ThemeNames = { "Rose", "Dark", "Light" };
 
-        // Health Check 상태 캐시 (세션 전용, 영속화 없음)
+        // Server URL Health Check 상태 캐시 (세션 전용, 영속화 없음)
         private string _healthCheckLabel = "";      // 화면에 표시할 결과 라벨 ("OK", "Failed: ..." 등)
         private uint _healthCheckColor = 0xFFFFFFFF; // 라벨 색상 (ImGui ABGR). 0 이면 TextUnformatted 기본색
         private bool _healthCheckRunning = false;    // 중복 클릭 방지
         private static readonly HttpClient _healthHttp = new() { Timeout = TimeSpan.FromSeconds(3) };
+
+        // Python Path Health Check 상태 캐시 (세션 전용, 영속화 없음)
+        private string _pythonCheckLabel = "";
+        private uint _pythonCheckColor = 0xFFFFFFFF;
+        private bool _pythonCheckRunning = false;
 
         public void Draw()
         {
@@ -149,7 +158,19 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 }
             }
 
-            // Health Check 버튼 + 결과 라벨
+            // Comfy URL (AlienHS 서버가 사용할 ComfyUI URL 오버라이드)
+            {
+                string comfyLabel = EditorWidgets.BeginPropertyRow("Comfy URL");
+                string buf = EditorPreferences.AiComfyUrl ?? "";
+                if (ImGui.InputText(comfyLabel, ref buf, 512))
+                {
+                    EditorPreferences.AiComfyUrl = buf;
+                    EditorPreferences.Save();
+                }
+                ImGui.TextDisabled("Override AlienHS default (leave empty to use server's default).");
+            }
+
+            // Server Health Check 버튼 + 결과 라벨
             {
                 string hcLabel = EditorWidgets.BeginPropertyRow("Health Check");
                 ImGui.BeginDisabled(_healthCheckRunning);
@@ -177,6 +198,26 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 {
                     EditorPreferences.AiPythonPath = buf;
                     EditorPreferences.Save();
+                }
+            }
+
+            // Python Health Check 버튼 + 결과 라벨
+            {
+                string hcLabel = EditorWidgets.BeginPropertyRow("Python Check");
+                ImGui.BeginDisabled(_pythonCheckRunning);
+                if (ImGui.Button(_pythonCheckRunning ? "Checking...##pythoncheck" : "Check##pythoncheck"))
+                {
+                    RunPythonHealthCheck(EditorPreferences.AiPythonPath ?? "");
+                }
+                ImGui.EndDisabled();
+
+                if (!string.IsNullOrEmpty(_pythonCheckLabel))
+                {
+                    ImGui.SameLine();
+                    if (_pythonCheckColor != 0)
+                        ImGui.TextColored(ImGui.ColorConvertU32ToFloat4(_pythonCheckColor), _pythonCheckLabel);
+                    else
+                        ImGui.TextUnformatted(_pythonCheckLabel);
                 }
             }
 
@@ -250,6 +291,101 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 finally
                 {
                     _healthCheckRunning = false;
+                }
+            });
+        }
+
+        /// <summary>
+        /// AiPythonPath 값을 그대로 Process.Start로 호출하여 `--version`을 수행한다.
+        /// 정상 종료 + stdout/stderr에 "Python" 포함 시 OK. Win32Exception(파일 없음),
+        /// 타임아웃(3초), exit code != 0, 기타 예외는 Failed로 표시한다.
+        /// 백그라운드 Task에서 실행하며 UI를 블로킹하지 않는다.
+        /// </summary>
+        /// <param name="pythonPath">Preferences.AiPythonPath 값.</param>
+        private void RunPythonHealthCheck(string pythonPath)
+        {
+            if (_pythonCheckRunning) return;
+            _pythonCheckRunning = true;
+            _pythonCheckLabel = "Checking...";
+            _pythonCheckColor = 0xFFAAAAAA; // 회색
+
+            string path = (pythonPath ?? "").Trim();
+            if (string.IsNullOrEmpty(path))
+            {
+                _pythonCheckLabel = "Failed: path is empty";
+                _pythonCheckColor = 0xFF0000FF;
+                _pythonCheckRunning = false;
+                return;
+            }
+
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    var psi = new ProcessStartInfo
+                    {
+                        FileName = path,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                    };
+                    psi.ArgumentList.Add("--version");
+
+                    using var proc = Process.Start(psi);
+                    if (proc == null)
+                    {
+                        _pythonCheckLabel = "Failed: could not start process";
+                        _pythonCheckColor = 0xFF0000FF;
+                        return;
+                    }
+
+                    string stdout = proc.StandardOutput.ReadToEnd();
+                    string stderr = proc.StandardError.ReadToEnd();
+                    bool exited = proc.WaitForExit(3000);
+                    if (!exited)
+                    {
+                        try { proc.Kill(entireProcessTree: true); } catch { }
+                        _pythonCheckLabel = "Failed: timeout";
+                        _pythonCheckColor = 0xFF0000FF;
+                        return;
+                    }
+
+                    int exitCode = proc.ExitCode;
+                    string combined = (stdout + "\n" + stderr);
+
+                    if (exitCode == 0 && combined.IndexOf("Python", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        var match = Regex.Match(combined, @"Python\s+[\w\.\-\+]+", RegexOptions.IgnoreCase);
+                        string version = match.Success ? match.Value.Trim() : "Python";
+                        _pythonCheckLabel = $"OK ({version})";
+                        _pythonCheckColor = 0xFF00FF00; // 녹색
+                    }
+                    else if (exitCode != 0)
+                    {
+                        _pythonCheckLabel = $"Failed: exit code {exitCode}";
+                        _pythonCheckColor = 0xFF0000FF;
+                    }
+                    else
+                    {
+                        _pythonCheckLabel = "Failed: no \"Python\" in output";
+                        _pythonCheckColor = 0xFF0000FF;
+                    }
+                }
+                catch (Win32Exception ex)
+                {
+                    // 파일 없음, 권한 없음 등
+                    _pythonCheckLabel = $"Failed: {ex.Message}";
+                    _pythonCheckColor = 0xFF0000FF;
+                }
+                catch (Exception ex)
+                {
+                    _pythonCheckLabel = $"Failed: {ex.Message}";
+                    _pythonCheckColor = 0xFF0000FF;
+                }
+                finally
+                {
+                    _pythonCheckRunning = false;
                 }
             });
         }

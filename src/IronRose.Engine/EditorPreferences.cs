@@ -14,6 +14,7 @@
 //     EditorFont: string                        — 에디터 폰트명 (기본 "Roboto")
 //     EnableAiAssetGeneration: bool             — AI 이미지 생성 기능 전체 on/off (기본 true, 메뉴/다이얼로그 노출만 제어)
 //     AiAlienhsServerUrl: string                — AlienHS 서버 URL (기본 "http://localhost:25000")
+//     AiComfyUrl: string                        — AlienHS 서버가 사용할 ComfyUI URL 오버라이드 (기본 "")
 //     AiPythonPath: string                      — CLI 실행 파이썬 경로 (기본 "python")
 //     AiRefineEndpoint: string                  — 프롬프트 refine 엔드포인트 키 (기본 "")
 //     AiRefineModel: string                     — ComfyUI 모델 파일명 (기본 "")
@@ -75,6 +76,12 @@ namespace IronRose.Engine
         /// <summary>AlienHS invoke-comfyui 서버 URL.</summary>
         public static string AiAlienhsServerUrl { get; set; } = "http://localhost:25000";
 
+        /// <summary>
+        /// AlienHS 서버가 사용할 ComfyUI URL 오버라이드. 빈 문자열이면 서버 기본값을 사용한다.
+        /// CLI의 --comfy-url 인자로 전달된다.
+        /// </summary>
+        public static string AiComfyUrl { get; set; } = "";
+
         /// <summary>CLI 실행에 사용할 Python 인터프리터 경로.</summary>
         public static string AiPythonPath { get; set; } = "python";
 
@@ -133,6 +140,9 @@ namespace IronRose.Engine
                 if (!string.IsNullOrEmpty(aiServerStr))
                     AiAlienhsServerUrl = aiServerStr;
 
+                // ai_comfy_url (빈 문자열도 유효 — 그대로 복원)
+                AiComfyUrl = pref.GetString("ai_comfy_url", AiComfyUrl) ?? "";
+
                 // ai_python_path
                 var aiPyStr = pref.GetString("ai_python_path", "");
                 if (!string.IsNullOrEmpty(aiPyStr))
@@ -179,6 +189,7 @@ namespace IronRose.Engine
                 pref.SetValue("editor_font", EditorFont);
                 pref.SetValue("enable_ai_asset_generation", EnableAiAssetGeneration);
                 pref.SetValue("ai_alienhs_server_url", AiAlienhsServerUrl);
+                pref.SetValue("ai_comfy_url", AiComfyUrl);
                 pref.SetValue("ai_python_path", AiPythonPath);
                 pref.SetValue("ai_refine_endpoint", AiRefineEndpoint);
                 pref.SetValue("ai_refine_model", AiRefineModel);

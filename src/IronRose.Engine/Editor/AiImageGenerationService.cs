@@ -190,6 +190,12 @@ namespace IronRose.Engine.Editor
             psi.ArgumentList.Add("--server");
             psi.ArgumentList.Add(EditorPreferences.AiAlienhsServerUrl ?? "");
 
+            if (!string.IsNullOrWhiteSpace(EditorPreferences.AiComfyUrl))
+            {
+                psi.ArgumentList.Add("--comfy-url");
+                psi.ArgumentList.Add(EditorPreferences.AiComfyUrl);
+            }
+
             if (!string.IsNullOrWhiteSpace(EditorPreferences.AiRefineEndpoint))
             {
                 psi.ArgumentList.Add("--endpoint");
