@@ -114,6 +114,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         // Thumbnail generation request
         private string? _pendingThumbnailFolder;
 
+        // AI image generation dialog + deferred-open trigger
+        private readonly AiImageGenerateDialog _aiImageDialog = new();
+        private string? _openAiImageDialogForFolder;
+
         // Rename asset popup state
         private bool _openRenameAssetPopup;
         private string _renameAssetName = "";
@@ -124,6 +128,29 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         public void Draw()
         {
             if (!ProjectContext.IsProjectLoaded) return;
+
+            // Drain background AI image generation results (UI thread only).
+            AiImageGenerationService.DrainResults(result =>
+            {
+                if (result.Success && !string.IsNullOrEmpty(result.AbsoluteOutputPath))
+                {
+                    var db = Resources.GetAssetDatabase() as AssetDatabase;
+                    db?.ReimportAsync(result.AbsoluteOutputPath);
+                    AiImageHistory.RecordSuccess(
+                        result.Request.StylePrompt,
+                        result.Request.Prompt,
+                        result.Request.Refine,
+                        result.Request.Alpha);
+                }
+                EditorModal.EnqueueAlert(result.Message);
+            });
+
+            // Deferred open of AI image dialog (set by context menu)
+            if (_openAiImageDialogForFolder != null)
+            {
+                _aiImageDialog.Open(_openAiImageDialogForFolder);
+                _openAiImageDialogForFolder = null;
+            }
 
             // Ping 요청 처리 (닫혀있으면 소비만 하고 무시)
             var pingPath = EditorBridge.ConsumePingAssetPath();
@@ -479,6 +506,16 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                                 }
                                 ImGui.EndMenu();
                             }
+                            // AI image generation (only when pref toggle is on and a folder is selected)
+                            if (EditorPreferences.EnableAiAssetGeneration && _selectedFolder != null)
+                            {
+                                ImGui.Separator();
+                                if (ImGui.MenuItem("Generate with AI (Texture)..."))
+                                {
+                                    _openAiImageDialogForFolder = Path.GetFullPath(_selectedFolder.FullPath);
+                                }
+                                ImGui.Separator();
+                            }
                             if (ImGui.MenuItem("Create Thumbnails"))
                                 _pendingThumbnailFolder = _selectedFolder!.FullPath;
                             var thumbPath1 = Path.Combine(Path.GetFullPath(_selectedFolder!.FullPath), ".thumbnails.png");
@@ -663,6 +700,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     _pendingSelectPath = null;
                 }
             }
+
+            // AI image generation dialog (popups render independently of the panel window)
+            _aiImageDialog.Draw();
 
             ImGui.End();
         }
@@ -1137,6 +1177,15 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     _openDeleteFolderPopup = true;
                 }
                 ImGui.Separator();
+                // AI image generation (only when pref toggle is on)
+                if (EditorPreferences.EnableAiAssetGeneration)
+                {
+                    if (ImGui.MenuItem("Generate with AI (Texture)..."))
+                    {
+                        _openAiImageDialogForFolder = Path.GetFullPath(node.FullPath);
+                    }
+                    ImGui.Separator();
+                }
                 if (ImGui.MenuItem("Create Thumbnails"))
                     _pendingThumbnailFolder = node.FullPath;
                 var thumbPath2 = Path.Combine(Path.GetFullPath(node.FullPath), ".thumbnails.png");
