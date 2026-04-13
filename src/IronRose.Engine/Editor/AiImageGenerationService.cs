@@ -201,10 +201,10 @@ namespace IronRose.Engine.Editor
                 psi.ArgumentList.Add("--endpoint");
                 psi.ArgumentList.Add(EditorPreferences.AiRefineEndpoint);
             }
-            if (!string.IsNullOrWhiteSpace(EditorPreferences.AiRefineModel))
+            if (!string.IsNullOrWhiteSpace(EditorPreferences.AiGenerationModel))
             {
                 psi.ArgumentList.Add("--model");
-                psi.ArgumentList.Add(EditorPreferences.AiRefineModel);
+                psi.ArgumentList.Add(EditorPreferences.AiGenerationModel);
             }
 
             psi.ArgumentList.Add("--json");

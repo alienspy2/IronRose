@@ -17,7 +17,7 @@
 //     AiComfyUrl: string                        — AlienHS 서버가 사용할 ComfyUI URL 오버라이드 (기본 "")
 //     AiPythonPath: string                      — CLI 실행 파이썬 경로 (기본 "python")
 //     AiRefineEndpoint: string                  — 프롬프트 refine 엔드포인트 키 (기본 "")
-//     AiRefineModel: string                     — ComfyUI 모델 파일명 (기본 "")
+//     AiGenerationModel: string                 — ComfyUI 이미지 생성 모델 파일명 (기본 "z_image_turbo_nvfp4.safetensors")
 //     Load(): void                              — settings.toml [preferences] 로드
 //     Save(): void                              — settings.toml [preferences] 저장 (read-modify-write)
 //     MigrateFromEditorState(float?, string?): void — 레거시 EditorState 값 1회성 이전 훅
@@ -88,8 +88,8 @@ namespace IronRose.Engine
         /// <summary>프롬프트 refine 엔드포인트 키. 빈 문자열이면 CLI 기본값을 사용한다.</summary>
         public static string AiRefineEndpoint { get; set; } = "";
 
-        /// <summary>ComfyUI 모델 파일명. 빈 문자열이면 CLI 기본값을 사용한다.</summary>
-        public static string AiRefineModel { get; set; } = "";
+        /// <summary>ComfyUI 이미지 생성 모델 파일명. CLI의 --model 인자로 전달된다. 빈 문자열이면 CLI 기본값을 사용한다.</summary>
+        public static string AiGenerationModel { get; set; } = "z_image_turbo_nvfp4.safetensors";
 
         /// <summary>글로벌 설정 디렉토리 (~/.ironrose/).</summary>
         private static string GlobalSettingsDir =>
@@ -151,8 +151,8 @@ namespace IronRose.Engine
                 // ai_refine_endpoint (빈 문자열도 허용 — 그대로 복원)
                 AiRefineEndpoint = pref.GetString("ai_refine_endpoint", AiRefineEndpoint) ?? "";
 
-                // ai_refine_model
-                AiRefineModel = pref.GetString("ai_refine_model", AiRefineModel) ?? "";
+                // ai_generation_model (ComfyUI 이미지 생성 모델 파일명)
+                AiGenerationModel = pref.GetString("ai_generation_model", AiGenerationModel) ?? "";
 
                 EditorDebug.Log($"[EditorPreferences] Loaded: {GlobalSettingsPath}");
             }
@@ -192,7 +192,7 @@ namespace IronRose.Engine
                 pref.SetValue("ai_comfy_url", AiComfyUrl);
                 pref.SetValue("ai_python_path", AiPythonPath);
                 pref.SetValue("ai_refine_endpoint", AiRefineEndpoint);
-                pref.SetValue("ai_refine_model", AiRefineModel);
+                pref.SetValue("ai_generation_model", AiGenerationModel);
 
                 config.SaveToFile(GlobalSettingsPath, "[EditorPreferences]");
                 EditorDebug.Log($"[EditorPreferences] Saved: {GlobalSettingsPath}");
