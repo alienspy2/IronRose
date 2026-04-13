@@ -151,6 +151,9 @@ namespace IronRose.Engine
             // 사용자 전역 Preferences 로드 (ProjectContext와 독립, 테마/UI스케일/폰트 복원용)
             EditorPreferences.Load();
 
+            // AI 이미지 생성 히스토리 로드 (프로젝트별, memory/ai_image_history.json)
+            IronRose.Engine.Editor.AiImageHistory.Load();
+
             // EditorDebug 초기화 -- EngineRoot 확정 후 즉시 호출
             RoseEngine.EditorDebug.Initialize(ProjectContext.EngineRoot);
             RoseEngine.EditorDebug.Log("[Engine] EngineCore initializing...");
