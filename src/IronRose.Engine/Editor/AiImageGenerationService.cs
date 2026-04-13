@@ -18,6 +18,7 @@
 // @note    동일 절대 경로가 현재 실행 중이면 Enqueue 거부.
 //          Process.Start 표준출력의 마지막 JSON 라인을 파싱. --json 출력 규약 참조.
 //          Alpha=true인 경우 CLI 완료 후 원본 <stem>.png 삭제 → <stem>_nobg.png → <stem>.png 리네임.
+//          시작/완료/실패는 모달이 아닌 EditorDebug 콘솔 로그로 보고한다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Concurrent;
@@ -110,6 +111,11 @@ namespace IronRose.Engine.Editor
                     lock (_inFlightLock) _inFlightPaths.Remove(key);
                     Interlocked.Decrement(ref _runningCount);
                 }
+
+                if (result.Success && !string.IsNullOrEmpty(result.AbsoluteOutputPath))
+                    EditorDebug.Log($"[AiImageGen] done: {result.AbsoluteOutputPath}");
+                else
+                    EditorDebug.LogWarning($"[AiImageGen] error: {result.Message}");
 
                 _pending.Enqueue(result);
             });
