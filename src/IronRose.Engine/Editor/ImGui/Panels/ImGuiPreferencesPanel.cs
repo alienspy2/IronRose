@@ -3,7 +3,7 @@
 // @brief   앱-레벨 사용자 Preferences 편집 UI. Edit > Preferences... 메뉴에서 열리며
 //          Appearance(Color Theme / UI Scale / Editor Font), Integrations(Enable Claude Usage),
 //          AI Asset Generation(토글 + 서버 URL + Server Health Check + Comfy URL 오버라이드 +
-//          Python Path + Python Health Check + Refine Endpoint + Generation Model) 섹션을 제공한다.
+//          Python Path + Python Health Check + Generation Model) 섹션을 제공한다.
 // @deps    IronRose.Engine/EditorPreferences, IronRose.Engine.Editor.ImGuiEditor/ImGuiTheme,
 //          IronRose.Engine.Editor.ImGuiEditor/EditorWidgets,
 //          IronRose.Engine.Editor.ImGuiEditor/PanelMaximizer,
@@ -219,18 +219,6 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     else
                         ImGui.TextUnformatted(_pythonCheckLabel);
                 }
-            }
-
-            // Refine Endpoint
-            {
-                string epLabel = EditorWidgets.BeginPropertyRow("Refine Endpoint");
-                string buf = EditorPreferences.AiRefineEndpoint ?? "";
-                if (ImGui.InputText(epLabel, ref buf, 256))
-                {
-                    EditorPreferences.AiRefineEndpoint = buf;
-                    EditorPreferences.Save();
-                }
-                ImGui.TextDisabled("Empty = CLI default.");
             }
 
             // Generation Model (ComfyUI 이미지 생성 모델 파일명. CLI의 --model 인자)

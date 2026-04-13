@@ -16,7 +16,6 @@
 //     AiAlienhsServerUrl: string                — AlienHS 서버 URL (기본 "http://localhost:25000")
 //     AiComfyUrl: string                        — AlienHS 서버가 사용할 ComfyUI URL 오버라이드 (기본 "")
 //     AiPythonPath: string                      — CLI 실행 파이썬 경로 (기본 "python")
-//     AiRefineEndpoint: string                  — 프롬프트 refine 엔드포인트 키 (기본 "")
 //     AiGenerationModel: string                 — ComfyUI 이미지 생성 모델 파일명 (기본 "z_image_turbo_nvfp4.safetensors")
 //     Load(): void                              — settings.toml [preferences] 로드
 //     Save(): void                              — settings.toml [preferences] 저장 (read-modify-write)
@@ -85,9 +84,6 @@ namespace IronRose.Engine
         /// <summary>CLI 실행에 사용할 Python 인터프리터 경로.</summary>
         public static string AiPythonPath { get; set; } = "python";
 
-        /// <summary>프롬프트 refine 엔드포인트 키. 빈 문자열이면 CLI 기본값을 사용한다.</summary>
-        public static string AiRefineEndpoint { get; set; } = "";
-
         /// <summary>ComfyUI 이미지 생성 모델 파일명. CLI의 --model 인자로 전달된다. 빈 문자열이면 CLI 기본값을 사용한다.</summary>
         public static string AiGenerationModel { get; set; } = "z_image_turbo_nvfp4.safetensors";
 
@@ -148,9 +144,6 @@ namespace IronRose.Engine
                 if (!string.IsNullOrEmpty(aiPyStr))
                     AiPythonPath = aiPyStr;
 
-                // ai_refine_endpoint (빈 문자열도 허용 — 그대로 복원)
-                AiRefineEndpoint = pref.GetString("ai_refine_endpoint", AiRefineEndpoint) ?? "";
-
                 // ai_generation_model (ComfyUI 이미지 생성 모델 파일명)
                 AiGenerationModel = pref.GetString("ai_generation_model", AiGenerationModel) ?? "";
 
@@ -191,7 +184,6 @@ namespace IronRose.Engine
                 pref.SetValue("ai_alienhs_server_url", AiAlienhsServerUrl);
                 pref.SetValue("ai_comfy_url", AiComfyUrl);
                 pref.SetValue("ai_python_path", AiPythonPath);
-                pref.SetValue("ai_refine_endpoint", AiRefineEndpoint);
                 pref.SetValue("ai_generation_model", AiGenerationModel);
 
                 config.SaveToFile(GlobalSettingsPath, "[EditorPreferences]");
