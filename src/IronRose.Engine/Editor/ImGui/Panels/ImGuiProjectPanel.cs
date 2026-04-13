@@ -141,8 +141,12 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                         result.Request.Prompt,
                         result.Request.Refine,
                         result.Request.Alpha);
+                    EditorDebug.Log($"[AiImageGen] {result.Message}");
                 }
-                EditorModal.EnqueueAlert(result.Message);
+                else
+                {
+                    EditorDebug.LogWarning($"[AiImageGen] {result.Message}");
+                }
             });
 
             // Deferred open of AI image dialog (set by context menu)
