@@ -1,15 +1,14 @@
 // ------------------------------------------------------------
 // @file    EditorState.cs
 // @brief   에디터 상태 영속화 (.rose_editor_state.toml).
-//          마지막 씬 경로, 창 위치/크기, UI 스케일, 스냅 설정,
+//          마지막 씬 경로, 창 위치/크기, 스냅 설정,
 //          패널 가시성, ImGui 레이아웃, 프리팹 편집 모드, Canvas 편집 모드 상태를 저장/복원한다.
-// @deps    IronRose.Engine/ProjectContext, IronRose.Engine/TomlConfig, RoseEngine/Debug
+// @deps    IronRose.Engine/ProjectContext, IronRose.Engine/TomlConfig,
+//          IronRose.Engine/EditorPreferences, RoseEngine/Debug
 // @exports
 //   static class EditorState
 //     LastScenePath: string?                     — 마지막으로 열었던 씬 절대 경로
 //     WindowX/Y/W/H: int?                       — 창 위치/크기
-//     UiScale: float                            — UI 스케일 (0.5~3.0)
-//     EditorFont: string                        — UI 폰트 이름
 //     SceneViewRenderStyle: string              — Scene View 렌더 스타일
 //     SnapTranslate/Rotate/Scale/Grid2D: float  — 스냅 설정
 //     ImGuiLayoutData: string?                  — ImGui 독 레이아웃 INI 데이터
@@ -29,6 +28,7 @@
 // @note    경로 저장 시 ProjectRoot 기준 상대 경로로 변환하여 저장.
 //          FindOrCreatePath()는 ProjectContext.ProjectRoot를 기반으로 파일 경로를 결정한다.
 //          TOML 읽기에 TomlConfig API를 사용한다. Save()는 문자열 직접 조합을 유지한다.
+//          UiScale/EditorFont는 EditorPreferences로 이전됨 (Load() 시 1회 마이그레이션, Save()에 더 이상 기록 안 함).
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -54,12 +54,6 @@ namespace IronRose.Engine.Editor
         public static int? WindowY { get; set; }
         public static int? WindowW { get; set; }
         public static int? WindowH { get; set; }
-
-        /// <summary>에디터 UI 스케일 (0.5 ~ 3.0, 기본 1.0).</summary>
-        public static float UiScale { get; set; } = 1.0f;
-
-        /// <summary>에디터 UI 폰트 이름 ("Roboto" 또는 "ArchivoBlack").</summary>
-        public static string EditorFont { get; set; } = "Roboto";
 
         /// <summary>Scene View 렌더 스타일 ("wireframe", "matcap", "diffuse_only", "rendered").</summary>
         public static string SceneViewRenderStyle { get; set; } = "matcap";
@@ -172,10 +166,15 @@ namespace IronRose.Engine.Editor
                 var s = editor.GetString("last_scene", "");
                 if (!string.IsNullOrEmpty(s))
                     LastScenePath = ToAbsolute(s);
-                UiScale = Math.Clamp(editor.GetFloat("ui_scale", UiScale), 0.5f, 3.0f);
-                var sf = editor.GetString("editor_font", "");
-                if (!string.IsNullOrEmpty(sf))
-                    EditorFont = sf;
+
+                // 1회성 마이그레이션: 레거시 ui_scale/editor_font 키가 남아있다면 EditorPreferences로 이식.
+                // 이후 Save()에서는 이 두 키를 더 이상 기록하지 않으므로 다음 Save 시 키가 영구 삭제된다.
+                float? legacyScale = editor.HasKey("ui_scale") ? (float?)editor.GetFloat("ui_scale", 1.0f) : null;
+                string? legacyFont = editor.HasKey("editor_font") ? editor.GetString("editor_font", "") : null;
+                if (string.IsNullOrEmpty(legacyFont)) legacyFont = null;
+                if (legacyScale.HasValue || legacyFont != null)
+                    EditorPreferences.MigrateFromEditorState(legacyScale, legacyFont);
+
                 var sr = editor.GetString("scene_view_render_style", "");
                 if (!string.IsNullOrEmpty(sr))
                     SceneViewRenderStyle = sr;
@@ -250,8 +249,6 @@ namespace IronRose.Engine.Editor
                 var scenePath = string.IsNullOrEmpty(LastScenePath) ? "" : ToRelative(LastScenePath);
                 var toml = "[editor]\n";
                 toml += $"last_scene = \"{scenePath}\"\n";
-                toml += $"ui_scale = {UiScale:F1}\n";
-                toml += $"editor_font = \"{EditorFont}\"\n";
                 toml += $"scene_view_render_style = \"{SceneViewRenderStyle}\"\n";
                 toml += $"game_view_resolution = \"{GameViewResolution}\"\n";
                 toml += "\n[snap]\n";

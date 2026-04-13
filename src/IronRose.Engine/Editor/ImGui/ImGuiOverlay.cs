@@ -321,13 +321,13 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             }
 
             // Restore saved font selection
-            _currentFont = EditorState.EditorFont;
+            _currentFont = EditorPreferences.EditorFont;
 
             // Apply theme
-            ImGuiTheme.Apply();
+            ImGuiTheme.Apply(EditorPreferences.ColorTheme);
 
             // Restore saved UI scale
-            _uiScale = EditorState.UiScale;
+            _uiScale = EditorPreferences.UiScale;
             io.FontGlobalScale = _uiScale;
 
             // Load saved layout if exists
@@ -1695,9 +1695,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor
 
             _currentFont = fontName;
 
-            // Persist to editor state
-            EditorState.EditorFont = fontName;
-            EditorState.Save();
+            // Persist to editor preferences
+            EditorPreferences.EditorFont = fontName;
+            EditorPreferences.Save();
         }
 
         private void RestorePanelStates()
@@ -1736,9 +1736,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             var io = ImGui.GetIO();
             io.FontGlobalScale = _uiScale;
 
-            // Persist to editor state
-            EditorState.UiScale = _uiScale;
-            EditorState.Save();
+            // Persist to editor preferences
+            EditorPreferences.UiScale = _uiScale;
+            EditorPreferences.Save();
         }
 
         private void DuplicateSelected()
