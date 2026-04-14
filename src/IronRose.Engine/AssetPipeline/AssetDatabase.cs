@@ -17,6 +17,10 @@
 //     ProjectDirty: bool                    — 프로젝트 변경 여부
 // @note    ScanAssets 루프에서 100개 파일마다 EngineCore.PumpWindowEvents()를 호출하여
 //          OS "응답 없음" 방지. FileSystemWatcher로 런타임 에셋 변경 감지.
+//          파일 쓰기 도중 Changed 이벤트가 즉시 전달되면 PNG CRC 오류 등으로 Import가 실패할 수 있어,
+//          ProcessFileChanges는 FileChangeDebounceMs(150ms) 만큼 "마지막 Changed로부터 조용한" 뒤
+//          실제 Reimport를 실행한다. Reimport는 try/finally로 _importDepth를 복원하고, 실패 시
+//          oldAsset을 _loadedAssets에 되돌려 씬 참조가 dangling되지 않고 후속 Reimport가 가능하게 한다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Concurrent;
@@ -104,7 +108,17 @@ namespace IronRose.AssetPipeline
             public AssetChangeType Type;
             public string FullPath;
             public string? OldFullPath;
+            /// <summary>이벤트 수신 시각 (UTC tick). 파일 쓰기 완료 대기용 debounce에 사용.</summary>
+            public long TimestampTicks;
         }
+
+        /// <summary>
+        /// 외부 프로세스가 에셋 파일을 쓰는 중 FileSystemWatcher가 Changed 이벤트를 즉시 전달하므로,
+        /// 해당 이벤트 수신 후 이 시간(ms)만큼 추가 Changed 이벤트가 없어야 실제 reimport를 실행한다.
+        /// 그동안 도착하는 Changed 이벤트는 타임스탬프를 리셋하여 대기 시간을 연장.
+        /// PNG CRC 오류 등 "쓰기 중간 읽기"를 방지.
+        /// </summary>
+        private const int FileChangeDebounceMs = 150;
 
         public int AssetCount => _guidToPath.Count;
 
@@ -661,7 +675,12 @@ namespace IronRose.AssetPipeline
             _roseCache.InvalidateCache(path);
 
             // 3. 재임포트 + 캐시 저장 + 메모리 로드 + 씬 참조 교체
-            switch (importerType)
+            // 예외가 발생해도 _importDepth를 반드시 복원하고, 실패 시 oldAsset을 _loadedAssets에
+            // 복원하여 이후 파일 변경/Inspector Apply 경로에서 다시 Reimport가 트리거되도록 보장한다.
+            bool reimportSucceeded = false;
+            try
+            {
+                switch (importerType)
             {
                 case "MeshImporter":
                 {
@@ -797,44 +816,75 @@ namespace IronRose.AssetPipeline
                         InvalidatePrefabAndDependents(prefabGuid!);
                     break;
                 }
-            }
-
-            // 4. 이전 에셋 GPU 리소스 정리 (텍스처 공유로 인한 이중 Dispose 방지)
-            if (oldAsset is MeshImportResult oldMeshResult)
-            {
-                var disposed = new HashSet<Texture2D>();
-                foreach (var tex in oldMeshResult.Textures)
-                {
-                    if (tex != null && disposed.Add(tex))
-                        DisposeIfNotDefault(tex);
                 }
-                foreach (var mat in oldMeshResult.Materials)
+
+                reimportSucceeded = _loadedAssets.ContainsKey(path) || importerType == "PrefabImporter";
+
+                // 4. 이전 에셋 GPU 리소스 정리 (텍스처 공유로 인한 이중 Dispose 방지)
+                // 실패한 경우 oldAsset을 복원해야 하므로 정리하지 않는다.
+                if (reimportSucceeded)
                 {
-                    if (mat.mainTexture != null && disposed.Add(mat.mainTexture))
-                        DisposeIfNotDefault(mat.mainTexture);
-                    if (mat.normalMap != null && disposed.Add(mat.normalMap))
-                        DisposeIfNotDefault(mat.normalMap);
-                    if (mat.MROMap != null && disposed.Add(mat.MROMap))
-                        DisposeIfNotDefault(mat.MROMap);
+                    if (oldAsset is MeshImportResult oldMeshResult)
+                    {
+                        var disposed = new HashSet<Texture2D>();
+                        foreach (var tex in oldMeshResult.Textures)
+                        {
+                            if (tex != null && disposed.Add(tex))
+                                DisposeIfNotDefault(tex);
+                        }
+                        foreach (var mat in oldMeshResult.Materials)
+                        {
+                            if (mat.mainTexture != null && disposed.Add(mat.mainTexture))
+                                DisposeIfNotDefault(mat.mainTexture);
+                            if (mat.normalMap != null && disposed.Add(mat.normalMap))
+                                DisposeIfNotDefault(mat.normalMap);
+                            if (mat.MROMap != null && disposed.Add(mat.MROMap))
+                                DisposeIfNotDefault(mat.MROMap);
+                        }
+                    }
+                    else if (oldAsset is SpriteImportResult oldSpriteResult)
+                    {
+                        oldSpriteResult.Texture?.Dispose();
+                    }
+                    else if (oldAsset is Texture2D oldTex)
+                    {
+                        oldTex.Dispose();
+                    }
+                    else if (oldAsset is Font oldFont)
+                    {
+                        oldFont.atlasTexture?.Dispose();
+                    }
                 }
             }
-            else if (oldAsset is SpriteImportResult oldSpriteResult)
+            catch (Exception ex)
             {
-                oldSpriteResult.Texture?.Dispose();
+                // 임포트 실패: 이미지 쓰기 중간 상태를 읽어 CRC Error가 발생하는 경우 등.
+                // oldAsset이 있다면 _loadedAssets에 복원하여 후속 파일 변경/Inspector Apply 경로에서
+                // 정상적으로 다시 Reimport가 트리거되도록 한다.
+                EditorDebug.LogError($"[AssetDatabase] Reimport failed: {path} — {ex.Message}");
+                if (oldAsset != null)
+                {
+                    _loadedAssets[path] = oldAsset;
+                    // sub-asset 캐시를 다시 채워서 씬의 sub-asset 참조도 일관성 유지
+                    if (oldAsset is MeshImportResult oldMesh)
+                    {
+                        var meta2 = RoseMetadata.LoadOrCreate(path);
+                        CacheSubAssets(path, oldMesh, meta2);
+                    }
+                    else if (oldAsset is SpriteImportResult oldSpr)
+                    {
+                        var meta2 = RoseMetadata.LoadOrCreate(path);
+                        CacheSpriteSubAssets(path, oldSpr, meta2);
+                    }
+                }
             }
-            else if (oldAsset is Texture2D oldTex)
+            finally
             {
-                oldTex.Dispose();
+                ProjectDirty = true;
+                if (reimportSucceeded) ReimportVersion++;
+                _importDepth--;
+                if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Reimport finished: {path} (success={reimportSucceeded})");
             }
-            else if (oldAsset is Font oldFont)
-            {
-                oldFont.atlasTexture?.Dispose();
-            }
-
-            ProjectDirty = true;
-            ReimportVersion++;
-            _importDepth--;
-            if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Reimported: {path}");
         }
 
         // ─── Async Reimport (비동기 재임포트 + 진행 UI) ──────────────
@@ -943,14 +993,46 @@ namespace IronRose.AssetPipeline
             if (_reimportTask == null) return false;
             if (!_reimportTask.IsCompleted) return false;
 
-            // 에러 처리
-            if (_reimportTask.IsFaulted)
+            var path = _reimportPath!;
+            bool faulted = _reimportTask.IsFaulted;
+
+            // 에러 처리: 실패 시 oldAsset을 _loadedAssets에 복원하여 씬 참조가 dangling되지 않도록
+            // 보장하고, 이후 파일 변경/Inspector Apply 경로에서 다시 Reimport가 트리거되도록 한다.
+            if (faulted)
             {
                 var ex = _reimportTask.Exception?.InnerException;
                 EditorDebug.LogError($"[AssetDatabase] Async reimport failed: {ex?.Message}");
-            }
 
-            var path = _reimportPath!;
+                if (_reimportOldAsset != null)
+                {
+                    _loadedAssets[path] = _reimportOldAsset;
+                    if (_reimportOldAsset is MeshImportResult oldMeshR)
+                    {
+                        var meta2 = _reimportMeta ?? RoseMetadata.LoadOrCreate(path);
+                        CacheSubAssets(path, oldMeshR, meta2);
+                    }
+                    else if (_reimportOldAsset is SpriteImportResult oldSprR)
+                    {
+                        var meta2 = _reimportMeta ?? RoseMetadata.LoadOrCreate(path);
+                        CacheSpriteSubAssets(path, oldSprR, meta2);
+                    }
+                }
+
+                // GPU 정리 스킵하고 바로 상태 초기화로.
+                _reimportTimer?.Stop();
+                _reimportTask = null;
+                _reimportPath = null;
+                _reimportOldAsset = null;
+                _reimportTimer = null;
+                _reimportMeshResult = null;
+                _reimportTexResult = null;
+                _reimportSpriteResult = null;
+                _reimportMeta = null;
+                _reimportType = null;
+                _importDepth--;
+                ProjectDirty = true;
+                return true;
+            }
 
             // 메인 스레드 마무리
             switch (_reimportType)
@@ -1523,6 +1605,7 @@ namespace IronRose.AssetPipeline
                         Type = AssetChangeType.Renamed,
                         FullPath = e.FullPath,
                         OldFullPath = e.OldFullPath,
+                        TimestampTicks = DateTime.UtcNow.Ticks,
                     });
                 }
             };
@@ -1561,12 +1644,16 @@ namespace IronRose.AssetPipeline
                 {
                     Type = type,
                     FullPath = fullPath,
+                    TimestampTicks = DateTime.UtcNow.Ticks,
                 });
             }
         }
 
         /// <summary>
         /// 메인 스레드에서 매 프레임 호출. 파일 변경 이벤트를 처리한다.
+        /// FileSystemWatcher가 파일 쓰기 도중에도 Changed 이벤트를 전달하므로,
+        /// 이벤트 수신 후 일정 시간(FileChangeDebounceMs) 추가 Changed가 없어야 실제 임포트를 실행한다.
+        /// Debounce 기간 내 이벤트는 큐에 되돌려 다음 프레임에 재평가한다.
         /// </summary>
         public void ProcessFileChanges()
         {
@@ -1578,12 +1665,56 @@ namespace IronRose.AssetPipeline
                 _pendingChanges.Clear();
             }
 
-            // Deduplicate: keep only the last event per file path
+            // Deduplicate: keep only the last (most recent) event per file path.
+            // Created/Deleted/Renamed는 type을 그대로 유지하되 timestamp는 최신으로 갱신한다.
             var deduped = new Dictionary<string, AssetChangeEvent>(StringComparer.OrdinalIgnoreCase);
             foreach (var evt in events)
+            {
+                if (deduped.TryGetValue(evt.FullPath, out var existing))
+                {
+                    // Deleted가 들어오면 이후 이벤트로 덮어쓰지 않고 Deleted 유지.
+                    // 그 외에는 최신 이벤트로 교체하면서 타임스탬프 갱신 → debounce 연장.
+                    if (existing.Type == AssetChangeType.Deleted) continue;
+                }
                 deduped[evt.FullPath] = evt;
+            }
 
+            // Debounce: 아직 안정화 대기 시간이 지나지 않은 이벤트는 큐에 되돌린다.
+            // 쓰기 중에는 Changed가 연속으로 도착하여 타임스탬프가 계속 갱신되므로 처리가 지연된다.
+            var nowTicks = DateTime.UtcNow.Ticks;
+            var debounceTicks = TimeSpan.FromMilliseconds(FileChangeDebounceMs).Ticks;
+            var toRequeue = new List<AssetChangeEvent>();
+            var ready = new List<AssetChangeEvent>();
             foreach (var evt in deduped.Values)
+            {
+                // Deleted/Renamed는 debounce하지 않음 (원자적 이벤트로 간주)
+                if (evt.Type == AssetChangeType.Created || evt.Type == AssetChangeType.Changed)
+                {
+                    if (nowTicks - evt.TimestampTicks < debounceTicks)
+                    {
+                        toRequeue.Add(evt);
+                        continue;
+                    }
+                }
+                ready.Add(evt);
+            }
+
+            if (toRequeue.Count > 0)
+            {
+                lock (_changeLock)
+                {
+                    foreach (var evt in toRequeue)
+                        _pendingChanges.Enqueue(evt);
+                }
+            }
+
+            if (ready.Count == 0) return;
+
+            var deduped_ready = new Dictionary<string, AssetChangeEvent>(StringComparer.OrdinalIgnoreCase);
+            foreach (var evt in ready)
+                deduped_ready[evt.FullPath] = evt;
+
+            foreach (var evt in deduped_ready.Values)
             {
                 try
                 {
