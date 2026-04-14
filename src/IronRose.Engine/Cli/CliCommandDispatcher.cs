@@ -1941,12 +1941,52 @@ namespace IronRose.Engine.Cli
                     if (db == null)
                         return JsonError("AssetDatabase not initialized");
 
-                    var projectPath = args.Length > 0 ? args[0] : ProjectContext.AssetsPath;
-                    if (string.IsNullOrEmpty(projectPath))
-                        return JsonError("No assets path specified");
+                    var assetsRoot = ProjectContext.AssetsPath;
+                    if (string.IsNullOrEmpty(assetsRoot))
+                        return JsonError("Project assets path not configured");
 
-                    db.ScanAssets(projectPath);
-                    return JsonOk(new { count = db.AssetCount });
+                    // 인자 없음 → 전체 에셋 루트를 풀 스캔 (DB 재구축)
+                    if (args.Length == 0)
+                    {
+                        db.ScanAssets(assetsRoot);
+                        return JsonOk(new { count = db.AssetCount });
+                    }
+
+                    // 인자 있음 → 상대/절대 경로를 해석하여 서브트리만 증분 스캔
+                    var inputPath = args[0];
+                    string resolved;
+                    try
+                    {
+                        resolved = System.IO.Path.IsPathRooted(inputPath)
+                            ? System.IO.Path.GetFullPath(inputPath)
+                            : System.IO.Path.GetFullPath(System.IO.Path.Combine(ProjectContext.ProjectRoot, inputPath));
+                    }
+                    catch (Exception ex)
+                    {
+                        return JsonError($"Invalid path '{inputPath}': {ex.Message}");
+                    }
+
+                    var assetsRootFull = System.IO.Path.GetFullPath(assetsRoot);
+                    // 서브트리는 Assets/ 하위여야 한다.
+                    var assetsRootNormalized = assetsRootFull.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+                    var resolvedNormalized = resolved.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+                    bool insideAssets = resolvedNormalized.Equals(assetsRootNormalized, StringComparison.OrdinalIgnoreCase)
+                        || resolvedNormalized.StartsWith(assetsRootNormalized + System.IO.Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+                    if (!insideAssets)
+                        return JsonError($"Path is outside Assets root: {resolved}");
+
+                    if (!System.IO.Directory.Exists(resolved))
+                        return JsonError($"Asset directory not found: {resolved}");
+
+                    // 서브트리 전체 경로가 Assets 루트와 같다면 전체 재스캔으로 폴백
+                    if (resolvedNormalized.Equals(assetsRootNormalized, StringComparison.OrdinalIgnoreCase))
+                    {
+                        db.ScanAssets(assetsRoot);
+                        return JsonOk(new { count = db.AssetCount });
+                    }
+
+                    int touched = db.ScanAssetsSubtree(resolved);
+                    return JsonOk(new { count = touched, path = resolved });
                 });
             };
 
