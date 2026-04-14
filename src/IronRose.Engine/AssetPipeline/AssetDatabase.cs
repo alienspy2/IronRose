@@ -652,173 +652,194 @@ namespace IronRose.AssetPipeline
         public void Reimport(string path)
         {
             if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Reimport starting: {path}");
+
+            // ─── _importDepth 누수 방지 ───
+            // _importDepth++ 직후부터 finally까지 try 범위를 잡아서,
+            // 선행 IO(LoadOrCreate 등) 또는 캐시 정리 단계에서 IO 예외가 발생해도
+            // _importDepth--가 반드시 실행되도록 보장한다. (외부 프로세스가 .rose/.meta/
+            // 에셋 파일을 쓰는 중일 때 CRC/IO Exception이 터져도 depth가 누수되지 않는다.)
             _importDepth++;
-            _failedImports.Remove(path);
-            var meta = RoseMetadata.LoadOrCreate(path);
-            var importerType = GetImporterType(meta);
-
-            // 1. 기존 에셋 보존 (Dispose하지 않음 — 씬 참조 교체 후 처리)
-            _loadedAssets.TryGetValue(path, out var oldAsset);
-            _loadedAssets.Remove(path);
-
-            // 기존 sub-asset 캐시/역참조 맵 정리
-            if (oldAsset is MeshImportResult oldResult)
-            {
-                RemoveSubAssetCaches(path, oldResult);
-            }
-            else if (oldAsset is SpriteImportResult oldSprResult)
-            {
-                RemoveSpriteSubAssetCaches(path, oldSprResult);
-            }
-
-            // 2. 디스크 캐시 무효화
-            _roseCache.InvalidateCache(path);
-
-            // 3. 재임포트 + 캐시 저장 + 메모리 로드 + 씬 참조 교체
-            // 예외가 발생해도 _importDepth를 반드시 복원하고, 실패 시 oldAsset을 _loadedAssets에
-            // 복원하여 이후 파일 변경/Inspector Apply 경로에서 다시 Reimport가 트리거되도록 보장한다.
             bool reimportSucceeded = false;
+            object? oldAsset = null;
+            string importerType = string.Empty;
             try
             {
+                _failedImports.Remove(path);
+                var meta = RoseMetadata.LoadOrCreate(path);
+                importerType = GetImporterType(meta);
+
+                // 1. 기존 에셋 스냅샷 (Dispose하지 않음 — 씬 참조 교체 후 처리)
+                //    try 내부 최상단에서 스냅샷을 뜨고 Remove한다. 이후 어느 단계에서
+                //    예외가 나도 catch에서 oldAsset으로 복원 가능하다.
+                if (_loadedAssets.TryGetValue(path, out var cur))
+                    oldAsset = cur;
+                _loadedAssets.Remove(path);
+
+                // 기존 sub-asset 캐시/역참조 맵 정리
+                if (oldAsset is MeshImportResult oldResult)
+                {
+                    RemoveSubAssetCaches(path, oldResult);
+                }
+                else if (oldAsset is SpriteImportResult oldSprResult)
+                {
+                    RemoveSpriteSubAssetCaches(path, oldSprResult);
+                }
+
+                // 2. 디스크 캐시 무효화
+                _roseCache.InvalidateCache(path);
+
+                // 3. 재임포트 + 캐시 저장 + 메모리 로드 + 씬 참조 교체
+                // 각 importer case는 성공 시 명시적으로 reimportSucceeded = true를 세팅한다.
+                // (_loadedAssets.ContainsKey 같은 암묵적 판정은 TextAssetImporter처럼
+                // 기존 인스턴스만 갱신하고 _loadedAssets에 다시 넣지 않는 case에서 false negative가 난다.)
                 switch (importerType)
-            {
-                case "MeshImporter":
                 {
-                    var newResult = ImportMesh(path, meta);
-                    if (newResult != null)
+                    case "MeshImporter":
                     {
-                        RegisterSubAssets(path, newResult, meta);
-                        StoreCacheOrDefer(path, newResult, meta);
-                        _loadedAssets[path] = newResult;
-                        CacheSubAssets(path, newResult, meta);
-                        ReplaceMeshInScene(newResult);
-
-                    }
-                    break;
-                }
-                case "TextureImporter":
-                {
-                    var newTex = _textureImporter.Import(path, meta);
-                    if (newTex != null)
-                    {
-                        StoreCacheOrDefer(path, newTex, meta);
-                        var oldTex = oldAsset is SpriteImportResult oldSpr ? oldSpr.Texture : oldAsset as Texture2D;
-                        if (IsSpriteTexture(meta))
+                        var newResult = ImportMesh(path, meta);
+                        if (newResult != null)
                         {
-                            var sr = BuildSpriteImportResult(newTex, meta);
-                            RegisterSpriteSubAssets(path, sr, meta);
-                            _loadedAssets[path] = sr;
-                            CacheSpriteSubAssets(path, sr, meta);
-                            var oldSprResult = oldAsset as SpriteImportResult;
-                            ReplaceSpriteInScene(oldSprResult, sr);
+                            RegisterSubAssets(path, newResult, meta);
+                            StoreCacheOrDefer(path, newResult, meta);
+                            _loadedAssets[path] = newResult;
+                            CacheSubAssets(path, newResult, meta);
+                            ReplaceMeshInScene(newResult);
+                            reimportSucceeded = true;
                         }
-                        else
+                        break;
+                    }
+                    case "TextureImporter":
+                    {
+                        var newTex = _textureImporter.Import(path, meta);
+                        if (newTex != null)
                         {
-                            _loadedAssets[path] = newTex;
+                            StoreCacheOrDefer(path, newTex, meta);
+                            var oldTex = oldAsset is SpriteImportResult oldSpr ? oldSpr.Texture : oldAsset as Texture2D;
+                            if (IsSpriteTexture(meta))
+                            {
+                                var sr = BuildSpriteImportResult(newTex, meta);
+                                RegisterSpriteSubAssets(path, sr, meta);
+                                _loadedAssets[path] = sr;
+                                CacheSpriteSubAssets(path, sr, meta);
+                                var oldSprResult = oldAsset as SpriteImportResult;
+                                ReplaceSpriteInScene(oldSprResult, sr);
+                            }
+                            else
+                            {
+                                _loadedAssets[path] = newTex;
+                            }
+                            ReplaceTextureInScene(newTex, oldTex);
+                            reimportSucceeded = true;
                         }
-                        ReplaceTextureInScene(newTex, oldTex);
+                        break;
                     }
-                    break;
-                }
-                case "FontImporter":
-                {
-                    var newFont = _fontImporter.Import(path, meta);
-                    if (newFont != null)
+                    case "FontImporter":
                     {
-                        _loadedAssets[path] = newFont;
-                        ReplaceFontInScene(newFont);
-                    }
-                    break;
-                }
-                case "MaterialImporter":
-                {
-                    // 이전 Material 역참조맵 제거
-                    if (oldAsset is Material oldMat)
-                        _materialToGuid.Remove(oldMat);
-
-                    var newMat = _materialImporter.Import(path, meta, this);
-                    if (newMat != null)
-                    {
-                        _loadedAssets[path] = newMat;
-                        if (!string.IsNullOrEmpty(meta.guid))
-                            _materialToGuid[newMat] = meta.guid;
-                        ReplaceMaterialInScene(newMat, oldAsset as Material);
-                    }
-                    break;
-                }
-                case "RendererProfileImporter":
-                {
-                    if (oldAsset is RendererProfile oldRp)
-                        _rendererProfileToGuid.Remove(oldRp);
-
-                    var newRp = _rendererProfileImporter.Import(path, meta);
-                    if (newRp != null)
-                    {
-                        _loadedAssets[path] = newRp;
-                        if (!string.IsNullOrEmpty(meta.guid))
-                            _rendererProfileToGuid[newRp] = meta.guid;
-
-                        // 활성 프로파일이면 참조 교체
-                        if (RenderSettings.activeRendererProfile == oldAsset)
+                        var newFont = _fontImporter.Import(path, meta);
+                        if (newFont != null)
                         {
-                            RenderSettings.activeRendererProfile = newRp;
-                            newRp.ApplyToRenderSettings();
+                            _loadedAssets[path] = newFont;
+                            ReplaceFontInScene(newFont);
+                            reimportSucceeded = true;
                         }
+                        break;
                     }
-                    break;
-                }
-                case "PostProcessProfileImporter":
-                {
-                    if (oldAsset is PostProcessProfile oldPp)
-                        _ppProfileToGuid.Remove(oldPp);
-
-                    var newPp = _ppProfileImporter.Import(path, meta);
-                    if (newPp != null)
+                    case "MaterialImporter":
                     {
-                        _loadedAssets[path] = newPp;
-                        if (!string.IsNullOrEmpty(meta.guid))
-                            _ppProfileToGuid[newPp] = meta.guid;
+                        // 이전 Material 역참조맵 제거
+                        if (oldAsset is Material oldMat)
+                            _materialToGuid.Remove(oldMat);
 
-                        // Volume의 stale profile 참조 갱신
-                        foreach (var vol in PostProcessVolume._allVolumes)
+                        var newMat = _materialImporter.Import(path, meta, this);
+                        if (newMat != null)
                         {
-                            if (vol.profileGuid == meta.guid)
-                                vol.profile = newPp;
-                        }
-                    }
-                    break;
-                }
-                case "TextAssetImporter":
-                {
-                    var newTa = _textAssetImporter.Import(path, meta);
-                    if (newTa != null)
-                    {
-                        // 기존 인스턴스가 있으면 내용만 갱신 (씬 참조 유지)
-                        if (oldAsset is TextAsset oldTa)
-                        {
-                            oldTa.text = newTa.text;
-                            oldTa.bytes = newTa.bytes;
-                        }
-                        else
-                        {
-                            _loadedAssets[path] = newTa;
+                            _loadedAssets[path] = newMat;
                             if (!string.IsNullOrEmpty(meta.guid))
-                                _textAssetToGuid[newTa] = meta.guid;
+                                _materialToGuid[newMat] = meta.guid;
+                            ReplaceMaterialInScene(newMat, oldAsset as Material);
+                            reimportSucceeded = true;
                         }
+                        break;
                     }
-                    break;
-                }
-                case "PrefabImporter":
-                {
-                    // Dependency graph 기반으로 수정된 프리팹과 이를 참조하는 부모들만 캐스케이드 무효화
-                    var prefabGuid = GetGuidFromPath(path);
-                    if (!string.IsNullOrEmpty(prefabGuid))
-                        InvalidatePrefabAndDependents(prefabGuid!);
-                    break;
-                }
-                }
+                    case "RendererProfileImporter":
+                    {
+                        if (oldAsset is RendererProfile oldRp)
+                            _rendererProfileToGuid.Remove(oldRp);
 
-                reimportSucceeded = _loadedAssets.ContainsKey(path) || importerType == "PrefabImporter";
+                        var newRp = _rendererProfileImporter.Import(path, meta);
+                        if (newRp != null)
+                        {
+                            _loadedAssets[path] = newRp;
+                            if (!string.IsNullOrEmpty(meta.guid))
+                                _rendererProfileToGuid[newRp] = meta.guid;
+
+                            // 활성 프로파일이면 참조 교체
+                            if (RenderSettings.activeRendererProfile == oldAsset)
+                            {
+                                RenderSettings.activeRendererProfile = newRp;
+                                newRp.ApplyToRenderSettings();
+                            }
+                            reimportSucceeded = true;
+                        }
+                        break;
+                    }
+                    case "PostProcessProfileImporter":
+                    {
+                        if (oldAsset is PostProcessProfile oldPp)
+                            _ppProfileToGuid.Remove(oldPp);
+
+                        var newPp = _ppProfileImporter.Import(path, meta);
+                        if (newPp != null)
+                        {
+                            _loadedAssets[path] = newPp;
+                            if (!string.IsNullOrEmpty(meta.guid))
+                                _ppProfileToGuid[newPp] = meta.guid;
+
+                            // Volume의 stale profile 참조 갱신
+                            foreach (var vol in PostProcessVolume._allVolumes)
+                            {
+                                if (vol.profileGuid == meta.guid)
+                                    vol.profile = newPp;
+                            }
+                            reimportSucceeded = true;
+                        }
+                        break;
+                    }
+                    case "TextAssetImporter":
+                    {
+                        var newTa = _textAssetImporter.Import(path, meta);
+                        if (newTa != null)
+                        {
+                            // 기존 인스턴스가 있으면 내용만 갱신 (씬 참조 유지).
+                            // 이 경로에서는 _loadedAssets에 새로 넣지 않는 대신,
+                            // 앞서 Remove된 oldTa를 다시 세팅해 lookup miss를 없앤다.
+                            if (oldAsset is TextAsset oldTa)
+                            {
+                                oldTa.text = newTa.text;
+                                oldTa.bytes = newTa.bytes;
+                                _loadedAssets[path] = oldTa;
+                            }
+                            else
+                            {
+                                _loadedAssets[path] = newTa;
+                                if (!string.IsNullOrEmpty(meta.guid))
+                                    _textAssetToGuid[newTa] = meta.guid;
+                            }
+                            reimportSucceeded = true;
+                        }
+                        break;
+                    }
+                    case "PrefabImporter":
+                    {
+                        // Dependency graph 기반으로 수정된 프리팹과 이를 참조하는 부모들만 캐스케이드 무효화
+                        var prefabGuid = GetGuidFromPath(path);
+                        if (!string.IsNullOrEmpty(prefabGuid))
+                            InvalidatePrefabAndDependents(prefabGuid!);
+                        // PrefabImporter는 _loadedAssets에 넣지 않는다. 무효화가 수행되면 성공.
+                        reimportSucceeded = true;
+                        break;
+                    }
+                }
 
                 // 4. 이전 에셋 GPU 리소스 정리 (텍스처 공유로 인한 이중 Dispose 방지)
                 // 실패한 경우 oldAsset을 복원해야 하므로 정리하지 않는다.
@@ -858,28 +879,39 @@ namespace IronRose.AssetPipeline
             }
             catch (Exception ex)
             {
-                // 임포트 실패: 이미지 쓰기 중간 상태를 읽어 CRC Error가 발생하는 경우 등.
-                // oldAsset이 있다면 _loadedAssets에 복원하여 후속 파일 변경/Inspector Apply 경로에서
+                // 임포트 실패: 이미지 쓰기 중간 상태를 읽어 CRC Error가 발생하는 경우,
+                // LoadOrCreate에서 IO 예외가 발생하는 경우 등. oldAsset이 있다면
+                // _loadedAssets에 복원하여 후속 파일 변경/Inspector Apply 경로에서
                 // 정상적으로 다시 Reimport가 트리거되도록 한다.
                 EditorDebug.LogError($"[AssetDatabase] Reimport failed: {path} — {ex.Message}");
-                if (oldAsset != null)
-                {
-                    _loadedAssets[path] = oldAsset;
-                    // sub-asset 캐시를 다시 채워서 씬의 sub-asset 참조도 일관성 유지
-                    if (oldAsset is MeshImportResult oldMesh)
-                    {
-                        var meta2 = RoseMetadata.LoadOrCreate(path);
-                        CacheSubAssets(path, oldMesh, meta2);
-                    }
-                    else if (oldAsset is SpriteImportResult oldSpr)
-                    {
-                        var meta2 = RoseMetadata.LoadOrCreate(path);
-                        CacheSpriteSubAssets(path, oldSpr, meta2);
-                    }
-                }
             }
             finally
             {
+                // 조용한 실패(importer가 예외 없이 null 반환) 또는 catch 경로에서도
+                // oldAsset이 있으면 _loadedAssets를 복원. 성공 경로에는 영향이 없다.
+                if (!reimportSucceeded && oldAsset != null && !_loadedAssets.ContainsKey(path))
+                {
+                    _loadedAssets[path] = oldAsset;
+                    // sub-asset 캐시를 다시 채워서 씬의 sub-asset 참조도 일관성 유지
+                    try
+                    {
+                        if (oldAsset is MeshImportResult oldMesh)
+                        {
+                            var meta2 = RoseMetadata.LoadOrCreate(path);
+                            CacheSubAssets(path, oldMesh, meta2);
+                        }
+                        else if (oldAsset is SpriteImportResult oldSpr)
+                        {
+                            var meta2 = RoseMetadata.LoadOrCreate(path);
+                            CacheSpriteSubAssets(path, oldSpr, meta2);
+                        }
+                    }
+                    catch (Exception restoreEx)
+                    {
+                        EditorDebug.LogError($"[AssetDatabase] Reimport restore failed: {path} — {restoreEx.Message}");
+                    }
+                }
+
                 ProjectDirty = true;
                 if (reimportSucceeded) ReimportVersion++;
                 _importDepth--;
@@ -1710,11 +1742,9 @@ namespace IronRose.AssetPipeline
 
             if (ready.Count == 0) return;
 
-            var deduped_ready = new Dictionary<string, AssetChangeEvent>(StringComparer.OrdinalIgnoreCase);
+            // ready 리스트는 이미 path-unique한 deduped.Values에서 debounce 통과한 것만 추린 것이라
+            // FullPath가 유일하다. 별도 Dictionary 재집계(deduped_ready)는 no-op이므로 제거.
             foreach (var evt in ready)
-                deduped_ready[evt.FullPath] = evt;
-
-            foreach (var evt in deduped_ready.Values)
             {
                 try
                 {
