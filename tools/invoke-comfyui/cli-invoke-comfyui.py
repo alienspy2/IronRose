@@ -90,14 +90,11 @@ def generate(
     server: str = DEFAULT_SERVER,
     output: Path | None = None,
     bypass_refine: bool = False,
-    endpoint: str | None = None,
     comfy_model: str | None = None,
     comfy_url: str | None = None,
 ) -> dict:
     url = server.rstrip("/") + SERVICE_PATH + "/api/generate"
     body: dict = {"prompt": prompt, "bypass_refine": bypass_refine}
-    if endpoint:
-        body["endpoint"] = endpoint
     if comfy_model:
         body["comfy_model"] = comfy_model
     if comfy_url:
@@ -204,8 +201,6 @@ def main(argv: list[str] | None = None) -> int:
                         help=f"AlienHS 서버 URL (기본: {DEFAULT_SERVER})")
     parser.add_argument("--bypass-refine", action="store_true",
                         help="AI 프롬프트 정제 건너뛰기 (원본 프롬프트 그대로)")
-    parser.add_argument("--endpoint", default=None,
-                        help="프롬프트 정제용 엔드포인트 키 (예: genai-31b, gemma4-e4b-q4)")
     parser.add_argument("--model", dest="comfy_model", default=None,
                         help="ComfyUI 모델 파일명 (예: z_image_turbo_nvfp4.safetensors)")
     parser.add_argument("--comfy-url", dest="comfy_url", default=None,
@@ -257,7 +252,6 @@ def main(argv: list[str] | None = None) -> int:
                 server=args.server,
                 output=args.output,
                 bypass_refine=args.bypass_refine,
-                endpoint=args.endpoint,
                 comfy_model=args.comfy_model,
                 comfy_url=args.comfy_url,
             )

@@ -38,7 +38,6 @@ python cli-invoke-comfyui.py --rmbg-input ./photo.jpg -o ./out/clean.png
 | `-o, --output` | 저장 경로 (기본: `./genimage_<timestamp>.png`) |
 | `--server` | AlienHS 서버 URL (기본: `http://localhost:25000`, `ALIENHS_SERVER` 환경변수) |
 | `--bypass-refine` | AI 프롬프트 정제 건너뛰고 원본 프롬프트 그대로 사용 |
-| `--endpoint` | 정제용 엔드포인트 키 (예: `genai-31b`, `gemma4-e4b-q4`) |
 | `--model` | ComfyUI 모델 파일명 |
 | `--comfy-url` | ComfyUI 서버 URL 덮어쓰기 |
 | `--rmbg` | 생성 후 배경 제거(BEN2) 수행. 결과는 `<원본stem>_nobg.png`로 저장 |
