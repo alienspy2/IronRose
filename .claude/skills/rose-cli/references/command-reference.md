@@ -507,6 +507,34 @@ GUID에서 파일 경로 조회.
 asset.path <guid>
 ```
 
+### `asset.select.get`
+에셋 브라우저(프로젝트 패널)의 현재 선택 조회.
+```
+asset.select.get
+```
+응답: `{count, primary, assets: [{path, guid, type, exists}, ...]}`. 선택이 없으면 `count:0`, `primary:null`.
+
+### `asset.select`
+경로 또는 GUID로 에셋 브라우저 선택을 설정. `--add` 플래그를 주면 기존 선택에 추가, 없으면 단일 선택으로 교체. `none`을 인자로 주면 전체 해제.
+```
+asset.select <pathOrGuid> [--add]
+asset.select none
+```
+응답 스키마는 `asset.select.get`과 동일. 경로/GUID를 해석할 수 없으면 `asset not found: <arg>` 에러.
+
+### `asset.select.none`
+에셋 선택 전체 해제. `asset.select none`과 동일.
+```
+asset.select.none
+```
+
+### `asset.info`
+단일 에셋 상세 정보. 경로 또는 GUID 허용.
+```
+asset.info <pathOrGuid>
+```
+응답: `{path, guid, type, exists, size_bytes, importer, sub_assets}`. `importer`는 `RoseMetadata`의 importer TOML을 JSON 딕셔너리로 직렬화. `sub_assets`는 서브에셋의 `{name, type}` 목록. 이미지 해상도/픽셀 포맷 등 디코더가 필요한 정보는 포함되지 않음.
+
 ### `asset.import`
 에셋 임포트/리임포트 (ScanAssets 호출).
 ```
