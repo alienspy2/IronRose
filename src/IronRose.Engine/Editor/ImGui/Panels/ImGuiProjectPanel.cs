@@ -22,16 +22,31 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         private FolderNode? _root;
         private FolderNode? _selectedFolder;
-        private string? _selectedAssetPath; // Primary (마지막 클릭) — Inspector/Drag 하위 호환
-        private readonly HashSet<string> _selectedAssetPaths = new(); // 멀티셀렉션
-        public string? SelectedAssetPath => _selectedAssetPath;
-        public IReadOnlyCollection<string> SelectedAssetPaths => _selectedAssetPaths;
+
+        // 선택 상태는 EditorAssetSelection(static)에 위임한다. 아래 멤버들은
+        // 기존 코드가 필드처럼 읽고 쓰던 형태를 유지하기 위한 얇은 facade일 뿐이다.
+        // Primary (마지막 클릭) — 할당 시 null이면 전체 해제, 아니면 Primary로 올림.
+        private string? _selectedAssetPath
+        {
+            get => EditorAssetSelection.PrimaryPath;
+            set
+            {
+                if (value == null) EditorAssetSelection.Clear();
+                else EditorAssetSelection.Add(value);
+            }
+        }
+        // 멀티셀렉션 facade (Clear/Add/Remove/Contains/Count/IEnumerable 지원).
+        private readonly SelectedAssetPathsView _selectedAssetPaths = new();
+        public string? SelectedAssetPath => EditorAssetSelection.PrimaryPath;
+        public IReadOnlyCollection<string> SelectedAssetPaths => EditorAssetSelection.Paths;
 
         // Drag-drop: 드래그 중인 에셋 경로 (ImGui payload 대신 static 필드로 전달)
         internal static string? _draggedAssetPath;
 
+        // 기존 코드 호환용 dummy 카운터 — 실제 버전은 EditorAssetSelection이 관리한다.
+        // `_assetSelectionVersion++` 구문이 여러 곳에 남아있어 유지한다.
         private long _assetSelectionVersion;
-        public long AssetSelectionVersion => _assetSelectionVersion;
+        public long AssetSelectionVersion => EditorAssetSelection.SelectionVersion;
 
         // Ping: 트리 노드를 자동으로 펼치기 위한 경로 집합
         private HashSet<string>? _pingOpenPaths;
@@ -2352,6 +2367,36 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             public string Type;
             public int Index;
             public string Guid;
+        }
+
+        /// <summary>
+        /// EditorAssetSelection.Paths를 기존 HashSet 기반 코드가 쓰던 API(Add/Remove/
+        /// Clear/Contains/Count/IEnumerable)로 노출하는 얇은 facade.
+        /// 모든 변경은 EditorAssetSelection static 상태로 전파된다.
+        /// </summary>
+        private sealed class SelectedAssetPathsView : System.Collections.Generic.ICollection<string>
+        {
+            public int Count => EditorAssetSelection.Count;
+            public bool IsReadOnly => false;
+
+            public void Add(string item) => EditorAssetSelection.Add(item);
+            public void Clear() => EditorAssetSelection.Clear();
+            public bool Contains(string item) => EditorAssetSelection.Contains(item);
+            public bool Remove(string item)
+            {
+                if (!EditorAssetSelection.Contains(item)) return false;
+                EditorAssetSelection.Remove(item);
+                return true;
+            }
+            public void CopyTo(string[] array, int arrayIndex)
+            {
+                foreach (var p in EditorAssetSelection.Paths)
+                    array[arrayIndex++] = p;
+            }
+            public System.Collections.Generic.IEnumerator<string> GetEnumerator()
+                => EditorAssetSelection.Paths.GetEnumerator();
+            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()
+                => GetEnumerator();
         }
     }
 }
