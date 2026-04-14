@@ -4,6 +4,7 @@
 //          메인 스레드 실행이 필요한 명령은 큐에 넣고 결과를 대기한다.
 // @deps    System.Text.Json, RoseEngine/SceneManager, IronRose.Engine/ProjectContext,
 //          IronRose.Engine.Editor/EditorPlayMode, IronRose.Engine.Editor/EditorSelection,
+//          IronRose.Engine.Editor/EditorAssetSelection,
 //          IronRose.Engine.Editor/SceneSerializer, IronRose.Engine.Editor/GameObjectSnapshot,
 //          IronRose.Engine.Cli/CliLogBuffer,
 //          RoseEngine/Material, RoseEngine/MeshRenderer, RoseEngine/Light,
@@ -30,6 +31,7 @@
 //          editor.undo, editor.redo,
 //          prefab.instantiate, prefab.save,
 //          asset.list, asset.find, asset.guid, asset.path,
+//          asset.select, asset.select.get, asset.select.none, asset.info,
 //          scene.tree, scene.new,
 //          material.info, material.set_color, material.set_metallic, material.set_roughness, material.set_blend_mode,
 //          light.info, light.set_color, light.set_intensity,
@@ -1060,6 +1062,74 @@ namespace IronRose.Engine.Cli
                         return JsonError($"No path found for GUID: {guid}");
 
                     return JsonOk(new { path });
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // asset.select.get -- 현재 에셋 브라우저 선택 조회 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["asset.select.get"] = args => ExecuteOnMainThread(() =>
+                BuildAssetSelectionResponse());
+
+            // ----------------------------------------------------------------
+            // asset.select -- 에셋 선택 교체 또는 추가 (메인 스레드)
+            //   usage: asset.select <pathOrGuid> [--add]
+            //   asset.select none  → 전체 해제 (asset.select.none 별칭)
+            // ----------------------------------------------------------------
+            _handlers["asset.select"] = args =>
+            {
+                if (args.Length == 0)
+                    return JsonError("Usage: asset.select <pathOrGuid> [--add]");
+
+                return ExecuteOnMainThread(() =>
+                {
+                    if (string.Equals(args[0], "none", StringComparison.OrdinalIgnoreCase))
+                    {
+                        EditorAssetSelection.Clear();
+                        return BuildAssetSelectionResponse();
+                    }
+
+                    var assetRef = args[0];
+                    bool add = args.Skip(1).Any(a =>
+                        string.Equals(a, "--add", StringComparison.OrdinalIgnoreCase));
+
+                    var path = ResolveAssetPath(assetRef);
+                    if (string.IsNullOrEmpty(path))
+                        return JsonError($"asset not found: {assetRef}");
+
+                    if (add) EditorAssetSelection.Add(path);
+                    else EditorAssetSelection.Select(path);
+
+                    return BuildAssetSelectionResponse();
+                });
+            };
+
+            // ----------------------------------------------------------------
+            // asset.select.none -- 에셋 선택 전체 해제 (메인 스레드)
+            // ----------------------------------------------------------------
+            _handlers["asset.select.none"] = args => ExecuteOnMainThread(() =>
+            {
+                EditorAssetSelection.Clear();
+                return BuildAssetSelectionResponse();
+            });
+
+            // ----------------------------------------------------------------
+            // asset.info -- 단일 에셋 상세 정보 (메인 스레드)
+            //   usage: asset.info <pathOrGuid>
+            // ----------------------------------------------------------------
+            _handlers["asset.info"] = args =>
+            {
+                if (args.Length < 1)
+                    return JsonError("Usage: asset.info <pathOrGuid>");
+
+                var assetRef = args[0];
+                return ExecuteOnMainThread(() =>
+                {
+                    var path = ResolveAssetPath(assetRef);
+                    if (string.IsNullOrEmpty(path))
+                        return JsonError($"asset not found: {assetRef}");
+
+                    return JsonOk(BuildAssetInfo(path));
                 });
             };
 
@@ -2912,6 +2982,102 @@ namespace IronRose.Engine.Cli
         // ================================================================
         // Sprite 헬퍼 메서드
         // ================================================================
+
+        /// <summary>현재 EditorAssetSelection 상태를 asset.select.get 스키마로 직렬화한다.</summary>
+        private static string BuildAssetSelectionResponse()
+        {
+            var db = Resources.GetAssetDatabase();
+            var paths = EditorAssetSelection.Paths;
+            var list = new List<object>();
+            foreach (var p in paths)
+            {
+                var guid = db?.GetGuidFromPath(p) ?? "";
+                var ext = System.IO.Path.GetExtension(p).TrimStart('.');
+                list.Add(new
+                {
+                    path = p,
+                    guid,
+                    type = ext,
+                    exists = System.IO.File.Exists(p),
+                });
+            }
+            return JsonOk(new
+            {
+                count = list.Count,
+                primary = EditorAssetSelection.PrimaryPath,
+                assets = list,
+            });
+        }
+
+        /// <summary>단일 에셋의 상세 정보를 asset.info 스키마로 직렬화한다.</summary>
+        private static object BuildAssetInfo(string path)
+        {
+            var db = Resources.GetAssetDatabase();
+            var guid = db?.GetGuidFromPath(path) ?? "";
+            var ext = System.IO.Path.GetExtension(path).TrimStart('.');
+            bool exists = System.IO.File.Exists(path);
+            long? sizeBytes = null;
+            if (exists)
+            {
+                try { sizeBytes = new System.IO.FileInfo(path).Length; }
+                catch { sizeBytes = null; }
+            }
+
+            Dictionary<string, object?>? importer = null;
+            var subAssets = new List<object>();
+            try
+            {
+                var meta = RoseMetadata.LoadOrCreate(path);
+                if (meta.importer != null && meta.importer.Count > 0)
+                {
+                    importer = new Dictionary<string, object?>();
+                    foreach (var kv in meta.importer)
+                        importer[kv.Key] = TomlValueToJson(kv.Value);
+                }
+                foreach (var sub in meta.subAssets)
+                    subAssets.Add(new { name = sub.name, type = sub.type });
+            }
+            catch
+            {
+                // 메타데이터가 없거나 손상된 경우 importer=null, subAssets=[]로 유지.
+            }
+
+            return new
+            {
+                path,
+                guid,
+                type = ext,
+                exists,
+                size_bytes = sizeBytes,
+                importer,
+                sub_assets = subAssets,
+            };
+        }
+
+        /// <summary>TomlTable 값을 JSON 직렬화 가능한 객체로 변환한다 (재귀).</summary>
+        private static object? TomlValueToJson(object? value)
+        {
+            switch (value)
+            {
+                case null: return null;
+                case TomlTable table:
+                    {
+                        var dict = new Dictionary<string, object?>();
+                        foreach (var kv in table)
+                            dict[kv.Key] = TomlValueToJson(kv.Value);
+                        return dict;
+                    }
+                case TomlArray arr:
+                    {
+                        var list = new List<object?>();
+                        foreach (var item in arr)
+                            list.Add(TomlValueToJson(item));
+                        return list;
+                    }
+                default:
+                    return value;
+            }
+        }
 
         /// <summary>에셋 경로 또는 GUID를 실제 파일 경로로 해석한다.</summary>
         private static string? ResolveAssetPath(string assetRef)
