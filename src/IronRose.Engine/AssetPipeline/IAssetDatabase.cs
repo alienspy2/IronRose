@@ -8,6 +8,12 @@ namespace IronRose.AssetPipeline
     {
         int AssetCount { get; }
         void ScanAssets(string projectPath);
+        /// <summary>
+        /// 지정된 서브트리만 증분 스캔하여 _guidToPath에 추가/갱신한다.
+        /// 기존 DB 엔트리를 Clear하지 않으며, FileSystemWatcher 재설정도 하지 않는다.
+        /// 반환값은 이번 스캔에서 추가/갱신된 (sub-asset 포함) GUID 개수.
+        /// </summary>
+        int ScanAssetsSubtree(string absoluteSubPath);
         string? GetPathFromGuid(string guid);
         string? GetGuidFromPath(string path);
         T? Load<T>(string path) where T : class;

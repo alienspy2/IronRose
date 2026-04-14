@@ -7,7 +7,8 @@
 //          MeshImporter, GltfMeshImporter, TextureImporter, FontImporter, MaterialImporter
 // @exports
 //   class AssetDatabase : IAssetDatabase
-//     ScanAssets(string): void              — 프로젝트 에셋 스캔 및 GUID 등록
+//     ScanAssets(string): void              — 프로젝트 에셋 스캔 및 GUID 등록 (전체 DB Clear 후 재구축)
+//     ScanAssetsSubtree(string): int        — 지정 서브트리만 증분 스캔 (Clear 없이 _guidToPath에 추가/갱신, touched 수 반환)
 //     GetPathFromGuid(string): string?      — GUID → 파일 경로
 //     GetGuidFromPath(string): string?      — 파일 경로 → GUID
 //     Load<T>(string): T?                   — 경로로 에셋 로드
@@ -160,6 +161,45 @@ namespace IronRose.AssetPipeline
             RoseMetadata.OnSaved += OnRoseMetadataSaved;
 
             StartWatching(projectPath);
+        }
+
+        public int ScanAssetsSubtree(string absoluteSubPath)
+        {
+            if (!Directory.Exists(absoluteSubPath))
+            {
+                EditorDebug.LogWarning($"[AssetDatabase] ScanAssetsSubtree: directory not found: {absoluteSubPath}");
+                return 0;
+            }
+
+            int touched = 0;
+            int fileCount = 0;
+            foreach (var ext in SupportedExtensions)
+            {
+                var files = Directory.GetFiles(absoluteSubPath, $"*{ext}", SearchOption.AllDirectories);
+                foreach (var file in files)
+                {
+                    if (Path.GetFileName(file).StartsWith('.')) continue;
+                    var meta = RoseMetadata.LoadOrCreate(file);
+                    if (!string.IsNullOrEmpty(meta.guid))
+                    {
+                        _guidToPath[meta.guid] = file;
+                        touched++;
+
+                        foreach (var sub in meta.subAssets)
+                        {
+                            var subPath = SubAssetPath.Build(file, sub.type, sub.index);
+                            _guidToPath[sub.guid] = subPath;
+                            touched++;
+                        }
+                    }
+
+                    if (++fileCount % 100 == 0)
+                        EngineCore.PumpWindowEvents();
+                }
+            }
+
+            EditorDebug.Log($"[AssetDatabase] Subtree scan: {touched} entries touched in {absoluteSubPath}");
+            return touched;
         }
 
         public string? GetPathFromGuid(string guid)
