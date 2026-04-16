@@ -94,6 +94,21 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         private RectSelectionTool? _rectSelection;
         private GizmoRenderer? _gizmoRenderer;
 
+        // --- Cycle picking state ---
+        // 같은 좌표를 반복 클릭할 때 겹친 오브젝트를 순차로 선택한다.
+        // 클릭 위치가 크게 달라지면 리셋된다.
+        private const float CYCLE_PICK_TOLERANCE_PX = 4f;
+        private Vector2 _cyclePickLastMousePos;
+        private bool _cyclePickHasState;
+        private enum CyclePickDomain { None, UI, Scene3D }
+        private CyclePickDomain _cyclePickDomain;
+        // UI cycle: 전체 후보 리스트와 다음 선택할 인덱스.
+        private readonly List<int> _cycleUiCandidateIds = new();
+        private int _cycleUiNextIndex;
+        // 3D cycle: 지금까지 이 좌표에서 cycle된 ID 집합 (피킹 패스에서 제외됨).
+        private readonly HashSet<int> _cycle3DExcludedIds = new();
+        private readonly List<RoseEngine.GameObject> _cyclePickScratchGOs = new();
+
         // MMB click-to-focus tracking
         private Vector2 _mmbDownPos;
         private bool _mmbTracking;
@@ -2644,18 +2659,37 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                         float imgH = max.Y - min.Y;
                         bool ctrlHeld = io.KeyCtrl;
 
-                        // UI overlay hit-test (rendered on top of 3D scene)
-                        var uiHit = _sceneView.ShowUI
-                            ? RoseEngine.CanvasRenderer.HitTest(mouse.X, mouse.Y, min.X, min.Y, imgW, imgH)
-                            : null;
-
-                        if (uiHit != null)
+                        // 클릭 위치가 이전과 다르면 cycle 상태를 리셋한다. Ctrl 멀티셀렉에서는
+                        // 기존 선택이 누적되는 동작이 기본이므로 cycle도 사용하지 않는다.
+                        bool samePos = _cyclePickHasState &&
+                            Math.Abs(mouse.X - _cyclePickLastMousePos.X) <= CYCLE_PICK_TOLERANCE_PX &&
+                            Math.Abs(mouse.Y - _cyclePickLastMousePos.Y) <= CYCLE_PICK_TOLERANCE_PX;
+                        if (ctrlHeld || !samePos)
                         {
-                            int id = uiHit.GetInstanceID();
+                            ResetCyclePickState();
+                        }
+
+                        // UI overlay hit-test (rendered on top of 3D scene).
+                        // UI와 3D는 독립적으로 cycle — UI가 하나라도 히트되면 UI 안에서만 순환.
+                        List<RoseEngine.GameObject>? uiHits = null;
+                        if (_sceneView.ShowUI)
+                        {
+                            RoseEngine.CanvasRenderer.HitTestAll(
+                                mouse.X, mouse.Y, min.X, min.Y, imgW, imgH, _cyclePickScratchGOs);
+                            if (_cyclePickScratchGOs.Count > 0)
+                                uiHits = _cyclePickScratchGOs;
+                        }
+
+                        if (uiHits != null)
+                        {
+                            int id = PickUiCycleTarget(uiHits, ctrlHeld);
                             if (ctrlHeld)
                                 EditorSelection.ToggleSelect(id);
                             else
                                 EditorSelection.Select(id);
+
+                            _cyclePickLastMousePos = mouse;
+                            _cyclePickHasState = !ctrlHeld;
                         }
                         else if (fb != null)
                         {
@@ -2663,20 +2697,92 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                             float relY = (mouse.Y - min.Y) / imgH;
                             uint px = (uint)(relX * fb.Width);
                             uint py = (uint)(relY * fb.Height);
+
+                            // 3D cycle 도메인으로 진입. UI에서 Scene3D로 전환되면 기존 상태 리셋.
+                            if (_cyclePickDomain != CyclePickDomain.Scene3D)
+                            {
+                                _cycle3DExcludedIds.Clear();
+                                _cyclePickDomain = CyclePickDomain.Scene3D;
+                            }
+
+                            // 같은 좌표 재클릭(samePos)일 때만 "현재 선택"을 제외 집합에 추가한다.
+                            // 새 위치의 첫 클릭에서는 단순 픽 결과(최상단)를 그대로 사용한다.
+                            if (!ctrlHeld && samePos)
+                            {
+                                int? curPrimary = EditorSelection.SelectedGameObjectId;
+                                if (curPrimary.HasValue)
+                                {
+                                    // 누적된 exclude가 있고 현재 선택이 거기 없다면, 사용자가 이전 클릭과
+                                    // 이번 클릭 사이에 외부(Hierarchy 등)에서 선택을 바꾼 것으로 간주한다.
+                                    // 이 경우 누적 exclude를 리셋해 cycle 시작점을 재설정한다 (명세 #3).
+                                    // 현재 선택이 이번 픽 후보에 포함되면 그 다음 후보가 선택되고(명세 #2),
+                                    // 포함되지 않으면 최상단이 선택된다(명세 #3).
+                                    if (_cycle3DExcludedIds.Count > 0 && !_cycle3DExcludedIds.Contains(curPrimary.Value))
+                                    {
+                                        _cycle3DExcludedIds.Clear();
+                                    }
+                                    if (!_cycle3DExcludedIds.Contains(curPrimary.Value))
+                                        _cycle3DExcludedIds.Add(curPrimary.Value);
+                                }
+                            }
+
+                            var excludeSnapshot = (!ctrlHeld && _cycle3DExcludedIds.Count > 0)
+                                ? new List<int>(_cycle3DExcludedIds)
+                                : null;
+
                             _sceneRenderer!.RequestPick(px, py, pickedId =>
                             {
                                 if (pickedId == 0)
                                 {
-                                    if (!ctrlHeld) EditorSelection.Clear();
+                                    // 후보가 소진되었다면 cycle을 리셋해 최상단부터 다시 시작.
+                                    if (!ctrlHeld && _cycle3DExcludedIds.Count > 0)
+                                    {
+                                        _cycle3DExcludedIds.Clear();
+                                        _sceneRenderer!.RequestPick(px, py, pickedId2 =>
+                                        {
+                                            if (pickedId2 == 0)
+                                            {
+                                                if (!ctrlHeld) EditorSelection.Clear();
+                                                ResetCyclePickState();
+                                            }
+                                            else
+                                            {
+                                                EditorSelection.Select((int)pickedId2);
+                                                _cycle3DExcludedIds.Add((int)pickedId2);
+                                                _cyclePickLastMousePos = mouse;
+                                                _cyclePickHasState = true;
+                                                _cyclePickDomain = CyclePickDomain.Scene3D;
+                                            }
+                                        }, null);
+                                    }
+                                    else
+                                    {
+                                        if (!ctrlHeld) EditorSelection.Clear();
+                                        ResetCyclePickState();
+                                    }
                                 }
                                 else
                                 {
                                     if (ctrlHeld)
+                                    {
                                         EditorSelection.ToggleSelect((int)pickedId);
+                                        // Ctrl 클릭은 cycle 상태를 갱신하지 않는다.
+                                    }
                                     else
+                                    {
                                         EditorSelection.Select((int)pickedId);
+                                        _cycle3DExcludedIds.Add((int)pickedId);
+                                        _cyclePickLastMousePos = mouse;
+                                        _cyclePickHasState = true;
+                                        _cyclePickDomain = CyclePickDomain.Scene3D;
+                                    }
                                 }
-                            });
+                            }, excludeSnapshot);
+                        }
+                        else
+                        {
+                            // fb가 없고 UI도 없으면 cycle 리셋.
+                            ResetCyclePickState();
                         }
                     }
                 }
@@ -2684,6 +2790,82 @@ namespace IronRose.Engine.Editor.ImGuiEditor
 
             // Draw selection rectangle overlay
             _rectSelection.DrawOverlay();
+        }
+
+        /// <summary>
+        /// UI cycle pick: 후보 리스트에서 다음 선택 대상의 instanceID를 결정한다.
+        /// - 현재 선택이 리스트에 있으면 다음 인덱스 (끝이면 처음으로 wrap)
+        /// - 없으면 리스트 최상단(첫 번째)
+        /// Ctrl 클릭은 cycle에 참여하지 않고 항상 최상단을 대상으로 한다 (기존 ToggleSelect 동작 보존).
+        /// </summary>
+        private int PickUiCycleTarget(List<RoseEngine.GameObject> hits, bool ctrlHeld)
+        {
+            if (hits.Count == 0) return 0;
+            if (ctrlHeld) return hits[0].GetInstanceID();
+
+            // 동일 좌표 연속 클릭 시 후보 리스트가 같다면 인덱스를 진행, 다르면 새로 시작.
+            bool sameCandidates = _cyclePickDomain == CyclePickDomain.UI
+                && _cycleUiCandidateIds.Count == hits.Count;
+            if (sameCandidates)
+            {
+                for (int i = 0; i < hits.Count; i++)
+                {
+                    if (_cycleUiCandidateIds[i] != hits[i].GetInstanceID())
+                    { sameCandidates = false; break; }
+                }
+            }
+
+            if (!sameCandidates)
+            {
+                _cycleUiCandidateIds.Clear();
+                foreach (var go in hits) _cycleUiCandidateIds.Add(go.GetInstanceID());
+                _cyclePickDomain = CyclePickDomain.UI;
+
+                // 현재 선택이 후보에 있으면 그 다음 인덱스, 없으면 최상단(0).
+                int? curId = EditorSelection.SelectedGameObjectId;
+                if (curId.HasValue)
+                {
+                    int idx = _cycleUiCandidateIds.IndexOf(curId.Value);
+                    _cycleUiNextIndex = idx >= 0 ? (idx + 1) % _cycleUiCandidateIds.Count : 0;
+                }
+                else
+                {
+                    _cycleUiNextIndex = 0;
+                }
+            }
+            else
+            {
+                // 같은 좌표+같은 후보 리스트지만, 이전 클릭과 이번 클릭 사이에 사용자가 외부(Hierarchy 등)에서
+                // 선택을 바꿨을 수 있다. 명세 #2/#3에 부합하도록 현재 선택을 기준으로 다음 인덱스를 보정한다.
+                //   - 현재 선택이 후보에 있으면   → 그 다음 인덱스 (끝이면 wrap) (명세 #2)
+                //   - 현재 선택이 후보에 없으면   → 최상단(0)                     (명세 #3)
+                int? curId = EditorSelection.SelectedGameObjectId;
+                if (curId.HasValue)
+                {
+                    int idx = _cycleUiCandidateIds.IndexOf(curId.Value);
+                    _cycleUiNextIndex = idx >= 0 ? (idx + 1) % _cycleUiCandidateIds.Count : 0;
+                }
+                else
+                {
+                    _cycleUiNextIndex = 0;
+                }
+            }
+
+            int targetIdx = _cycleUiNextIndex;
+            if (targetIdx < 0 || targetIdx >= _cycleUiCandidateIds.Count) targetIdx = 0;
+            int targetId = _cycleUiCandidateIds[targetIdx];
+            _cycleUiNextIndex = (targetIdx + 1) % _cycleUiCandidateIds.Count;
+            return targetId;
+        }
+
+        /// <summary>Cycle pick 상태 전체 리셋 (새 위치 클릭 / Ctrl 클릭 등).</summary>
+        private void ResetCyclePickState()
+        {
+            _cyclePickHasState = false;
+            _cyclePickDomain = CyclePickDomain.None;
+            _cycleUiCandidateIds.Clear();
+            _cycleUiNextIndex = 0;
+            _cycle3DExcludedIds.Clear();
         }
 
         /// <summary>

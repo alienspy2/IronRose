@@ -105,6 +105,9 @@ namespace IronRose.Rendering
         private bool _pickRequested;
         private uint _pickX, _pickY;
         private Action<uint>? _pickCallback;
+        // Optional exclusion set for cycle-pick: renderers whose GameObject ID is in this set
+        // will be skipped during the pick pass (treated as if not present).
+        private HashSet<int>? _pickExcludeIds;
 
         public Framebuffer? Framebuffer => _framebuffer;
         public TextureView? ColorTextureView => _colorTextureView;
@@ -556,10 +559,29 @@ namespace IronRose.Rendering
 
         public void RequestPick(uint x, uint y, Action<uint> callback)
         {
+            RequestPick(x, y, callback, null);
+        }
+
+        /// <summary>
+        /// 피킹 요청. <paramref name="excludeIds"/>에 포함된 GameObject ID는 피킹 패스에서 스킵되어
+        /// 같은 픽셀 위치에서 다음 후보를 골라낼 수 있다 (cycle picking).
+        /// </summary>
+        public void RequestPick(uint x, uint y, Action<uint> callback, IReadOnlyCollection<int>? excludeIds)
+        {
             _pickRequested = true;
             _pickX = x;
             _pickY = y;
             _pickCallback = callback;
+            if (excludeIds != null && excludeIds.Count > 0)
+            {
+                if (_pickExcludeIds == null) _pickExcludeIds = new HashSet<int>();
+                else _pickExcludeIds.Clear();
+                foreach (var id in excludeIds) _pickExcludeIds.Add(id);
+            }
+            else
+            {
+                _pickExcludeIds = null;
+            }
         }
 
         /// <summary>
@@ -774,13 +796,15 @@ namespace IronRose.Rendering
             {
                 if (!renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
                 if (renderer.gameObject._isEditorInternal) continue;
+                int rawId = renderer.gameObject.GetInstanceID();
+                if (_pickExcludeIds != null && _pickExcludeIds.Contains(rawId)) continue;
                 var filter = renderer.GetComponent<MeshFilter>();
                 if (filter?.mesh == null) continue;
                 var mesh = filter.mesh;
                 mesh.UploadToGPU(_device!);
                 if (mesh.VertexBuffer == null || mesh.IndexBuffer == null) continue;
 
-                uint objId = (uint)renderer.gameObject.GetInstanceID();
+                uint objId = (uint)rawId;
                 pickCl.UpdateBuffer(_pickIdBuffer, 0, new PickIdUniforms
                 {
                     World = RoseEngine.Matrix4x4.TRS(
@@ -821,8 +845,13 @@ namespace IronRose.Rendering
             unsafe { pickedId = *(uint*)map.Data; }
             _device.Unmap(_pickStaging);
 
-            _pickCallback?.Invoke(pickedId);
+            // 콜백 내부에서 RequestPick(재진입)이 호출될 수 있으므로, 멤버 상태를 먼저 비우고
+            // 로컬로 캡처한 콜백을 호출한다. 이렇게 해야 Invoke 도중 세팅된 새 _pickCallback/
+            // _pickRequested가 이 스코프 바깥에서 덮어써지지 않는다.
+            var cb = _pickCallback;
             _pickCallback = null;
+            _pickRequested = false;
+            cb?.Invoke(pickedId);
         }
 
         public void Dispose()
