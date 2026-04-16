@@ -2,13 +2,15 @@
 // @file    ImGuiGameViewPanel.cs
 // @brief   에디터 Game View 패널. 게임 렌더링 결과를 표시하고
 //          Canvas UI 오버레이를 렌더링한다.
-// @deps    CanvasRenderer
+// @deps    CanvasRenderer, EditorPreferences, PanelMaximizer
 // @exports
 //   class ImGuiGameViewPanel : IEditorPanel
 //     void Draw()             — 패널 렌더링
 //     (uint,uint) GetRenderTargetSize(...)  — RT 크기 계산
 // @note    Canvas UI 오버레이 렌더링 시 CanvasRenderer.IsInteractive를 true로 명시하여
 //          Game View에서 게임 UI 입력이 정상 처리되도록 한다.
+//          탭 우클릭 컨텍스트 메뉴에 "Focus on Play" 토글을 제공한다
+//          (EditorPreferences.FocusGameViewOnPlay에 영속화됨).
 // ------------------------------------------------------------
 using System;
 using System.Numerics;
@@ -131,7 +133,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
             ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, Vector2.Zero);
             var gameViewVisible = ImGui.Begin("Game View", ref _isOpen);
-            PanelMaximizer.DrawTabContextMenu("Game View");
+            PanelMaximizer.DrawTabContextMenu("Game View", DrawExtraContextMenuItems);
             if (gameViewVisible)
             {
                 _isWindowFocused = ImGui.IsWindowFocused();
@@ -173,6 +175,16 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             }
             ImGui.End();
             ImGui.PopStyleVar();
+        }
+
+        private static void DrawExtraContextMenuItems()
+        {
+            bool focusOnPlay = EditorPreferences.FocusGameViewOnPlay;
+            if (ImGui.MenuItem("Focus on Play", null, ref focusOnPlay))
+            {
+                EditorPreferences.FocusGameViewOnPlay = focusOnPlay;
+                EditorPreferences.Save();
+            }
         }
 
         private void DrawToolbar()

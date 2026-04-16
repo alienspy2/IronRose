@@ -17,6 +17,7 @@
 //     AiComfyUrl: string                        — AlienHS 서버가 사용할 ComfyUI URL 오버라이드 (기본 "")
 //     AiPythonPath: string                      — CLI 실행 파이썬 경로 (기본 "python")
 //     AiGenerationModel: string                 — ComfyUI 이미지 생성 모델 파일명 (기본 "z_image_turbo_nvfp4.safetensors")
+//     FocusGameViewOnPlay: bool                 — Play 모드 진입 시 Game View를 자동 포커스 (기본 false)
 //     Load(): void                              — settings.toml [preferences] 로드
 //     Save(): void                              — settings.toml [preferences] 저장 (read-modify-write)
 //     MigrateFromEditorState(float?, string?): void — 레거시 EditorState 값 1회성 이전 훅
@@ -87,6 +88,12 @@ namespace IronRose.Engine
         /// <summary>ComfyUI 이미지 생성 모델 파일명. CLI의 --model 인자로 전달된다. 빈 문자열이면 CLI 기본값을 사용한다.</summary>
         public static string AiGenerationModel { get; set; } = "z_image_turbo_nvfp4.safetensors";
 
+        /// <summary>
+        /// Play 모드 진입 시 Game View 패널을 자동으로 포커스. Play 종료 시 이전 포커스 패널로 복귀.
+        /// Game View 탭 우클릭 컨텍스트 메뉴에서 토글한다.
+        /// </summary>
+        public static bool FocusGameViewOnPlay { get; set; } = false;
+
         /// <summary>글로벌 설정 디렉토리 (~/.ironrose/).</summary>
         private static string GlobalSettingsDir =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ironrose");
@@ -147,6 +154,9 @@ namespace IronRose.Engine
                 // ai_generation_model (ComfyUI 이미지 생성 모델 파일명)
                 AiGenerationModel = pref.GetString("ai_generation_model", AiGenerationModel) ?? "";
 
+                // focus_game_view_on_play
+                FocusGameViewOnPlay = pref.GetBool("focus_game_view_on_play", FocusGameViewOnPlay);
+
                 EditorDebug.Log($"[EditorPreferences] Loaded: {GlobalSettingsPath}");
             }
             catch (Exception ex)
@@ -185,6 +195,7 @@ namespace IronRose.Engine
                 pref.SetValue("ai_comfy_url", AiComfyUrl);
                 pref.SetValue("ai_python_path", AiPythonPath);
                 pref.SetValue("ai_generation_model", AiGenerationModel);
+                pref.SetValue("focus_game_view_on_play", FocusGameViewOnPlay);
 
                 config.SaveToFile(GlobalSettingsPath, "[EditorPreferences]");
                 EditorDebug.Log($"[EditorPreferences] Saved: {GlobalSettingsPath}");

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using ImGuiNET;
 using IronRose.Engine.Editor.ImGuiEditor.Panels;
@@ -26,8 +27,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         /// <summary>
         /// 각 패널의 ImGui.Begin() 직후 호출.
         /// 탭 우클릭 시 Maximize/Restore 컨텍스트 메뉴를 표시한다.
+        /// <paramref name="extraItems"/>가 전달되면 Maximize/Restore 아래에 구분선과 함께 추가 항목을 렌더링한다.
         /// </summary>
-        public static void DrawTabContextMenu(string panelName)
+        public static void DrawTabContextMenu(string panelName, Action? extraItems = null)
         {
             if (ImGui.BeginPopupContextItem($"##tabctx_{panelName}"))
             {
@@ -41,6 +43,13 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                     if (ImGui.MenuItem("Maximize"))
                         Maximize(panelName);
                 }
+
+                if (extraItems != null)
+                {
+                    ImGui.Separator();
+                    extraItems();
+                }
+
                 ImGui.EndPopup();
             }
         }

@@ -16,6 +16,9 @@
 // @note    ProbeGlyphRanges()는 폰트 글리프 범위를 디스크 캐시(FontGlyphCache/)에 저장하여
 //          두 번째 실행부터 CPU-집약적 프로브를 건너뜀.
 //          Initialize 폰트 루프에서 EngineCore.PumpWindowEvents()를 호출하여 OS "응답 없음" 방지.
+//          Focus-on-Play: 매 프레임 TrackFocusedPanel()로 주요 패널 포커스를 기록하고,
+//          EditorPreferences.FocusGameViewOnPlay가 true면 Play 진입 시 Game View로 포커스 이동,
+//          종료 시 직전 패널로 복귀 (EditorPlayMode.OnBeforeEnterPlayMode/OnAfterStopPlayMode 구독).
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -128,6 +131,11 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         // Prefab Edit Mode — Back 확인
         private bool _showPrefabBackConfirm;
         private int _pendingPrefabBackCount;
+
+        // Focus on Play — Play 진입 시 Game View 자동 포커스, 종료 시 이전 포커스 복귀
+        // 매 프레임 포커스된 패널 ImGui 윈도우 이름을 기록하고, Play 진입 시 스냅샷하여 사용한다.
+        private string? _lastFocusedPanelName;
+        private string? _savedFocusPanelName;
 
         private bool _titleNeedsUpdate = true;
         private bool _lastDirtyState;
@@ -432,6 +440,10 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             // Restore saved panel visibility (only if layout was loaded, not first-time default)
             if (!_layoutManager.NeedsLayout)
                 RestorePanelStates();
+
+            // Play 모드 진입/종료 시 Focus-on-Play 처리
+            EditorPlayMode.OnBeforeEnterPlayMode += HandleFocusOnPlayEnter;
+            EditorPlayMode.OnAfterStopPlayMode += HandleFocusOnPlayExit;
 
             Debug.Log("[ImGui] Overlay initialized");
         }
@@ -828,6 +840,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor
 
             // ── Maximize auto-restore (최대화된 패널이 닫히면 자동 복원) ──
             PanelMaximizer.CheckAutoRestore();
+
+            // ── Focus 추적 (Focus-on-Play 복귀용) ──
+            TrackFocusedPanel();
 
             // ── Auto-save (최대화 중에는 패널 상태를 저장하지 않음) ──
             if (!PanelMaximizer.IsMaximized)
@@ -3047,8 +3062,59 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             catch { /* clipboard access failed */ }
         }
 
+        // ================================================================
+        // Focus on Play
+        // ================================================================
+
+        /// <summary>
+        /// 매 프레임 포커스된 주요 패널 이름을 기록한다.
+        /// Play 모드 진입 시 스냅샷되어 종료 후 복귀 대상이 된다.
+        /// 추적 대상은 EditorPlayMode와 무관한 고정 도킹 패널들로 제한한다.
+        /// </summary>
+        private void TrackFocusedPanel()
+        {
+            // 주요 패널 포커스 상태를 우선순위 순으로 검사. 복수 포커스 불가능하지만 방어적으로 처리.
+            if (_sceneView != null && _sceneView.IsOpen && _sceneView.IsWindowFocused)
+                _lastFocusedPanelName = "Scene View";
+            else if (_gameView != null && _gameView.IsOpen && _gameView.IsWindowFocused)
+                _lastFocusedPanelName = "Game View";
+            else if (_hierarchy != null && _hierarchy.IsOpen && _hierarchy.IsWindowFocused)
+                _lastFocusedPanelName = "Hierarchy";
+            else if (_project != null && _project.IsOpen && _project.IsWindowFocused)
+                _lastFocusedPanelName = "Project";
+            // 위 네 개에 속하지 않으면 이전 값 유지 (일시적 메뉴바 클릭 등으로 포커스가 빠져도 복원 타겟 유지)
+        }
+
+        /// <summary>
+        /// Play 모드 진입 전 호출. 옵션이 켜진 경우 이전 포커스를 저장하고 Game View로 포커스를 이동한다.
+        /// </summary>
+        private void HandleFocusOnPlayEnter()
+        {
+            if (!EditorPreferences.FocusGameViewOnPlay) return;
+            if (_gameView == null || !_gameView.IsOpen) return;
+
+            _savedFocusPanelName = _lastFocusedPanelName;
+            ImGui.SetWindowFocus("Game View");
+        }
+
+        /// <summary>
+        /// Play 모드 종료 후 호출. Play 진입 시 저장된 패널로 포커스를 복귀한다.
+        /// </summary>
+        private void HandleFocusOnPlayExit()
+        {
+            if (!EditorPreferences.FocusGameViewOnPlay) return;
+            if (string.IsNullOrEmpty(_savedFocusPanelName)) return;
+
+            ImGui.SetWindowFocus(_savedFocusPanelName);
+            _savedFocusPanelName = null;
+        }
+
         public void Dispose()
         {
+            // Focus-on-Play 이벤트 구독 해제
+            EditorPlayMode.OnBeforeEnterPlayMode -= HandleFocusOnPlayEnter;
+            EditorPlayMode.OnAfterStopPlayMode -= HandleFocusOnPlayExit;
+
             // Clipboard buffer cleanup
             if (_clipboardReturnBuffer != 0)
             {
