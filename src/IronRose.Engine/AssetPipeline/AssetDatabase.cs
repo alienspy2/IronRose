@@ -22,6 +22,8 @@
 //          ProcessFileChanges는 FileChangeDebounceMs(150ms) 만큼 "마지막 Changed로부터 조용한" 뒤
 //          실제 Reimport를 실행한다. Reimport는 try/finally로 _importDepth를 복원하고, 실패 시
 //          oldAsset을 _loadedAssets에 되돌려 씬 참조가 dangling되지 않고 후속 Reimport가 가능하게 한다.
+//          sync Reimport 성공 경로와 async ProcessReimport 성공 경로는 둘 다
+//          ProjectDirty = true; ReimportVersion++ 로 종료되어 Inspector preview가 최신 상태를 반영한다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Concurrent;
@@ -869,6 +871,22 @@ namespace IronRose.AssetPipeline
                         }
                         break;
                     }
+                    case "AnimationClipImporter":
+                    {
+                        // 이전 AnimationClip의 역참조맵 제거
+                        if (oldAsset is AnimationClip oldClip)
+                            _animClipToGuid.Remove(oldClip);
+
+                        var newClip = _animClipImporter.Import(path, meta);
+                        if (newClip != null)
+                        {
+                            _loadedAssets[path] = newClip;
+                            if (!string.IsNullOrEmpty(meta.guid))
+                                _animClipToGuid[newClip] = meta.guid;
+                            reimportSucceeded = true;
+                        }
+                        break;
+                    }
                     case "PrefabImporter":
                     {
                         // Dependency graph 기반으로 수정된 프리팹과 이를 참조하는 부모들만 캐스케이드 무효화
@@ -1201,6 +1219,9 @@ namespace IronRose.AssetPipeline
             _reimportType = null;
             _importDepth--;
             ProjectDirty = true;
+            // sync Reimport의 finally 경로(ProjectDirty = true; ReimportVersion++)와 대칭.
+            // Inspector preview 등 ReimportVersion을 구독하는 UI가 async 경로에서도 갱신되도록 보장.
+            ReimportVersion++;
 
             return true;
         }
