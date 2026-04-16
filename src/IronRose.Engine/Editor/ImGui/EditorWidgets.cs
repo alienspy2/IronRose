@@ -1,3 +1,20 @@
+// ------------------------------------------------------------
+// @file    EditorWidgets.cs
+// @brief   Editor 패널 공용 ImGui 위젯 헬퍼. Unity Inspector 스타일(라벨 왼쪽/값 오른쪽 stretch)로
+//          DragFloat/DragInt 싱글클릭 편집, Slider+Input 콤보, ColorEdit4 등을 제공.
+// @deps    ImGuiNET, RoseEngine (Color)
+// @exports
+//   static class EditorWidgets
+//     LabelWidthRatio: float                                                        — 라벨/값 레이아웃 비율
+//     BeginPropertyRow(string): string                                              — raw 위젯 앞에 라벨 렌더
+//     DragFloatClickable/DragIntClickable/DragFloat2Clickable/
+//     DragFloat3Clickable/DragFloat4Clickable(...)                                  — 싱글클릭 텍스트 편집 지원 Drag 위젯
+//     SliderFloatWithInput/SliderIntWithInput(..., out bool sliderDeactivated)      — 슬라이더+입력 콤보, 편집 종료 신호 out
+//     ColorEdit4(string, ref Color/Vector4[, out bool deactivatedAfterEdit])        — 숫자 입력 + 팝업 picker 결합 Color 위젯
+// @note    ColorEdit4는 내부적으로 세 개의 ImGui 아이템(숫자 ColorEdit4, ColorButton, 팝업 내 ColorPicker4)을
+//          submit 하므로 외부의 ImGui.IsItemDeactivatedAfterEdit()로는 picker 팝업의 편집 종료를
+//          감지할 수 없다. Undo 기록이 필요한 호출부는 반드시 out 파라미터 오버로드를 사용할 것.
+// ------------------------------------------------------------
 using System.Collections.Generic;
 using ImGuiNET;
 using RoseEngine;
@@ -282,21 +299,27 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         // ── Color (RoseEngine.Color ↔ System.Numerics.Vector4) ──
 
         public static bool ColorEdit4(string label, ref Color color)
+            => ColorEdit4(label, ref color, out _);
+
+        public static bool ColorEdit4(string label, ref Color color, out bool deactivatedAfterEdit)
         {
             bool hasLayout = BeginPropertyLayout(label);
             string widgetLabel = hasLayout ? ("##color_" + label) : label;
 
             var nc = new System.Numerics.Vector4(color.r, color.g, color.b, color.a);
-            bool changed = ColorEdit4Core(widgetLabel, ref nc);
+            bool changed = ColorEdit4Core(widgetLabel, ref nc, out deactivatedAfterEdit);
             if (changed)
                 color = new Color(nc.X, nc.Y, nc.Z, nc.W);
             return changed;
         }
 
         public static bool ColorEdit4(string label, ref System.Numerics.Vector4 color)
+            => ColorEdit4(label, ref color, out _);
+
+        public static bool ColorEdit4(string label, ref System.Numerics.Vector4 color, out bool deactivatedAfterEdit)
         {
             string hiddenLabel = "##color4_" + label;
-            bool changed = ColorEdit4Core(hiddenLabel, ref color);
+            bool changed = ColorEdit4Core(hiddenLabel, ref color, out deactivatedAfterEdit);
 
             if (!IsHiddenLabel(label))
             {
@@ -306,8 +329,13 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             return changed;
         }
 
-        private static bool ColorEdit4Core(string widgetLabel, ref System.Numerics.Vector4 nc)
+        // 팝업이 이번 프레임에 닫혔는지 추적하기 위한 상태. pickerId별로 이전 프레임의 열림 상태를 기억.
+        private static readonly HashSet<string> _colorPickerOpenLastFrame = new();
+
+        private static bool ColorEdit4Core(string widgetLabel, ref System.Numerics.Vector4 nc, out bool deactivatedAfterEdit)
         {
+            deactivatedAfterEdit = false;
+
             string pickerId = widgetLabel + "##cpk";
             float totalW = ImGui.CalcItemWidth();
             float btnSize = ImGui.GetFrameHeight();
@@ -316,6 +344,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             ImGui.SetNextItemWidth(totalW - btnSize - spacing);
             bool changed = ImGui.ColorEdit4(widgetLabel, ref nc,
                 ImGuiColorEditFlags.NoSmallPreview | ImGuiColorEditFlags.NoPicker);
+            // 숫자 입력 필드에서 편집이 종료된 경우
+            if (ImGui.IsItemDeactivatedAfterEdit())
+                deactivatedAfterEdit = true;
 
             ImGui.SameLine(0, spacing);
 
@@ -324,14 +355,29 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 new System.Numerics.Vector2(btnSize, btnSize)))
                 ImGui.OpenPopup(pickerId);
 
+            bool wasOpen = _colorPickerOpenLastFrame.Contains(pickerId);
+            bool isOpen = false;
             if (ImGui.BeginPopup(pickerId))
             {
+                isOpen = true;
                 changed |= ImGui.ColorPicker4("##picker", ref nc,
                     ImGuiColorEditFlags.AlphaBar | ImGuiColorEditFlags.AlphaPreview);
+                // 팝업 내부 picker의 deactivation도 누적
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                    deactivatedAfterEdit = true;
                 if (ImGui.IsKeyPressed(ImGuiKey.Escape))
                     ImGui.CloseCurrentPopup();
                 ImGui.EndPopup();
             }
+
+            // 팝업이 이번 프레임에 닫혔다면(이전 프레임에는 열려 있었음) deactivation으로 간주.
+            // 드래그 중 바깥 클릭/Escape로 닫히는 경우 picker의 IsItemDeactivatedAfterEdit 신호가
+            // 누락되는 경우를 보완한다.
+            if (wasOpen && !isOpen)
+                deactivatedAfterEdit = true;
+
+            if (isOpen) _colorPickerOpenLastFrame.Add(pickerId);
+            else _colorPickerOpenLastFrame.Remove(pickerId);
 
             return changed;
         }

@@ -1836,8 +1836,12 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 else if (valueType == typeof(Color))
                 {
                     var c = (Color)(val ?? Color.white);
-                    changed = EditorWidgets.ColorEdit4(label, ref c);
+                    changed = EditorWidgets.ColorEdit4(label, ref c, out bool colorDeactivated);
                     if (changed) newVal = c;
+                    // ColorEdit4는 내부적으로 여러 ImGui 아이템을 submit 하므로,
+                    // 외부의 ImGui.IsItemDeactivatedAfterEdit()로는 picker 팝업의
+                    // 편집 종료를 감지할 수 없다. out 신호를 슬라이더 경로와 동일하게 병합.
+                    if (colorDeactivated) pendingSliderDeactivation = true;
                 }
                 else if (valueType.IsEnum)
                 {
@@ -5148,12 +5152,15 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 else if (valueType == typeof(Color))
                 {
                     var c = (Color)(val ?? Color.white);
-                    if (EditorWidgets.ColorEdit4(label, ref c))
+                    // ColorEdit4는 내부적으로 여러 ImGui 아이템을 submit 하므로
+                    // ImGui.IsItemDeactivatedAfterEdit()로는 picker 편집 종료를 감지할 수 없다.
+                    // out 신호를 직접 사용한다.
+                    if (EditorWidgets.ColorEdit4(label, ref c, out bool colorDeactivated))
                     {
                         _undoTracker.BeginEdit(widgetId, val);
                         setter(c);
                     }
-                    if (ImGui.IsItemDeactivatedAfterEdit() &&
+                    if (colorDeactivated &&
                         _undoTracker.EndEdit(widgetId, out var oldVal))
                     {
                         UndoSystem.Record(new SetPropertyAction(
