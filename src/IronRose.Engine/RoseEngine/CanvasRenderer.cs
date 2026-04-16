@@ -11,6 +11,7 @@
 //     static bool IsHitOrAncestorOfHit(GO)    — GO가 히트 대상이거나 히트 GO의 조상인지 확인
 //     static void RenderAll(...)              — 모든 활성 Canvas를 sortingOrder 순으로 렌더
 //     static GameObject? HitTest(...)         — 스크린 좌표에서 최상위 UI GO 반환
+//     static void HitTestAll(...)             — 스크린 좌표의 모든 UI GO를 위→아래 순으로 수집 (cycle 선택용)
 //     static void CollectHitsInRect(...)      — 사각형 영역과 겹치는 UI GO 수집
 //     static float GetCanvasScaleFor(...)     — GO의 조상 Canvas scaleFactor 반환
 // @note    IsInteractive는 호출하는 쪽(Game View/Scene View)에서 설정해야 한다.
@@ -285,6 +286,89 @@ namespace RoseEngine
             }
 
             return hit;
+        }
+
+        /// <summary>
+        /// 주어진 스크린 좌표에 있는 모든 UI GameObject를 최상단(위) → 최하단(아래) 순으로 반환.
+        /// 겹친 UI를 순차 선택(cycle picking)할 때 후보 리스트로 사용한다.
+        /// 트리 순회는 부모 → 자식(DFS pre-order) 순이며, 자식이 부모 위에 렌더되므로
+        /// 결과 리스트는 끝에서 앞쪽으로 갈수록 위에 있는 요소다. 이 메서드는 반환 전에
+        /// 리스트를 뒤집어 "위 → 아래" 순서로 제공한다. 여러 Canvas가 있을 때는
+        /// sortingOrder가 큰 Canvas의 요소가 먼저(위) 온다.
+        /// </summary>
+        public static void HitTestAll(float mouseScreenX, float mouseScreenY,
+            float screenX, float screenY, float screenW, float screenH,
+            List<GameObject> results)
+        {
+            results.Clear();
+            if (Canvas._allCanvases.Count == 0) return;
+
+            _sorted.Clear();
+            foreach (var c in Canvas._allCanvases)
+            {
+                if (!c._isDestroyed && c.gameObject.activeInHierarchy)
+                    _sorted.Add(c);
+            }
+            // sortingOrder 내림차순 — 큰 쪽(위에 렌더됨)부터 먼저 후보로 수집
+            _sorted.Sort((a, b) => b.sortingOrder.CompareTo(a.sortingOrder));
+
+            foreach (var canvas in _sorted)
+            {
+                if (canvas.renderMode != CanvasRenderMode.ScreenSpaceOverlay)
+                    continue;
+
+                float scaleFactor = canvas.GetScaleFactor(screenW, screenH);
+                float logicalW = scaleFactor > 0 ? screenW / scaleFactor : screenW;
+                float logicalH = scaleFactor > 0 ? screenH / scaleFactor : screenH;
+
+                var rootRect = new Rect(0, 0, logicalW, logicalH);
+
+                int startCount = results.Count;
+                HitTestAllNode(canvas.gameObject, rootRect, screenX, screenY, scaleFactor,
+                    mouseScreenX, mouseScreenY, results);
+                // DFS는 부모→자식 순이라 자식(위)이 리스트 뒤에 온다. 이 Canvas 구간만 뒤집어서
+                // "위→아래" 순서로 맞춘다.
+                results.Reverse(startCount, results.Count - startCount);
+            }
+        }
+
+        private static void HitTestAllNode(GameObject go, Rect parentRect,
+            float ox, float oy, float scale,
+            float mouseX, float mouseY, List<GameObject> results)
+        {
+            if (!go.activeInHierarchy) return;
+
+            var rt = go.GetComponent<RectTransform>();
+            Rect localRect = rt != null ? rt.GetWorldRect(parentRect) : parentRect;
+
+            var screenRect = new Rect(
+                ox + localRect.x * scale,
+                oy + localRect.y * scale,
+                localRect.width * scale,
+                localRect.height * scale);
+
+            if (rt != null && HasUIRenderable(go) && !go._isEditorInternal &&
+                mouseX >= screenRect.x && mouseX <= screenRect.xMax &&
+                mouseY >= screenRect.y && mouseY <= screenRect.yMax)
+            {
+                results.Add(go);
+            }
+
+            var scrollView = go.GetComponent<UIScrollView>();
+            float childOx = ox;
+            float childOy = oy;
+            if (scrollView != null)
+            {
+                childOx -= scrollView.scrollPosition.x * scale;
+                childOy -= scrollView.scrollPosition.y * scale;
+            }
+
+            var t = go.transform;
+            for (int i = 0; i < t.childCount; i++)
+            {
+                HitTestAllNode(t.GetChild(i).gameObject, localRect, childOx, childOy, scale,
+                    mouseX, mouseY, results);
+            }
         }
 
         /// <summary>
