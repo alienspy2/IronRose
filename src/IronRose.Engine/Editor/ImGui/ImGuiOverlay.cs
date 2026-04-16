@@ -2695,8 +2695,20 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                             if (!ctrlHeld && samePos)
                             {
                                 int? curPrimary = EditorSelection.SelectedGameObjectId;
-                                if (curPrimary.HasValue && !_cycle3DExcludedIds.Contains(curPrimary.Value))
-                                    _cycle3DExcludedIds.Add(curPrimary.Value);
+                                if (curPrimary.HasValue)
+                                {
+                                    // 누적된 exclude가 있고 현재 선택이 거기 없다면, 사용자가 이전 클릭과
+                                    // 이번 클릭 사이에 외부(Hierarchy 등)에서 선택을 바꾼 것으로 간주한다.
+                                    // 이 경우 누적 exclude를 리셋해 cycle 시작점을 재설정한다 (명세 #3).
+                                    // 현재 선택이 이번 픽 후보에 포함되면 그 다음 후보가 선택되고(명세 #2),
+                                    // 포함되지 않으면 최상단이 선택된다(명세 #3).
+                                    if (_cycle3DExcludedIds.Count > 0 && !_cycle3DExcludedIds.Contains(curPrimary.Value))
+                                    {
+                                        _cycle3DExcludedIds.Clear();
+                                    }
+                                    if (!_cycle3DExcludedIds.Contains(curPrimary.Value))
+                                        _cycle3DExcludedIds.Add(curPrimary.Value);
+                                }
                             }
 
                             var excludeSnapshot = (!ctrlHeld && _cycle3DExcludedIds.Count > 0)
@@ -2795,6 +2807,23 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 _cyclePickDomain = CyclePickDomain.UI;
 
                 // 현재 선택이 후보에 있으면 그 다음 인덱스, 없으면 최상단(0).
+                int? curId = EditorSelection.SelectedGameObjectId;
+                if (curId.HasValue)
+                {
+                    int idx = _cycleUiCandidateIds.IndexOf(curId.Value);
+                    _cycleUiNextIndex = idx >= 0 ? (idx + 1) % _cycleUiCandidateIds.Count : 0;
+                }
+                else
+                {
+                    _cycleUiNextIndex = 0;
+                }
+            }
+            else
+            {
+                // 같은 좌표+같은 후보 리스트지만, 이전 클릭과 이번 클릭 사이에 사용자가 외부(Hierarchy 등)에서
+                // 선택을 바꿨을 수 있다. 명세 #2/#3에 부합하도록 현재 선택을 기준으로 다음 인덱스를 보정한다.
+                //   - 현재 선택이 후보에 있으면   → 그 다음 인덱스 (끝이면 wrap) (명세 #2)
+                //   - 현재 선택이 후보에 없으면   → 최상단(0)                     (명세 #3)
                 int? curId = EditorSelection.SelectedGameObjectId;
                 if (curId.HasValue)
                 {

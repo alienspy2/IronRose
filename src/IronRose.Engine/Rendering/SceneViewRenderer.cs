@@ -845,8 +845,13 @@ namespace IronRose.Rendering
             unsafe { pickedId = *(uint*)map.Data; }
             _device.Unmap(_pickStaging);
 
-            _pickCallback?.Invoke(pickedId);
+            // 콜백 내부에서 RequestPick(재진입)이 호출될 수 있으므로, 멤버 상태를 먼저 비우고
+            // 로컬로 캡처한 콜백을 호출한다. 이렇게 해야 Invoke 도중 세팅된 새 _pickCallback/
+            // _pickRequested가 이 스코프 바깥에서 덮어써지지 않는다.
+            var cb = _pickCallback;
             _pickCallback = null;
+            _pickRequested = false;
+            cb?.Invoke(pickedId);
         }
 
         public void Dispose()
