@@ -2940,7 +2940,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                     && _gizmo != null && _sceneRenderer.Framebuffer != null)
                 {
                     _gizmo.Render(cl, _editorCamera, _sceneRenderer,
-                        _sceneView.SelectedTool, _sceneView.SelectedSpace,
+                        _sceneView.SelectedTool, _sceneView.SelectedSpace, _sceneView.SelectedPivotMode,
                         _sceneRenderer.Framebuffer.Width, _sceneRenderer.Framebuffer.Height);
                 }
 

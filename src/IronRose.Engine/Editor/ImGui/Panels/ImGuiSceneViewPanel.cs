@@ -36,6 +36,12 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         Local,
     }
 
+    public enum TransformPivotMode
+    {
+        Pivot,   // Active(primary) object's pivot
+        Center,  // Average of all selected objects' positions
+    }
+
     public class ImGuiSceneViewPanel : IEditorPanel
     {
         private bool _isOpen = true;
@@ -63,7 +69,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         // Transform tools
         private int _selectedToolIdx = 0;
-        private int _selectedSpaceIdx = 0;
+        private int _selectedSpaceIdx = EditorState.SceneViewTransformSpace;
+        private int _selectedPivotIdx = EditorState.SceneViewPivotMode;
         // Overlay toggles
         private bool _showGizmos = true;
         private bool _showUI = true;
@@ -77,6 +84,21 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         public int SelectedMatCapIndex => _selectedMatCapIdx;
         public TransformTool SelectedTool => (TransformTool)_selectedToolIdx;
         public TransformSpace SelectedSpace => (TransformSpace)_selectedSpaceIdx;
+        public TransformPivotMode SelectedPivotMode => (TransformPivotMode)_selectedPivotIdx;
+
+        private void ToggleTransformSpace()
+        {
+            _selectedSpaceIdx = _selectedSpaceIdx == 0 ? 1 : 0;
+            EditorState.SceneViewTransformSpace = _selectedSpaceIdx;
+            EditorState.Save();
+        }
+
+        private void TogglePivotMode()
+        {
+            _selectedPivotIdx = _selectedPivotIdx == 0 ? 1 : 0;
+            EditorState.SceneViewPivotMode = _selectedPivotIdx;
+            EditorState.Save();
+        }
         public bool IsImageHovered => _isImageHovered;
         public bool IsWindowFocused => _isWindowFocused;
         public Vector2 ImageScreenMin => _imageScreenMin;
@@ -326,12 +348,19 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             if (ToolButton("T", isRect)) _selectedToolIdx = 3;
             if (ImGui.IsItemHovered()) ImGui.SetTooltip("Rect (T)");
 
-            // Transform space
+            // Pivot mode (Pivot / Center)
             ImGui.SameLine();
             ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 8);
+            string pivotLabel = _selectedPivotIdx == 0 ? "Pivot" : "Center";
+            if (ImGui.Button(pivotLabel))
+                TogglePivotMode();
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Toggle Pivot/Center (X)");
+
+            // Transform space
+            ImGui.SameLine();
             string spaceLabel = _selectedSpaceIdx == 0 ? "World" : "Local";
             if (ImGui.Button(spaceLabel))
-                _selectedSpaceIdx = _selectedSpaceIdx == 0 ? 1 : 0;
+                ToggleTransformSpace();
             if (ImGui.IsItemHovered()) ImGui.SetTooltip("Toggle World/Local (Z)");
 
             // Snap settings
@@ -568,7 +597,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
         /// <summary>
         /// Handle keyboard shortcuts (global — works from any panel, like Unity).
-        /// W = Translate, E = Rotate, R = Scale, Z = toggle World/Local.
+        /// W = Translate, E = Rotate, R = Scale, T = Rect, Z = toggle World/Local, X = toggle Pivot/Center.
         /// </summary>
         public void ProcessShortcuts()
         {
@@ -582,7 +611,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             if (ImGui.IsKeyPressed(ImGuiKey.E)) _selectedToolIdx = 1;
             if (ImGui.IsKeyPressed(ImGuiKey.R)) _selectedToolIdx = 2;
             if (ImGui.IsKeyPressed(ImGuiKey.T)) _selectedToolIdx = 3;
-            if (ImGui.IsKeyPressed(ImGuiKey.Z)) _selectedSpaceIdx = _selectedSpaceIdx == 0 ? 1 : 0;
+            if (ImGui.IsKeyPressed(ImGuiKey.Z)) ToggleTransformSpace();
+            if (ImGui.IsKeyPressed(ImGuiKey.X)) TogglePivotMode();
         }
 
         // ================================================================
@@ -805,6 +835,21 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             ImGui.SameLine();
             if (ToolButton("T", isRect)) _selectedToolIdx = 3;
             if (ImGui.IsItemHovered()) ImGui.SetTooltip("Rect (T)");
+
+            // Pivot mode (Pivot / Center)
+            ImGui.SameLine();
+            ImGui.SetCursorPosX(ImGui.GetCursorPosX() + 8);
+            string pivotLabel = _selectedPivotIdx == 0 ? "Pivot" : "Center";
+            if (ImGui.Button(pivotLabel + "##canvas"))
+                TogglePivotMode();
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Toggle Pivot/Center (X)");
+
+            // Transform space (World / Local)
+            ImGui.SameLine();
+            string spaceLabel = _selectedSpaceIdx == 0 ? "World" : "Local";
+            if (ImGui.Button(spaceLabel + "##canvas"))
+                ToggleTransformSpace();
+            if (ImGui.IsItemHovered()) ImGui.SetTooltip("Toggle World/Local (Z)");
 
             // 줌 비율
             ImGui.SameLine();

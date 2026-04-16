@@ -61,6 +61,12 @@ namespace IronRose.Engine.Editor
         /// <summary>Game View 해상도 설정 ("native", "1920x1080", "1280x720").</summary>
         public static string GameViewResolution { get; set; } = "native";
 
+        /// <summary>Scene View Transform Space (0=World, 1=Local).</summary>
+        public static int SceneViewTransformSpace { get; set; } = 0;
+
+        /// <summary>Scene View Transform Pivot Mode (0=Pivot, 1=Center).</summary>
+        public static int SceneViewPivotMode { get; set; } = 0;
+
         // Snap settings
         /// <summary>이동 스냅 단위 (월드 유닛).</summary>
         public static float SnapTranslate { get; set; } = 1.0f;
@@ -181,6 +187,10 @@ namespace IronRose.Engine.Editor
                 var gvr = editor.GetString("game_view_resolution", "");
                 if (!string.IsNullOrEmpty(gvr))
                     GameViewResolution = gvr;
+                SceneViewTransformSpace = Math.Clamp(
+                    editor.GetInt("scene_view_transform_space", SceneViewTransformSpace), 0, 1);
+                SceneViewPivotMode = Math.Clamp(
+                    editor.GetInt("scene_view_pivot_mode", SceneViewPivotMode), 0, 1);
                 var sarp = editor.GetString("active_renderer_profile_guid", "");
                 if (!string.IsNullOrEmpty(sarp))
                     ActiveRendererProfileGuid = sarp;
@@ -251,6 +261,8 @@ namespace IronRose.Engine.Editor
                 toml += $"last_scene = \"{scenePath}\"\n";
                 toml += $"scene_view_render_style = \"{SceneViewRenderStyle}\"\n";
                 toml += $"game_view_resolution = \"{GameViewResolution}\"\n";
+                toml += $"scene_view_transform_space = {SceneViewTransformSpace}\n";
+                toml += $"scene_view_pivot_mode = {SceneViewPivotMode}\n";
                 toml += "\n[snap]\n";
                 toml += $"translate = {SnapTranslate:F3}\n";
                 toml += $"rotate = {SnapRotate:F1}\n";

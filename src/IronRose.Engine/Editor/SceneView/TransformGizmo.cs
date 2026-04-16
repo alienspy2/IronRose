@@ -100,10 +100,14 @@ namespace IronRose.Engine.Editor.SceneView
             var io = ImGuiNET.ImGui.GetIO();
             var tool = sceneView.SelectedTool;
             var space = sceneView.SelectedSpace;
+            var pivotMode = sceneView.SelectedPivotMode;
             var transform = selectedGo.transform;
 
+            // Gizmo position depends on pivot mode (Pivot = primary, Center = average of selected)
+            var gizmoPos = ComputeGizmoCenter(transform.position, pivotMode);
+
             // Gizmo scale to maintain constant screen size
-            float dist = (camera.Position - transform.position).magnitude;
+            float dist = (camera.Position - gizmoPos).magnitude;
             float gizmoScale = dist * 0.12f;
 
             // Get mouse in scene view local coords
@@ -122,7 +126,7 @@ namespace IronRose.Engine.Editor.SceneView
             var projMatrix = camera.GetProjectionMatrix(aspect).ToNumerics();
             var vp = viewMatrix * projMatrix;
 
-            var objPos = transform.position;
+            var objPos = gizmoPos;
             var objRot = space == TransformSpace.Local ? transform.rotation : RoseEngine.Quaternion.identity;
 
             if (_isDragging)
@@ -303,7 +307,7 @@ namespace IronRose.Engine.Editor.SceneView
             {
                 _isDragging = true;
                 _activeAxis = _hoveredAxis;
-                _dragStartObjPos = transform.position;
+                _dragStartObjPos = gizmoPos;
                 _dragStartObjRot = transform.rotation;
                 _dragStartObjScale = transform.localScale;
 
@@ -348,7 +352,8 @@ namespace IronRose.Engine.Editor.SceneView
         /// Render the gizmo using SceneViewRenderer's gizmo pipeline.
         /// </summary>
         public void Render(CommandList cl, EditorCamera camera, SceneViewRenderer renderer,
-            TransformTool tool, TransformSpace space, float viewportWidth, float viewportHeight)
+            TransformTool tool, TransformSpace space, TransformPivotMode pivotMode,
+            float viewportWidth, float viewportHeight)
         {
             if (!_meshesUploaded) return;
 
@@ -356,7 +361,7 @@ namespace IronRose.Engine.Editor.SceneView
             if (selectedGo == null || !selectedGo.activeInHierarchy || IsPrefabChildLocked(selectedGo)) return;
 
             var transform = selectedGo.transform;
-            var objPos = transform.position;
+            var objPos = ComputeGizmoCenter(transform.position, pivotMode);
             var objRot = space == TransformSpace.Local ? transform.rotation : RoseEngine.Quaternion.identity;
 
             float dist = (camera.Position - objPos).magnitude;
@@ -764,6 +769,30 @@ namespace IronRose.Engine.Editor.SceneView
         /// <summary>조상 중 PrefabInstance가 있으면 잠금. 프리팹 루트 자체는 이동 가능, 그 아래는 전부 잠금.</summary>
         private static bool IsPrefabChildLocked(GameObject go)
             => PrefabUtility.HasPrefabInstanceAncestor(go);
+
+        /// <summary>
+        /// 기즈모 중심점 계산.
+        /// Pivot: primary(마지막 선택)의 위치.
+        /// Center: 선택된 모든 오브젝트 위치의 평균(잠긴 프리팹 자식 제외).
+        /// </summary>
+        private static Vector3 ComputeGizmoCenter(Vector3 primaryPos, TransformPivotMode mode)
+        {
+            if (mode == TransformPivotMode.Pivot) return primaryPos;
+
+            var ids = EditorSelection.SelectedGameObjectIds;
+            if (ids.Count <= 1) return primaryPos;
+
+            var sum = Vector3.zero;
+            int count = 0;
+            foreach (var id in ids)
+            {
+                var go = UndoUtility.FindGameObjectById(id);
+                if (go == null || IsPrefabChildLocked(go)) continue;
+                sum += go.transform.position;
+                count++;
+            }
+            return count > 0 ? sum / (float)count : primaryPos;
+        }
 
         public void Dispose()
         {
