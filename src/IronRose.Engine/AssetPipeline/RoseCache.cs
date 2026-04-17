@@ -1,7 +1,8 @@
 // ------------------------------------------------------------
 // @file    RoseCache.cs
 // @brief   에셋(텍스처, 메시)을 바이너리 캐시 파일로 저장/로드하여 임포트 속도를 높인다.
-//          FormatVersion 11: texture_type+quality resolver 도입, BC1/NoCompression 지원.
+//          FormatVersion 12: sRGB variant 대신 UNorm variant 사용 (엔진 렌더 파이프라인이
+//          아직 sRGB variant를 지원하지 않아 압축 텍스처가 어두워지던 버그 수정).
 // @deps    IronRose.Engine (GpuTextureCompressor, MeshImportResult, RoseMetadata, ProjectContext,
 //                           TextureCompressionFormatResolver),
 //          RoseEngine (Material, Texture2D, Color, BlendMode, Mesh, Vector2/3/4, BoneWeight),
@@ -20,9 +21,12 @@
 //          Material 직렬화 순서: blendMode(byte) -> color -> emission -> PBR floats -> textures
 //          Store 계열 메서드는 temp file + atomic rename 패턴으로 동시 접근 안전성을 보장한다.
 //          Load/HasValidCache는 FileShare.ReadWrite|Delete로 열어 쓰기 중 읽기를 허용한다.
-//          FormatVersion 11: texture_type + quality → TextureCompressionFormatResolver로 포맷 결정.
+//          FormatVersion 11+: texture_type + quality → TextureCompressionFormatResolver로 포맷 결정.
 //            Color/High,Med=BC7, Color/Low=BC1, ColorWithAlpha/Low=BC3, NormalMap=BC5,
 //            Sprite/Low=BC3, HDR/Panoramic=BC6H. NoCompression=R8G8B8A8(LDR)/RGBA16F(HDR).
+//          FormatVersion 12: 엔진이 sRGB 파이프라인 미지원이라 Resolver/RoseCache 모두 UNorm
+//            variant로만 업로드. BC7_UNorm_SRgb 등을 쓰면 GPU sRGB 디코딩 + 최종 blit의
+//            pow(1/2.2) 감마 보정이 이중 적용되어 이미지가 어두워지기 때문.
 //          압축 우선순위: Compressonator CLI → GPU Vulkan (BC7/BC5만) → CPU BCnEncoder.NET.
 //          Compressonator CLI는 externalTools/compressonatorcli/에서 자동 탐지하며, 없으면 폴백.
 //          BC1 폴백 검증: BCnEncoder.NET의 BC1 지원 여부를 static _bc1CpuSupported 플래그로
@@ -52,7 +56,7 @@ namespace IronRose.AssetPipeline
     public class RoseCache
     {
         private const uint Magic = 0x45534F52; // "ROSE"
-        private const int FormatVersion = 11; // v11: texture_type+quality resolver 도입, BC1/NoCompression 지원
+        private const int FormatVersion = 12; // v12: sRGB variant 대신 UNorm variant 사용 (엔진 렌더 파이프라인이 아직 sRGB variant 미지원)
 
         // Custom format ID for BC6H (not in Veldrid 4.9 PixelFormat enum)
         private const int FormatBC6H_UFloat = 1000;
@@ -464,11 +468,13 @@ namespace IronRose.AssetPipeline
                 // BC1 선제 폴백: CPU BC1이 이미 미지원으로 확인되었고, CLI/GPU 경로가 모두 이 포맷을
                 // 처리할 수 없다면 출발점부터 BC3로 전환하여 mip 체인 포맷 불일치를 방지한다.
                 // (CLI는 BC1을 지원하므로 CLI가 사용 가능하면 BC1 유지.)
+                // Resolver가 현재 UNorm variant만 반환하므로 여기서도 UNorm만 사용한다.
+                // 엔진이 sRGB pipeline으로 전환되면 Resolver와 함께 맞춰 갱신할 것.
                 bool bc1PreFallback = false;
                 if (cliFormat == "BC1" && _bc1CpuSupported == false && _compressonatorCliPath == "")
                 {
                     cliFormat = "BC3";
-                    veldridFormat = isSrgb ? Veldrid.PixelFormat.BC3_UNorm_SRgb : Veldrid.PixelFormat.BC3_UNorm;
+                    veldridFormat = Veldrid.PixelFormat.BC3_UNorm;
                     cliQuality = TextureCompressionFormatResolver.GetCompressonatorQuality(cliFormat, quality);
                     bc1PreFallback = true;
                     Debug.LogWarning("[RoseCache] BC1 pre-fallback: CLI unavailable and CPU BC1 known unsupported → encoding as BC3");
@@ -563,14 +569,15 @@ namespace IronRose.AssetPipeline
             finalizeFormat:
                 // CPU 폴백에서 BC1 → BC3 전환이 발생한 경우 Veldrid 포맷도 일치시켜야 한다.
                 // 포맷 불일치 상태로 GPU에 업로드하면 크기 계산이 틀려 업로드 크래시/깨진 텍스처.
+                // Resolver가 현재 UNorm variant만 반환하므로 여기서도 UNorm만 사용한다.
                 if (bc1RuntimeFallback)
                 {
                     veldridFormat = cliFormat switch
                     {
-                        "BC3" => isSrgb ? Veldrid.PixelFormat.BC3_UNorm_SRgb : Veldrid.PixelFormat.BC3_UNorm,
-                        "BC1" => isSrgb ? Veldrid.PixelFormat.BC1_Rgba_UNorm_SRgb : Veldrid.PixelFormat.BC1_Rgba_UNorm,
+                        "BC3" => Veldrid.PixelFormat.BC3_UNorm,
+                        "BC1" => Veldrid.PixelFormat.BC1_Rgba_UNorm,
                         "BC5" => Veldrid.PixelFormat.BC5_UNorm,
-                        "BC7" => isSrgb ? Veldrid.PixelFormat.BC7_UNorm_SRgb : Veldrid.PixelFormat.BC7_UNorm,
+                        "BC7" => Veldrid.PixelFormat.BC7_UNorm,
                         _     => veldridFormat,
                     };
                     Debug.LogWarning($"[RoseCache] Format fallback applied → Veldrid format = {veldridFormat}");
