@@ -3794,41 +3794,55 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
             ImGui.Image(_previewTextureId, new System.Numerics.Vector2(displayW, displayH));
 
-            // 압축 후 메모리 크기 계산
-            string compression = "BC7";
+            // 압축 후 메모리 크기 계산 — Resolver 결과의 BitsPerPixel을 사용하여
+            // BC1(4bpp) / BC3·BC5·BC6H·BC7(8bpp) / Uncompressed(32bpp or 64bpp)을 정확히 반영.
             bool generateMipmaps = true;
+            string formatLabel = "BC7";
+            int bitsPerPixel = 8;
             if (_editedImporter != null)
             {
-                if (_editedImporter.TryGetValue("compression", out var cVal))
-                    compression = cVal?.ToString() ?? "BC7";
+                var tt = _editedImporter.TryGetValue("texture_type", out var ttv) ? ttv?.ToString() ?? "Color" : "Color";
+                var q = _editedImporter.TryGetValue("quality", out var qv) ? qv?.ToString() ?? "High" : "High";
+                var sr = _editedImporter.TryGetValue("srgb", out var sv) && sv is true;
+                var resolution = TextureCompressionFormatResolver.Resolve(tt ?? "Color", q ?? "High", sr);
+                formatLabel = resolution.CompressonatorFormat ?? (resolution.IsHdr ? "RGBA16F" : "RGBA8");
+                bitsPerPixel = resolution.BitsPerPixel;
                 if (_editedImporter.TryGetValue("generate_mipmaps", out var mVal) && mVal is bool m)
                     generateMipmaps = m;
             }
-            long memBytes = CalculateTextureMemorySize(_previewTexWidth, _previewTexHeight, compression, generateMipmaps);
+            long memBytes = CalculateTextureMemorySize(_previewTexWidth, _previewTexHeight, bitsPerPixel, generateMipmaps);
             string memStr = FormatMemorySize(memBytes);
 
             ImGui.TextDisabled($"{_previewTexWidth} x {_previewTexHeight}");
             ImGui.SameLine();
             ImGui.TextDisabled($"  {memStr}");
             ImGui.SameLine();
-            ImGui.TextDisabled($"  {compression}");
+            ImGui.TextDisabled($"  {formatLabel}");
         }
 
-        private static long CalculateTextureMemorySize(int width, int height, string compression, bool generateMipmaps)
+        /// <summary>
+        /// bpp 기반 텍스처 메모리 추정. mipmap chain 포함 시 각 레벨을 누적한다.
+        /// BC 포맷은 4x4 블록 단위로 저장되므로 width/height를 4의 배수로 올림하여 계산한다.
+        /// </summary>
+        private static long CalculateTextureMemorySize(int width, int height, int bitsPerPixel, bool generateMipmaps)
         {
+            // BC(8bpp 이하) vs uncompressed(32+bpp) 구분: bpp가 8 이하이면 BC로 간주.
+            bool isBlockCompressed = bitsPerPixel <= 8;
             long totalBytes = 0;
             int w = width, h = height;
             while (true)
             {
-                if (compression is "BC7" or "BC5" or "BC6H")
+                if (isBlockCompressed)
                 {
                     int blocksX = (w + 3) / 4;
                     int blocksY = (h + 3) / 4;
-                    totalBytes += blocksX * blocksY * 16;
+                    // 4x4 블록당 bit 수 = bitsPerPixel * 16 (BC1=64bit, BC3/5/6H/7=128bit)
+                    long bytesPerBlock = ((long)bitsPerPixel * 16) / 8;
+                    totalBytes += (long)blocksX * blocksY * bytesPerBlock;
                 }
                 else
                 {
-                    totalBytes += (long)w * h * 4;
+                    totalBytes += (long)w * h * (bitsPerPixel / 8);
                 }
 
                 if (!generateMipmaps || (w == 1 && h == 1)) break;

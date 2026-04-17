@@ -23,6 +23,13 @@
 //                                                        — Compressonator CLI -Quality 인자 값
 // @note    알 수 없는 textureType은 "Color", 알 수 없는 quality는 "High"로 fallback.
 //          NormalMap/HDR/Panoramic은 sRGB 파라미터를 무시한다 (항상 linear).
+//          현재 엔진 렌더 파이프라인은 sRGB variant 텍스처 포맷을 지원하지 않는다:
+//          셰이더는 텍스처 raw bytes를 직접 사용하고, blit.frag의 pow(color, 1/2.2)로
+//          최종 감마 보정을 한다. BC7_UNorm_SRgb 등 sRGB variant를 사용하면 GPU가
+//          자동 sRGB→linear 변환을 하여 감마 보정이 이중으로 걸려 이미지가 어두워진다.
+//          따라서 `isSrgb` 매개변수는 받아두되 VeldridFormat은 항상 UNorm variant를
+//          반환한다. 엔진이 proper sRGB 파이프라인으로 전환되면 이 제한을 해제하고
+//          sRGB variant를 돌려주면 된다. (버그 리포트 2026-04-17)
 //          Phase 1 단독 적용 시점에는 파이프라인이 아직 이 Resolver를 사용하지 않는다
 //          (Phase 3에서 RoseCache 통합). 그 전까지는 순수 함수 유닛으로만 존재.
 // ------------------------------------------------------------
@@ -70,7 +77,9 @@ namespace IronRose.AssetPipeline
         /// texture_type + quality + sRGB 조합으로 최종 포맷을 결정한다.
         /// - HDR 경로: High/Medium/Low → BC6H, NoCompression → RGBA16F.
         /// - LDR 경로: 매핑표에 따라 BC7/BC3/BC1/BC5 선택 또는 NoCompression→RGBA8.
-        /// - sRGB=true + LDR: 압축/비압축 모두 sRGB variant 사용. NormalMap/HDR은 무시.
+        /// - sRGB 파라미터는 현재 VeldridFormat에 반영하지 않는다 (파일 상단 @note 참조).
+        ///   엔진이 proper sRGB 파이프라인으로 전환되면 UNorm↔UNorm_SRgb variant를
+        ///   여기서 선택하도록 확장한다.
         /// 알 수 없는 textureType은 "Color", 알 수 없는 quality는 "High"로 fallback.
         /// </summary>
         public static TextureFormatResolution Resolve(string textureType, string quality, bool isSrgb)
@@ -113,17 +122,15 @@ namespace IronRose.AssetPipeline
             }
 
             // LDR 경로
-            // NormalMap은 linear 강제
-            var useSrgb = isSrgb && type != "NormalMap";
+            // 현재 렌더 파이프라인 제약으로 sRGB variant는 사용하지 않는다.
+            // isSrgb는 매개변수로는 받되 VeldridFormat에는 반영하지 않는다. 파일 상단 @note 참조.
+            _ = isSrgb;
 
             // NoCompression: RGBA8 직업로드
             if (q == "NoCompression")
             {
-                var fmt = useSrgb
-                    ? Veldrid.PixelFormat.R8_G8_B8_A8_UNorm_SRgb
-                    : Veldrid.PixelFormat.R8_G8_B8_A8_UNorm;
                 return new TextureFormatResolution(
-                    VeldridFormat: fmt,
+                    VeldridFormat: Veldrid.PixelFormat.R8_G8_B8_A8_UNorm,
                     BC6HVirtualId: 0,
                     CompressonatorFormat: null,
                     DisplayLabel: "R8G8B8A8 (32 bpp, Uncompressed)",
@@ -158,7 +165,7 @@ namespace IronRose.AssetPipeline
             return compFormat switch
             {
                 "BC7" => new TextureFormatResolution(
-                    VeldridFormat: useSrgb ? Veldrid.PixelFormat.BC7_UNorm_SRgb : Veldrid.PixelFormat.BC7_UNorm,
+                    VeldridFormat: Veldrid.PixelFormat.BC7_UNorm,
                     BC6HVirtualId: 0,
                     CompressonatorFormat: "BC7",
                     DisplayLabel: "BC7 (8 bpp)",
@@ -166,7 +173,7 @@ namespace IronRose.AssetPipeline
                     IsUncompressed: false,
                     IsHdr: false),
                 "BC3" => new TextureFormatResolution(
-                    VeldridFormat: useSrgb ? Veldrid.PixelFormat.BC3_UNorm_SRgb : Veldrid.PixelFormat.BC3_UNorm,
+                    VeldridFormat: Veldrid.PixelFormat.BC3_UNorm,
                     BC6HVirtualId: 0,
                     CompressonatorFormat: "BC3",
                     DisplayLabel: "BC3 (8 bpp)",
@@ -174,7 +181,7 @@ namespace IronRose.AssetPipeline
                     IsUncompressed: false,
                     IsHdr: false),
                 "BC1" => new TextureFormatResolution(
-                    VeldridFormat: useSrgb ? Veldrid.PixelFormat.BC1_Rgba_UNorm_SRgb : Veldrid.PixelFormat.BC1_Rgba_UNorm,
+                    VeldridFormat: Veldrid.PixelFormat.BC1_Rgba_UNorm,
                     BC6HVirtualId: 0,
                     CompressonatorFormat: "BC1",
                     DisplayLabel: "BC1 (4 bpp)",
@@ -182,7 +189,7 @@ namespace IronRose.AssetPipeline
                     IsUncompressed: false,
                     IsHdr: false),
                 "BC5" => new TextureFormatResolution(
-                    VeldridFormat: Veldrid.PixelFormat.BC5_UNorm, // NormalMap은 sRGB 무시
+                    VeldridFormat: Veldrid.PixelFormat.BC5_UNorm,
                     BC6HVirtualId: 0,
                     CompressonatorFormat: "BC5",
                     DisplayLabel: "BC5 (8 bpp)",
@@ -190,7 +197,7 @@ namespace IronRose.AssetPipeline
                     IsUncompressed: false,
                     IsHdr: false),
                 _ => new TextureFormatResolution(
-                    VeldridFormat: useSrgb ? Veldrid.PixelFormat.BC7_UNorm_SRgb : Veldrid.PixelFormat.BC7_UNorm,
+                    VeldridFormat: Veldrid.PixelFormat.BC7_UNorm,
                     BC6HVirtualId: 0,
                     CompressonatorFormat: "BC7",
                     DisplayLabel: "BC7 (8 bpp)",
