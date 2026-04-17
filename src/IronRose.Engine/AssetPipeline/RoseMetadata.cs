@@ -3,20 +3,25 @@
 // @brief   .rose 메타데이터 파일의 로드/저장을 담당한다. 에셋의 GUID, 버전,
 //          라벨, 임포터 설정, 서브에셋 목록을 관리한다.
 // @deps    IronRose.Engine/TomlConfig, IronRose.Engine/TomlConfigArray,
-//          Tomlyn.Model (InferImporter가 TomlTable/TomlArray 직접 사용)
+//          Tomlyn.Model (InferImporter가 TomlTable/TomlArray 직접 사용),
+//          IronRose.AssetPipeline/TextureMetadataMigration
 // @exports
 //   class SubAssetEntry
 //     name, type, index, guid                                   — 서브에셋 엔트리 정보
 //   class RoseMetadata
 //     guid, version, labels, importer (TomlTable), subAssets    — 메타데이터 필드
+//     internal _migrated: bool                                  — FromToml에서 마이그레이션 수행 플래그 (직렬화 X)
 //     static OnSaved: event Action<string>                      — 저장 시 이벤트
-//     static LoadOrCreate(string): RoseMetadata                 — .rose 파일 로드 또는 생성
+//     static LoadOrCreate(string): RoseMetadata                 — .rose 파일 로드 또는 생성. 마이그레이션 시 자동 재저장
 //     Save(string): void                                        — .rose 파일 저장
 //     GetOrCreateSubAsset(string, string, int): SubAssetEntry  — 서브에셋 찾기/생성
 //     PruneSubAssets(HashSet<string>): void                     — 미사용 서브에셋 제거
 // @note    importer 필드 타입은 TomlTable을 유지한다 (10+ 파일에서 직접 접근).
 //          InferImporter()는 TomlTable을 직접 사용하므로 변경하지 않는다.
 //          using Tomlyn.Model은 InferImporter 때문에 유지해야 한다.
+//          Phase 1 변경: TextureImporter InferImporter에서 compression 키 제거,
+//          .hdr/.exr는 quality="High" 추가. FromToml에서 TextureMetadataMigration.Apply
+//          호출하여 구버전 compression 키 정리. _migrated=true이면 LoadOrCreate가 자동 저장.
 // ------------------------------------------------------------
 using Tomlyn.Model;
 using IronRose.Engine;
@@ -24,6 +29,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Debug = RoseEngine.EditorDebug;
 
 namespace IronRose.AssetPipeline
 {
@@ -44,6 +50,13 @@ namespace IronRose.AssetPipeline
         public List<SubAssetEntry> subAssets { get; set; } = new();
 
         /// <summary>
+        /// FromToml에서 메타데이터 마이그레이션(구버전 compression 키 정리 등)이
+        /// 수행되었는지 여부. TOML에는 직렬화되지 않는다. LoadOrCreate가 true일 때
+        /// 파일을 자동 저장하여 마이그레이션 결과를 디스크에 반영한다.
+        /// </summary>
+        internal bool _migrated { get; set; }
+
+        /// <summary>
         /// .rose 파일이 저장될 때 발생. 인자는 에셋 경로 (.rose 제외).
         /// AssetDatabase가 구독하여 자동 reimport 처리.
         /// </summary>
@@ -57,7 +70,16 @@ namespace IronRose.AssetPipeline
             {
                 var config = TomlConfig.LoadFile(rosePath, "[RoseMetadata]");
                 if (config != null)
-                    return FromToml(config.GetRawTable());
+                {
+                    var loaded = FromToml(config.GetRawTable());
+                    if (loaded._migrated)
+                    {
+                        loaded.Save(rosePath);
+                        loaded._migrated = false;
+                        Debug.Log($"[RoseMetadata] Migrated legacy importer keys: {rosePath}");
+                    }
+                    return loaded;
+                }
             }
 
             var meta = new RoseMetadata();
@@ -131,8 +153,8 @@ namespace IronRose.AssetPipeline
                 {
                     ["type"] = "TextureImporter",
                     ["max_size"] = (long)4096,
-                    ["compression"] = "BC6H",
                     ["texture_type"] = "HDR",
+                    ["quality"] = "High",
                     ["srgb"] = false,
                     ["filter_mode"] = "Bilinear",
                     ["wrap_mode"] = "Repeat",
@@ -142,7 +164,6 @@ namespace IronRose.AssetPipeline
                 {
                     ["type"] = "TextureImporter",
                     ["max_size"] = (long)2048,
-                    ["compression"] = "BC3",
                     ["quality"] = "Low",
                     ["texture_type"] = "Color",
                     ["srgb"] = true,
@@ -239,7 +260,13 @@ namespace IronRose.AssetPipeline
 
             // importer는 TomlTable 그대로 사용 (Phase 5까지 유지)
             if (table.TryGetValue("importer", out var impVal) && impVal is TomlTable impTable)
+            {
                 meta.importer = impTable;
+                // 구버전 compression 키 등 TextureImporter 섹션 마이그레이션.
+                // 변경이 있었으면 LoadOrCreate가 Save 호출.
+                if (TextureMetadataMigration.Apply(meta.importer))
+                    meta._migrated = true;
+            }
 
             var subArr = config.GetArray("sub_assets");
             if (subArr != null)
