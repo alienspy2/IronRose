@@ -25,6 +25,11 @@
 //            Sprite/Low=BC3, HDR/Panoramic=BC6H. NoCompression=R8G8B8A8(LDR)/RGBA16F(HDR).
 //          압축 우선순위: Compressonator CLI → GPU Vulkan (BC7/BC5만) → CPU BCnEncoder.NET.
 //          Compressonator CLI는 externalTools/compressonatorcli/에서 자동 탐지하며, 없으면 폴백.
+//          BC1 폴백 검증: BCnEncoder.NET의 BC1 지원 여부를 static _bc1CpuSupported 플래그로
+//          1회 검증하여 미지원 환경에서는 BC3로 폴백한다. CPU 폴백이 BC1→BC3로 전환되면
+//          CompressWithCpuFallback의 out actualFormat를 통해 호출 측에 전달되고,
+//          Veldrid 포맷(BC3_UNorm(_SRgb))도 동시에 재계산되어 mip 체인 포맷 불일치와 업로드
+//          크래시를 방지한다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -61,6 +66,14 @@ namespace IronRose.AssetPipeline
         // Compressonator CLI path cache: null = not yet checked, "" = checked but not found
         private static string? _compressonatorCliPath;
         private static string? _compressonatorLibPath;
+
+        // BC1 CPU 인코더 지원 여부 캐시:
+        //   null  = 아직 확인 전 (첫 시도 시 결정)
+        //   true  = 정상 동작 확인됨
+        //   false = 예외 발생 확인됨 → 이후 호출은 즉시 BC3로 폴백
+        // 세션 내 1회 판정. BCnEncoder.NET 버전/환경에 따라 BC1 미지원 가능성이 있기 때문에
+        // 런타임 검증으로 안전하게 BC3로 폴백한다.
+        private static bool? _bc1CpuSupported;
 
         public RoseCache(string cacheRoot)
         {
@@ -112,8 +125,9 @@ namespace IronRose.AssetPipeline
                 var quality = GetMetaString(meta, "quality", "High");
                 var isSrgb = GetMetaBool(meta, "srgb", false);
                 var genMips = GetMetaBool(meta, "generate_mipmaps", false);
+                var resolution = TextureCompressionFormatResolver.Resolve(textureType, quality, isSrgb);
 
-                Debug.Log($"[RoseCache] Caching texture: {assetPath} ({texture.width}x{texture.height}, q={quality}, type={textureType}, srgb={isSrgb}, mips={genMips})");
+                Debug.Log($"[RoseCache] Storing texture '{assetPath}' {texture.width}x{texture.height} type={textureType} quality={quality} srgb={isSrgb} mips={genMips} → format={resolution.DisplayLabel}");
 
                 using (var fs = File.Create(tempPath))
                 using (var writer = new BinaryWriter(fs))
@@ -447,10 +461,24 @@ namespace IronRose.AssetPipeline
                 // GPU 경로는 현재 BC7/BC5만 지원.
                 bool gpuSupported = cliFormat == "BC7" || cliFormat == "BC5";
 
+                // BC1 선제 폴백: CPU BC1이 이미 미지원으로 확인되었고, CLI/GPU 경로가 모두 이 포맷을
+                // 처리할 수 없다면 출발점부터 BC3로 전환하여 mip 체인 포맷 불일치를 방지한다.
+                // (CLI는 BC1을 지원하므로 CLI가 사용 가능하면 BC1 유지.)
+                bool bc1PreFallback = false;
+                if (cliFormat == "BC1" && _bc1CpuSupported == false && _compressonatorCliPath == "")
+                {
+                    cliFormat = "BC3";
+                    veldridFormat = isSrgb ? Veldrid.PixelFormat.BC3_UNorm_SRgb : Veldrid.PixelFormat.BC3_UNorm;
+                    cliQuality = TextureCompressionFormatResolver.GetCompressonatorQuality(cliFormat, quality);
+                    bc1PreFallback = true;
+                    Debug.LogWarning("[RoseCache] BC1 pre-fallback: CLI unavailable and CPU BC1 known unsupported → encoding as BC3");
+                }
+
                 Debug.Log($"[RoseCache]     BC compress {textureType} {width}x{height} → {resolution.DisplayLabel} (q={quality} cli={cliQuality})...");
                 var sw = Stopwatch.StartNew();
 
                 byte[][] mipData;
+                bool bc1RuntimeFallback = false;
 
                 // 1순위: Compressonator CLI (Mode 0~7 전체 탐색, 최고 품질)
                 var cliResult = CompressWithCompressonator(rgbaData, width, height, cliFormat, cliQuality);
@@ -472,8 +500,18 @@ namespace IronRose.AssetPipeline
                             }
                             else
                             {
-                                // CLI가 중간에 실패하면 나머지는 CPU 폴백
-                                var fallback = CompressWithCpuFallback(mipRgba, mw, mh, cliFormat, isSrgb);
+                                // CLI가 중간에 실패하면 나머지는 CPU 폴백.
+                                // CPU 폴백이 BC1 → BC3로 전환하면 mip 체인 전체가 포맷 불일치가 되므로,
+                                // 해당 시점부터 mip0 포함 전체를 CPU 폴백으로 재생성한다.
+                                var fallback = CompressWithCpuFallback(mipRgba, mw, mh, cliFormat, isSrgb, out var mipActualFormat);
+                                if (mipActualFormat != cliFormat)
+                                {
+                                    Debug.LogWarning($"[RoseCache] CPU fallback produced {mipActualFormat} instead of {cliFormat} during CLI mip chain — regenerating full mip chain on CPU to avoid format mismatch");
+                                    cliFormat = mipActualFormat;
+                                    bc1RuntimeFallback = true;
+                                    mipData = CompressWithCpuFallback(rgbaData, width, height, cliFormat, isSrgb, out _);
+                                    goto finalizeFormat;
+                                }
                                 mipData[i] = fallback[0];
                             }
                         }
@@ -513,13 +551,38 @@ namespace IronRose.AssetPipeline
                 }
                 else
                 {
-                    // 3순위: CPU 폴백 (BCnEncoder.NET)
-                    mipData = CompressWithCpuFallback(rgbaData, width, height, cliFormat, isSrgb);
+                    // 3순위: CPU 폴백 (BCnEncoder.NET). BC1 미지원 시 내부에서 BC3로 전환.
+                    mipData = CompressWithCpuFallback(rgbaData, width, height, cliFormat, isSrgb, out var actualFormat);
+                    if (actualFormat != cliFormat)
+                    {
+                        cliFormat = actualFormat;
+                        bc1RuntimeFallback = true;
+                    }
+                }
+
+            finalizeFormat:
+                // CPU 폴백에서 BC1 → BC3 전환이 발생한 경우 Veldrid 포맷도 일치시켜야 한다.
+                // 포맷 불일치 상태로 GPU에 업로드하면 크기 계산이 틀려 업로드 크래시/깨진 텍스처.
+                if (bc1RuntimeFallback)
+                {
+                    veldridFormat = cliFormat switch
+                    {
+                        "BC3" => isSrgb ? Veldrid.PixelFormat.BC3_UNorm_SRgb : Veldrid.PixelFormat.BC3_UNorm,
+                        "BC1" => isSrgb ? Veldrid.PixelFormat.BC1_Rgba_UNorm_SRgb : Veldrid.PixelFormat.BC1_Rgba_UNorm,
+                        "BC5" => Veldrid.PixelFormat.BC5_UNorm,
+                        "BC7" => isSrgb ? Veldrid.PixelFormat.BC7_UNorm_SRgb : Veldrid.PixelFormat.BC7_UNorm,
+                        _     => veldridFormat,
+                    };
+                    Debug.LogWarning($"[RoseCache] Format fallback applied → Veldrid format = {veldridFormat}");
                 }
 
                 sw.Stop();
-                string compressSource = cliResult != null ? "CLI" : ((_gpuCompressor != null && gpuSupported) ? "GPU" : "CPU");
-                Debug.Log($"[RoseCache]     BC compress done: {mipData.Length} mips, {sw.ElapsedMilliseconds}ms ({compressSource})");
+                string compressSource = cliResult != null
+                    ? "CLI"
+                    : (_gpuCompressor != null && gpuSupported ? "GPU" : "CPU");
+                bool cliAvailable = _compressonatorCliPath != null && _compressonatorCliPath != "";
+                Debug.Log($"[RoseCache]     BC compress done via {compressSource} ({cliFormat}, q={cliQuality:0.0##}): {mipData.Length} mips, {sw.ElapsedMilliseconds}ms");
+                Debug.Log($"[RoseCache]     Fallback path: CLI={cliAvailable}, GPU={(_gpuCompressor != null && gpuSupported && compressSource == "GPU")}, CPU={(compressSource == "CPU")}, BC1→BC3={(bc1PreFallback || bc1RuntimeFallback)}");
 
                 return (mipData, veldridFormat);
             }
@@ -710,39 +773,36 @@ namespace IronRose.AssetPipeline
             }
         }
 
-        private static byte[][] CompressWithCpuFallback(byte[] rgbaData, int width, int height, string format, bool isSrgb)
+        /// <summary>
+        /// BCnEncoder.NET 기반 CPU 폴백 인코더.
+        /// BC1 요청 시 런타임 지원 여부를 static flag(_bc1CpuSupported)로 1회 검증하고,
+        /// 미지원으로 판정되면 이후 호출은 즉시 BC3로 폴백한다. `actualFormat`에 실제로
+        /// 인코딩된 포맷 문자열을 반환하므로, 호출 측에서 Veldrid 포맷을 그에 맞춰 재계산해야
+        /// mip 체인 포맷 불일치 및 업로드 크래시를 방지할 수 있다.
+        /// </summary>
+        private static byte[][] CompressWithCpuFallback(
+            byte[] rgbaData, int width, int height, string format, bool isSrgb,
+            out string actualFormat)
         {
             // isSrgb는 현재 BCnEncoder.NET에 전달할 수단이 없음(raw bytes 인코딩).
             // sRGB는 업로드 시 Veldrid 포맷 선택으로만 반영되므로 인코딩 단계에서는 무시.
             // 매개변수는 향후 확장을 위해 받아두되 현재는 사용하지 않는다.
             _ = isSrgb;
 
-            CompressionFormat bcFormat;
-            switch (format)
+            // BC1이 이미 미지원으로 확인된 경우 사전 폴백 — 예외 경로를 반복하지 않음.
+            if (format == "BC1" && _bc1CpuSupported == false)
             {
-                case "BC5":
-                    bcFormat = CompressionFormat.Bc5;
-                    break;
-                case "BC3":
-                    bcFormat = CompressionFormat.Bc3;
-                    break;
-                case "BC1":
-                    // 알파 1비트 지원 위해 Bc1WithAlpha 사용.
-                    // Color/Low 경로는 알파가 무시되지만 안전 기본.
-                    try
-                    {
-                        bcFormat = CompressionFormat.Bc1WithAlpha;
-                    }
-                    catch
-                    {
-                        Debug.LogWarning("[RoseCache] BC1 CPU encoder not available, falling back to BC3 (higher size)");
-                        bcFormat = CompressionFormat.Bc3;
-                    }
-                    break;
-                default:
-                    bcFormat = CompressionFormat.Bc7;
-                    break;
+                Debug.LogWarning("[RoseCache] BC1 CPU encoder unavailable (cached), using BC3 fallback");
+                format = "BC3";
             }
+
+            var bcFormat = format switch
+            {
+                "BC5" => CompressionFormat.Bc5,
+                "BC3" => CompressionFormat.Bc3,
+                "BC1" => CompressionFormat.Bc1WithAlpha, // Color/Low도 알파 1비트 지원 위해 Bc1WithAlpha 사용
+                _     => CompressionFormat.Bc7,
+            };
 
             try
             {
@@ -750,16 +810,23 @@ namespace IronRose.AssetPipeline
                 encoder.OutputOptions.Quality = CompressionQuality.Balanced;
                 encoder.OutputOptions.GenerateMipMaps = false;
                 encoder.Options.IsParallel = true;
-                return encoder.EncodeToRawBytes(rgbaData, width, height, BcPixelFormat.Rgba32);
+                var result = encoder.EncodeToRawBytes(rgbaData, width, height, BcPixelFormat.Rgba32);
+                if (format == "BC1") _bc1CpuSupported = true;
+                actualFormat = format;
+                return result;
             }
-            catch (Exception ex) when (bcFormat == CompressionFormat.Bc1WithAlpha)
+            catch (Exception ex) when (format == "BC1")
             {
-                Debug.LogWarning($"[RoseCache] BC1 CPU encoder not available, falling back to BC3 (higher size): {ex.Message}");
+                _bc1CpuSupported = false;
+                Debug.LogWarning($"[RoseCache] BC1 CPU encoder failed ({ex.Message}), falling back to BC3 for this and subsequent calls");
+                // BC3로 즉시 재시도.
                 var encoder = new BcEncoder(CompressionFormat.Bc3);
                 encoder.OutputOptions.Quality = CompressionQuality.Balanced;
                 encoder.OutputOptions.GenerateMipMaps = false;
                 encoder.Options.IsParallel = true;
-                return encoder.EncodeToRawBytes(rgbaData, width, height, BcPixelFormat.Rgba32);
+                var result = encoder.EncodeToRawBytes(rgbaData, width, height, BcPixelFormat.Rgba32);
+                actualFormat = "BC3";
+                return result;
             }
         }
 
