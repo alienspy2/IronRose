@@ -34,6 +34,9 @@
 //          CompressWithCpuFallback의 out actualFormat를 통해 호출 측에 전달되고,
 //          Veldrid 포맷(BC3_UNorm(_SRgb))도 동시에 재계산되어 mip 체인 포맷 불일치와 업로드
 //          크래시를 방지한다.
+//          ReadTexture는 BC6H 경로에서 Texture2D._storedAsBC6H = true로 설정한다. 이는 로드 후
+//          HDR float 포맷으로 디코드되어 _gpuFormat이 R16_G16_B16_A16_Float이 되는 상황에서도
+//          Inspector 프리뷰 라벨이 실제 저장 포맷(BC6H)을 표시할 수 있도록 하는 보조 플래그.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -940,7 +943,10 @@ namespace IronRose.AssetPipeline
             if (formatInt == FormatBC6H_UFloat)
             {
                 var hdrData = Bc6hEncoder.Decode(mipData[0], width, height);
-                return new Texture2D(width, height, hdrData);
+                var bc6hTex = new Texture2D(width, height, hdrData);
+                // 원본 저장 포맷이 BC6H였음을 Inspector 프리뷰 라벨이 알 수 있도록 플래그 설정.
+                bc6hTex._storedAsBC6H = true;
+                return bc6hTex;
             }
 
             var format = (Veldrid.PixelFormat)formatInt;
