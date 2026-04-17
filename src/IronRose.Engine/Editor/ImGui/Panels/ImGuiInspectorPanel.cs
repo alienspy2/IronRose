@@ -10,6 +10,10 @@
 //     Draw(): void                              — Inspector 패널 렌더링
 // @note    "Edit Canvas" 버튼은 Canvas 컴포넌트에 대해 CanvasEditMode.Enter/Exit를 토글한다.
 //          "Edit Collider" 패턴과 동일하게 녹색 하이라이트로 활성 상태를 표시.
+//          Texture 프리뷰 하단 라벨(width x height / memSize / format)은 _editedImporter(편집 중 UI 값)가
+//          아니라 실제 로드된 Texture2D.gpuFormat을 사용한다. Apply 전에 quality를 바꿔도 라벨은
+//          변하지 않으며, BC1→BC3 CPU 폴백처럼 실제 저장 포맷이 예측과 다를 때 그 실제 포맷을 표시한다.
+//          quality 콤보 옆의 DrawCompressionFormatPreview()는 의도적으로 예측(Resolver) 값을 보여준다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -83,6 +87,12 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         private IntPtr _previewTextureId;
         private int _previewTexWidth;
         private int _previewTexHeight;
+        // 실제 로드된 Texture2D의 GPU 픽셀 포맷과 BC6H 원본 여부.
+        // Preview 하단 라벨은 _editedImporter(현재 UI 편집값)가 아니라 실제로 저장/업로드된
+        // 결과를 보여줘야 하므로, CacheTexture 시점에 저장된 실제 포맷을 그대로 사용한다.
+        // Apply 전에 quality 콤보를 바꿔도 이 값은 변하지 않는다 (Apply → 재임포트 후에만 갱신).
+        private Veldrid.PixelFormat _previewTexFormat = Veldrid.PixelFormat.R8_G8_B8_A8_UNorm;
+        private bool _previewTexStoredAsBC6H;
         private PreviewType _previewType;
         // Material preview 캐시
         private Color _previewMatColor;
@@ -2018,6 +2028,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             _previewTextureId = IntPtr.Zero;
             _meshPreviewTextureId = IntPtr.Zero;
             _previewType = PreviewType.None;
+            _previewTexFormat = Veldrid.PixelFormat.R8_G8_B8_A8_UNorm;
+            _previewTexStoredAsBC6H = false;
             // MeshPreviewRenderer는 재사용 (GPU 리소스 비용이 높으므로 매번 재생성하지 않음)
         }
 
@@ -3708,6 +3720,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             _previewTextureId = id;
             _previewTexWidth = tex.width;
             _previewTexHeight = tex.height;
+            // 실제 로드된 텍스처의 GPU 포맷을 그대로 캐시. Resolver 예측이 아닌 실제 값을 라벨에 표시한다.
+            _previewTexFormat = tex.gpuFormat;
+            _previewTexStoredAsBC6H = tex.storedAsBC6H;
         }
 
         private void CacheMaterial(Material? mat)
@@ -3794,21 +3809,21 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
             ImGui.Image(_previewTextureId, new System.Numerics.Vector2(displayW, displayH));
 
-            // 압축 후 메모리 크기 계산 — Resolver 결과의 BitsPerPixel을 사용하여
-            // BC1(4bpp) / BC3·BC5·BC6H·BC7(8bpp) / Uncompressed(32bpp or 64bpp)을 정확히 반영.
+            // 라벨은 "예측"이 아니라 실제 로드된 Texture2D의 GPU 포맷을 그대로 반영한다.
+            // - Apply 전에 quality 콤보를 바꿔도 이 라벨은 변하지 않는다.
+            // - BC1 → BC3 CPU 폴백 같이 실제 저장 포맷이 Resolver 예측과 다를 때에도
+            //   실제 저장된 포맷이 표시된다 (→ 버그 상황을 사용자가 인지할 수 있음).
+            // mipmap 포함 여부도 실제 업로드된 텍스처 상태에 맞추는 것이 이상적이지만,
+            // 현재 Texture2D가 mipmap 유무를 외부로 노출하지 않으므로 _editedImporter의
+            // generate_mipmaps 값을 보조적으로 사용한다. (변경된 UI 값이 아닌 meta 값을
+            // 쓰려면 _assetMeta.importer를 참조해야 하지만, 이는 본 버그 범위 밖이라 유지.)
+            (string formatLabel, int bitsPerPixel) = GetTextureFormatLabel(_previewTexFormat, _previewTexStoredAsBC6H);
             bool generateMipmaps = true;
-            string formatLabel = "BC7";
-            int bitsPerPixel = 8;
-            if (_editedImporter != null)
+            if (_editedImporter != null
+                && _editedImporter.TryGetValue("generate_mipmaps", out var mVal)
+                && mVal is bool m)
             {
-                var tt = _editedImporter.TryGetValue("texture_type", out var ttv) ? ttv?.ToString() ?? "Color" : "Color";
-                var q = _editedImporter.TryGetValue("quality", out var qv) ? qv?.ToString() ?? "High" : "High";
-                var sr = _editedImporter.TryGetValue("srgb", out var sv) && sv is true;
-                var resolution = TextureCompressionFormatResolver.Resolve(tt ?? "Color", q ?? "High", sr);
-                formatLabel = resolution.CompressonatorFormat ?? (resolution.IsHdr ? "RGBA16F" : "RGBA8");
-                bitsPerPixel = resolution.BitsPerPixel;
-                if (_editedImporter.TryGetValue("generate_mipmaps", out var mVal) && mVal is bool m)
-                    generateMipmaps = m;
+                generateMipmaps = m;
             }
             long memBytes = CalculateTextureMemorySize(_previewTexWidth, _previewTexHeight, bitsPerPixel, generateMipmaps);
             string memStr = FormatMemorySize(memBytes);
@@ -3818,6 +3833,32 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             ImGui.TextDisabled($"  {memStr}");
             ImGui.SameLine();
             ImGui.TextDisabled($"  {formatLabel}");
+        }
+
+        /// <summary>
+        /// 실제 로드된 텍스처의 Veldrid PixelFormat과 BC6H 원본 여부를 받아
+        /// Inspector 프리뷰 라벨 문자열과 bits-per-pixel을 반환한다.
+        /// 알 수 없는 포맷은 32bpp Uncompressed로 안전하게 fallback.
+        /// </summary>
+        private static (string label, int bitsPerPixel) GetTextureFormatLabel(Veldrid.PixelFormat format, bool storedAsBC6H)
+        {
+            // BC6H는 로드 시 HDR float로 디코드되어 _gpuFormat이 R16G16B16A16_Float이 된다.
+            // storedAsBC6H 플래그가 set이면 원본 저장 포맷인 BC6H를 표시한다.
+            if (storedAsBC6H)
+                return ("BC6H", 8);
+
+            return format switch
+            {
+                Veldrid.PixelFormat.BC7_UNorm or Veldrid.PixelFormat.BC7_UNorm_SRgb => ("BC7", 8),
+                Veldrid.PixelFormat.BC5_UNorm or Veldrid.PixelFormat.BC5_SNorm => ("BC5", 8),
+                Veldrid.PixelFormat.BC3_UNorm or Veldrid.PixelFormat.BC3_UNorm_SRgb => ("BC3", 8),
+                Veldrid.PixelFormat.BC1_Rgba_UNorm or Veldrid.PixelFormat.BC1_Rgba_UNorm_SRgb => ("BC1", 4),
+                Veldrid.PixelFormat.BC1_Rgb_UNorm or Veldrid.PixelFormat.BC1_Rgb_UNorm_SRgb => ("BC1", 4),
+                Veldrid.PixelFormat.R8_G8_B8_A8_UNorm or Veldrid.PixelFormat.R8_G8_B8_A8_UNorm_SRgb => ("RGBA8", 32),
+                Veldrid.PixelFormat.R16_G16_B16_A16_Float => ("RGBA16F", 64),
+                Veldrid.PixelFormat.R32_G32_B32_A32_Float => ("RGBA32F", 128),
+                _ => (format.ToString(), 32),
+            };
         }
 
         /// <summary>

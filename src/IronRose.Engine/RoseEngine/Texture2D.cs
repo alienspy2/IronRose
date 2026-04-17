@@ -8,6 +8,8 @@
 //     name: string                                              — 텍스처 이름
 //     width: int, height: int                                   — 텍스처 크기 (읽기 전용)
 //     isHDR: bool                                               — HDR 텍스처 여부
+//     gpuFormat: Veldrid.PixelFormat                            — GPU 업로드 픽셀 포맷 (읽기 전용)
+//     storedAsBC6H: bool                                        — RoseCache 원본이 BC6H였는지 (읽기 전용)
 //     static LoadFromFile(string): Texture2D                    — 파일에서 LDR/HDR/EXR 로드
 //     static LoadHdrFromFile(string): Texture2D                 — HDR 파일 로드
 //     static LoadExrFromFile(string): Texture2D                 — EXR 파일 로드
@@ -46,6 +48,23 @@ namespace RoseEngine
         public bool isHDR => _hdrPixelData != null;
         internal PixelFormat _gpuFormat = PixelFormat.R8_G8_B8_A8_UNorm;
         internal byte[][]? _mipData;  // per-mip BC block data (null for uncompressed)
+        // RoseCache에 실제로 저장된 원본 포맷이 BC6H였는지 여부.
+        // BC6H는 로드 시 HDR float로 디코드되어 _gpuFormat이 R16_G16_B16_A16_Float이 되기 때문에
+        // Inspector 프리뷰 라벨이 실제 저장 포맷(BC6H)을 보여주려면 별도 플래그가 필요하다.
+        internal bool _storedAsBC6H;
+
+        /// <summary>
+        /// GPU에 업로드되는 Veldrid 픽셀 포맷(읽기 전용).
+        /// CreateFromCompressed / BC6H 디코드 / HDR float → half 경로에 따라 설정된다.
+        /// Inspector 등이 실제로 메모리에 올라간 포맷 라벨을 표시할 때 사용한다.
+        /// </summary>
+        public PixelFormat gpuFormat => _gpuFormat;
+
+        /// <summary>
+        /// RoseCache에 저장된 원본 포맷이 BC6H였는지 여부(읽기 전용).
+        /// true이면 Inspector 프리뷰 라벨이 RGBA16F 대신 BC6H를 표시해야 한다.
+        /// </summary>
+        public bool storedAsBC6H => _storedAsBC6H;
         internal Veldrid.Texture? VeldridTexture { get; private set; }
         internal TextureView? TextureView { get; private set; }
         private bool _isDirty = true;
