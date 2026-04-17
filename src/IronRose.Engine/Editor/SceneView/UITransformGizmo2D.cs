@@ -214,7 +214,9 @@ namespace IronRose.Engine.Editor.SceneView
             var panelMax = sceneView.ImageScreenMax;
             drawList.PushClipRect(panelMin, panelMax);
 
-            var pivot = _isDragging ? _dragGizmoCenter : GetMultiGizmoScreenPos(rt, sceneView.SelectedPivotMode);
+            // Translate: always use live position so the gizmo follows the element during drag.
+            // (Rotate/Scale intentionally use _dragGizmoCenter to keep the pivot fixed.)
+            var pivot = GetMultiGizmoScreenPos(rt, sceneView.SelectedPivotMode);
             float angle = GetLocalAngleRad(selectedGo, sceneView.SelectedSpace);
             var xDir = GetXArrowDir(angle);
             var yDir = GetYArrowVisualDir(angle);
