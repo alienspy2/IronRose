@@ -2597,6 +2597,17 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             }
         }
 
+        private void DrawCompressionFormatPreview()
+        {
+            if (_editedImporter == null)
+                return;
+            var tt = _editedImporter.TryGetValue("texture_type", out var ttv2) ? ttv2?.ToString() ?? "Color" : "Color";
+            var q = _editedImporter.TryGetValue("quality", out var qv2) ? qv2?.ToString() ?? "High" : "High";
+            var sr = _editedImporter.TryGetValue("srgb", out var sv2) && sv2 is true;
+            var resolution = TextureCompressionFormatResolver.Resolve(tt ?? "Color", q ?? "High", sr);
+            ImGui.TextDisabled($"Format: {resolution.DisplayLabel}");
+        }
+
         private void DrawTextureImporterSettings()
         {
             // Determine texture type
@@ -2611,23 +2622,17 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
 
             if (isHdr)
             {
-                DrawImporterCombo("compression", new[] { "BC6H", "none" }, "BC6H");
                 DrawImporterCombo("texture_type", new[] { "HDR", "Panoramic" }, "HDR");
+                DrawImporterCombo("quality", new[] { "High", "Medium", "Low", "NoCompression" }, "High");
+                DrawCompressionFormatPreview();
             }
             else if (isPanoramic)
             {
-                DrawImporterCombo("compression", new[] { "BC6H", "none" }, "BC6H");
-                DrawImporterCombo("texture_type", new[] { "Color", "NormalMap", "Sprite", "Panoramic" }, "Color");
+                DrawImporterCombo("texture_type", new[] { "Color", "ColorWithAlpha", "NormalMap", "Sprite", "Panoramic" }, "Color");
 
-                // Panoramic 전환 시 compression/srgb 자동 갱신
+                // Panoramic 전환 시 srgb 자동 갱신 (Panoramic은 linear 강제)
                 if (_editedImporter != null)
                 {
-                    var curComp = _editedImporter.TryGetValue("compression", out var cv) ? cv?.ToString() : null;
-                    if (curComp is "BC7" or "BC5")
-                    {
-                        _editedImporter["compression"] = "BC6H";
-                        _hasChanges = true;
-                    }
                     if (_editedImporter.TryGetValue("srgb", out var sv) && sv is true)
                     {
                         _editedImporter["srgb"] = false;
@@ -2636,32 +2641,19 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 }
 
                 DrawImporterInt("face_size", 512, 128, 4096);
+                DrawImporterCombo("quality", new[] { "High", "Medium", "Low", "NoCompression" }, "High");
+                DrawCompressionFormatPreview();
             }
             else
             {
                 var curType = _editedImporter?.TryGetValue("texture_type", out var ttv) == true ? ttv?.ToString() : null;
                 bool isNormalMap = curType == "NormalMap";
-                if (isNormalMap)
-                {
-                    ImGui.BeginDisabled();
-                    DrawImporterCombo("compression", new[] { "BC5" }, "BC5");
-                    ImGui.EndDisabled();
-                }
-                else
-                {
-                    DrawImporterCombo("compression", new[] { "BC7", "BC5", "BC3", "none" }, "BC7");
-                }
-                DrawImporterCombo("texture_type", new[] { "Color", "NormalMap", "Sprite", "Panoramic" }, "Color");
 
-                // NormalMap 전환 시 compression/srgb 자동 갱신
+                DrawImporterCombo("texture_type", new[] { "Color", "ColorWithAlpha", "NormalMap", "Sprite", "Panoramic" }, "Color");
+
+                // NormalMap 전환 시 srgb 자동 갱신 (NormalMap은 linear 강제)
                 if (isNormalMap && _editedImporter != null)
                 {
-                    var curComp = _editedImporter.TryGetValue("compression", out var cv2) ? cv2?.ToString() : null;
-                    if (curComp != "BC5")
-                    {
-                        _editedImporter["compression"] = "BC5";
-                        _hasChanges = true;
-                    }
                     if (_editedImporter.TryGetValue("srgb", out var sv2) && sv2 is true)
                     {
                         _editedImporter["srgb"] = false;
@@ -2669,35 +2661,14 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     }
                 }
 
-                // Color / Sprite: quality 옵션 (master). quality 변경 시 compression 자동 갱신.
-                // NormalMap은 BC5 고정이므로 quality UI를 노출하지 않는다.
-                if (!isNormalMap)
-                {
-                    DrawImporterCombo("quality", new[] { "High", "Medium", "Low" }, "High");
-
-                    if (_editedImporter != null)
-                    {
-                        var curQuality = _editedImporter.TryGetValue("quality", out var qv) ? qv?.ToString() : "High";
-                        var curComp2 = _editedImporter.TryGetValue("compression", out var cv3) ? cv3?.ToString() : null;
-                        if (curQuality == "Low")
-                        {
-                            if (curComp2 != "BC3" && curComp2 != "none")
-                            {
-                                _editedImporter["compression"] = "BC3";
-                                _hasChanges = true;
-                            }
-                        }
-                        else // High / Medium
-                        {
-                            // 이전에 Low로 인해 BC3가 되어 있었다면 BC7로 복원 (사용자가 명시적으로 BC3를 선택한 경우는 없음: Low 아닐 때)
-                            if (curComp2 == "BC3")
-                            {
-                                _editedImporter["compression"] = "BC7";
-                                _hasChanges = true;
-                            }
-                        }
-                    }
-                }
+                // quality는 NormalMap 포함 모든 LDR 경로에서 노출.
+                // NormalMap은 High/Medium/Low에서 동일하게 BC5로 결정되며, NoCompression에서 RGBA8로 빠진다.
+                // 이 의미 차이는 DrawCompressionFormatPreview()의 라벨이 설명한다.
+                // TODO(Phase 3): quality=NoCompression일 때 파이프라인(RoseCache.StoreTexture)이
+                //   Compressonator 경로를 건너뛰도록 연결한다. Phase 2 단독 시점에는 compression 키가 없어
+                //   기본값 "BC7"로 fallback되어 라벨과 실제 결과가 불일치할 수 있다.
+                DrawImporterCombo("quality", new[] { "High", "Medium", "Low", "NoCompression" }, "High");
+                DrawCompressionFormatPreview();
             }
 
             if (isPanoramic)
