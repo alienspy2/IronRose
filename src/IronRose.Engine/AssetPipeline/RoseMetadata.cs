@@ -4,6 +4,7 @@
 //          라벨, 임포터 설정, 서브에셋 목록을 관리한다.
 // @deps    IronRose.Engine/TomlConfig, IronRose.Engine/TomlConfigArray,
 //          Tomlyn.Model (InferImporter가 TomlTable/TomlArray 직접 사용),
+//          RoseEngine.EditorDebug (DetectDefaultTextureType 경고 로그),
 //          IronRose.AssetPipeline/TextureMetadataMigration
 // @exports
 //   class SubAssetEntry
@@ -19,12 +20,16 @@
 // @note    importer 필드 타입은 TomlTable을 유지한다 (10+ 파일에서 직접 접근).
 //          InferImporter()는 TomlTable을 직접 사용하므로 변경하지 않는다.
 //          using Tomlyn.Model은 InferImporter 때문에 유지해야 한다.
+//          DetectDefaultTextureType()은 신규 PNG/TGA 임포트 시 헤더 스캔으로
+//          알파 채널 유무를 판정한다. 기존 .rose는 FromToml 경로로 로드되어
+//          영향받지 않는다.
 //          Phase 1 변경: TextureImporter InferImporter에서 compression 키 제거,
 //          .hdr/.exr는 quality="High" 추가. FromToml에서 TextureMetadataMigration.Apply
 //          호출하여 구버전 compression 키 정리. _migrated=true이면 LoadOrCreate가 자동 저장.
 // ------------------------------------------------------------
 using Tomlyn.Model;
 using IronRose.Engine;
+using RoseEngine;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -165,7 +170,7 @@ namespace IronRose.AssetPipeline
                     ["type"] = "TextureImporter",
                     ["max_size"] = (long)2048,
                     ["quality"] = "Low",
-                    ["texture_type"] = "Color",
+                    ["texture_type"] = DetectDefaultTextureType(assetPath, ext),
                     ["srgb"] = true,
                     ["filter_mode"] = "Bilinear",
                     ["wrap_mode"] = "Repeat",
@@ -204,6 +209,54 @@ namespace IronRose.AssetPipeline
                 },
                 _ => new TomlTable { ["type"] = "DefaultImporter" },
             };
+        }
+
+        /// <summary>
+        /// 신규 텍스처 임포트 시, 파일 헤더를 읽어 알파 채널 유무에 따라
+        /// 기본 texture_type을 "Color" 또는 "ColorWithAlpha"로 결정한다.
+        /// 실패 시 안전하게 "Color"를 반환한다.
+        /// </summary>
+        private static string DetectDefaultTextureType(string assetPath, string extLower)
+        {
+            // JPEG/BMP는 알파 없음(표준). 32비트 BMP는 드물어 무시한다.
+            if (extLower == ".jpg" || extLower == ".jpeg" || extLower == ".bmp")
+                return "Color";
+
+            if (extLower != ".png" && extLower != ".tga")
+                return "Color";
+
+            try
+            {
+                using var fs = new FileStream(assetPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                Span<byte> header = stackalloc byte[32];
+                int read = fs.Read(header);
+
+                if (extLower == ".png")
+                {
+                    // PNG magic(8) + IHDR length(4) + IHDR type(4) + width(4) + height(4) + bitDepth(1) = colorType at byte 25.
+                    if (read < 26) return "Color";
+                    if (header[0] != 0x89 || header[1] != 0x50 || header[2] != 0x4E || header[3] != 0x47)
+                        return "Color";
+                    byte colorType = header[25];
+                    // 2=RGB, 6=RGBA, 4=Gray+Alpha, 3=Palette(+tRNS 가능). palette는 보수적으로 ColorWithAlpha 취급.
+                    bool hasAlpha = colorType == 4 || colorType == 6 || colorType == 3;
+                    return hasAlpha ? "ColorWithAlpha" : "Color";
+                }
+
+                if (extLower == ".tga")
+                {
+                    // TGA header: byte 16 = pixel depth.
+                    if (read < 18) return "Color";
+                    byte pixelDepth = header[16];
+                    return pixelDepth == 32 ? "ColorWithAlpha" : "Color";
+                }
+            }
+            catch (Exception ex)
+            {
+                EditorDebug.LogWarning($"[RoseMetadata] DetectDefaultTextureType failed for {assetPath}: {ex.Message}. Falling back to Color.");
+            }
+
+            return "Color";
         }
 
         private TomlConfig ToConfig()
