@@ -189,7 +189,8 @@ namespace IronRose.Rendering
             bool usePanoramic = skyboxMat?.shader?.name == "Skybox/Panoramic" && skyboxMat.mainTexture != null;
 
             var sunDir = new Vector4(0.3f, 0.8f, 0.5f, 0f);
-            foreach (var light in Light._allLights)
+            var envLightSnap = Light._allLights.Snapshot();
+            foreach (var light in envLightSnap)
             {
                 if (!light.enabled || !light.gameObject.activeInHierarchy) continue;
                 if (light.type == LightType.Directional)
@@ -259,7 +260,8 @@ namespace IronRose.Rendering
                 0, 0, 0, 0);
 
             var sunDir = new Vector4(0.3f, 0.8f, 0.5f, 0f);
-            foreach (var light in Light._allLights)
+            var skySunSnap = Light._allLights.Snapshot();
+            foreach (var light in skySunSnap)
             {
                 if (!light.enabled || !light.gameObject.activeInHierarchy) continue;
                 if (light.type == LightType.Directional)
@@ -372,7 +374,8 @@ namespace IronRose.Rendering
             };
 
             int count = 0;
-            foreach (var light in Light._allLights)
+            var fwdLightSnap = Light._allLights.Snapshot();
+            foreach (var light in fwdLightSnap)
             {
                 if (count >= MaxForwardLights) break;
                 if (!light.enabled || !light.gameObject.activeInHierarchy) continue;

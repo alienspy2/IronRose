@@ -1563,7 +1563,8 @@ namespace IronRose.Rendering
             cl.SetFullViewports();
 
             int dirCount = 0, pointCount = 0, spotCount = 0;
-            foreach (var light in Light._allLights)
+            var directLightSnap = Light._allLights.Snapshot();
+            foreach (var light in directLightSnap)
             {
                 if (!light.enabled || !light.gameObject.activeInHierarchy) continue;
 

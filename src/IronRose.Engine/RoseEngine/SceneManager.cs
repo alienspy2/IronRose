@@ -2,16 +2,18 @@
 // @file    SceneManager.cs
 // @brief   씬 내 GameObject/MonoBehaviour 등록, 게임 루프(Update/FixedUpdate/LateUpdate),
 //          Destroy 큐 처리, 코루틴/Invoke 위임, 씬 초기화(Clear) 등 핵심 관리자.
+//          모든 레지스트리는 ComponentRegistry<T> 로 감싸져 lock/snapshot 기반으로 동작.
 // @deps    RoseEngine/EditorDebug, RoseEngine/Debug, RoseEngine/Scene, RoseEngine/GameObject,
 //          RoseEngine/MonoBehaviour, RoseEngine/Time, RoseEngine/CoroutineScheduler,
-//          RoseEngine/InvokeScheduler, RoseEngine/MeshRenderer, RoseEngine/SpriteRenderer,
+//          RoseEngine/InvokeScheduler, RoseEngine/ComponentRegistry, RoseEngine/ThreadGuard,
+//          RoseEngine/MeshRenderer, RoseEngine/SpriteRenderer,
 //          RoseEngine/TextRenderer, RoseEngine/UIText, RoseEngine/UIInputField,
 //          RoseEngine/Light, RoseEngine/Camera, RoseEngine/Canvas, RoseEngine/CanvasRenderer,
 //          RoseEngine/Collider, RoseEngine/Collider2D, RoseEngine/Rigidbody, RoseEngine/Rigidbody2D,
 //          IronRose.Engine/PhysicsManager
 // @exports
 //   static class SceneManager
-//     AllGameObjects: IReadOnlyList<GameObject>                — 전체 GO 목록
+//     AllGameObjects: IReadOnlyList<GameObject>                — 전체 GO 목록 (Snapshot 반환)
 //     GetActiveScene(): Scene                                  — 활성 씬 반환
 //     SetActiveScene(Scene): void                              — 활성 씬 설정
 //     RegisterGameObject(GameObject): void                     — GO 등록
@@ -20,7 +22,10 @@
 //     Update(float): void                                      — 메인 업데이트 루프
 //     FixedUpdate(float): void                                 — 물리 업데이트 루프
 //     Clear(): void                                            — 씬 전체 초기화
-// @note    MonoBehaviour 콜백 에러는 Debug.LogError로 출력.
+// @note    AllGameObjects 는 매 호출마다 새 배열을 반환한다 (Snapshot). 호출자는
+//          변수에 담아 재사용하는 것을 권장한다. _destroyQueue 는 struct 기반이므로
+//          ComponentRegistry 대신 전용 _destroyQueueLock 으로 보호한다.
+//          MonoBehaviour 콜백 에러는 Debug.LogError 로 출력.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -56,38 +61,45 @@ namespace RoseEngine
         }
 
         // --- Core registries ---
-        private static readonly List<MonoBehaviour> _behaviours = new();
-        private static readonly List<MonoBehaviour> _pendingStart = new();
-        private static readonly List<GameObject> _allGameObjects = new();
+        private static readonly ComponentRegistry<MonoBehaviour> _behaviours = new();
+        private static readonly ComponentRegistry<MonoBehaviour> _pendingStart = new();
+        private static readonly ComponentRegistry<GameObject> _allGameObjects = new();
 
         // --- Deferred destroy ---
+        // DestroyEntry 는 struct 이므로 ComponentRegistry<T> where T : class 제약에 맞지 않는다.
+        // 따라서 전용 lock 으로 보호한다.
+        private static readonly object _destroyQueueLock = new();
         private static readonly List<DestroyEntry> _destroyQueue = new();
 
-        public static IReadOnlyList<GameObject> AllGameObjects => _allGameObjects;
+        public static IReadOnlyList<GameObject> AllGameObjects => _allGameObjects.Snapshot();
 
         /// <summary>루트 오브젝트 표시 순서 변경용.</summary>
         public static void MoveGameObjectIndex(GameObject go, int newRootIndex)
         {
-            int old = _allGameObjects.IndexOf(go);
-            if (old < 0) return;
-            _allGameObjects.RemoveAt(old);
-
-            // newRootIndex는 루트 전용 인덱스 → _allGameObjects 내 실제 위치로 변환
-            if (newRootIndex < 0) newRootIndex = 0;
-            int insertAt = _allGameObjects.Count; // 기본값: 리스트 끝
-            int rootCount = 0;
-            for (int i = 0; i < _allGameObjects.Count; i++)
+            ThreadGuard.DebugCheckMainThread("SceneManager.MoveGameObjectIndex");
+            _allGameObjects.WithLock(list =>
             {
-                if (_allGameObjects[i].transform.parent != null) continue;
-                if (rootCount == newRootIndex)
-                {
-                    insertAt = i;
-                    break;
-                }
-                rootCount++;
-            }
+                int old = list.IndexOf(go);
+                if (old < 0) return;
+                list.RemoveAt(old);
 
-            _allGameObjects.Insert(insertAt, go);
+                // newRootIndex는 루트 전용 인덱스 → list 내 실제 위치로 변환
+                if (newRootIndex < 0) newRootIndex = 0;
+                int insertAt = list.Count; // 기본값: 리스트 끝
+                int rootCount = 0;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    if (list[i].transform.parent != null) continue;
+                    if (rootCount == newRootIndex)
+                    {
+                        insertAt = i;
+                        break;
+                    }
+                    rootCount++;
+                }
+
+                list.Insert(insertAt, go);
+            });
         }
 
         // ================================================================
@@ -96,29 +108,35 @@ namespace RoseEngine
 
         public static void RegisterGameObject(GameObject go)
         {
-            _allGameObjects.Add(go);
+            ThreadGuard.DebugCheckMainThread("SceneManager.RegisterGameObject");
+            _allGameObjects.Register(go);
         }
 
         /// <summary>지정 GO의 모든 MonoBehaviour를 등록 해제한다 (프리팹 템플릿 마킹 시 사용).</summary>
         public static void UnregisterBehaviours(GameObject go)
         {
-            for (int i = _behaviours.Count - 1; i >= 0; i--)
+            ThreadGuard.DebugCheckMainThread("SceneManager.UnregisterBehaviours");
+            _behaviours.WithLock(list =>
             {
-                if (_behaviours[i].gameObject == go)
+                for (int i = list.Count - 1; i >= 0; i--)
                 {
-                    _pendingStart.Remove(_behaviours[i]);
-                    _behaviours.RemoveAt(i);
+                    if (list[i].gameObject == go)
+                    {
+                        _pendingStart.Unregister(list[i]);
+                        list.RemoveAt(i);
+                    }
                 }
-            }
+            });
         }
 
         public static void RegisterBehaviour(MonoBehaviour behaviour)
         {
+            ThreadGuard.DebugCheckMainThread("SceneManager.RegisterBehaviour");
             if (_behaviours.Contains(behaviour)) return;
             // 프리팹 템플릿(_isEditorInternal) GO의 behaviour는 등록하지 않음
             if (behaviour.gameObject != null && behaviour.gameObject._isEditorInternal) return;
 
-            _behaviours.Add(behaviour);
+            _behaviours.Register(behaviour);
 
             try
             {
@@ -140,7 +158,7 @@ namespace RoseEngine
                 }
             }
 
-            _pendingStart.Add(behaviour);
+            _pendingStart.Register(behaviour);
         }
 
         /// <summary>
@@ -148,10 +166,11 @@ namespace RoseEngine
         /// </summary>
         internal static void UnregisterBehaviour(MonoBehaviour behaviour)
         {
+            ThreadGuard.DebugCheckMainThread("SceneManager.UnregisterBehaviour");
             CoroutineScheduler.StopAllCoroutines(behaviour);
             InvokeScheduler.CancelAll(behaviour);
-            _behaviours.Remove(behaviour);
-            _pendingStart.Remove(behaviour);
+            _behaviours.Unregister(behaviour);
+            _pendingStart.Unregister(behaviour);
         }
 
         // ================================================================
@@ -160,9 +179,10 @@ namespace RoseEngine
 
         public static void FixedUpdate(float fixedDeltaTime)
         {
-            for (int i = 0; i < _behaviours.Count; i++)
+            var snap = _behaviours.Snapshot();
+            for (int i = 0; i < snap.Length; i++)
             {
-                var b = _behaviours[i];
+                var b = snap[i];
                 if (!IsActive(b)) continue;
                 try { b.FixedUpdate(); }
                 catch (Exception ex)
@@ -183,12 +203,16 @@ namespace RoseEngine
             Time.deltaTime = clampedDt * Time.timeScale;
             Time.time += Time.deltaTime;
 
-            // 1. Process pending Start() calls
-            if (_pendingStart.Count > 0)
+            // 1. Process pending Start() calls (atomic drain)
+            MonoBehaviour[]? pending = null;
+            _pendingStart.WithLock(list =>
             {
-                var pending = new List<MonoBehaviour>(_pendingStart);
-                _pendingStart.Clear();
-
+                if (list.Count == 0) return;
+                pending = list.ToArray();
+                list.Clear();
+            });
+            if (pending != null)
+            {
                 foreach (var b in pending)
                 {
                     if (!IsActive(b)) continue;
@@ -204,9 +228,10 @@ namespace RoseEngine
             InvokeScheduler.Process(Time.deltaTime);
 
             // 3. Update all behaviours
-            for (int i = 0; i < _behaviours.Count; i++)
+            var updSnap = _behaviours.Snapshot();
+            for (int i = 0; i < updSnap.Length; i++)
             {
-                var b = _behaviours[i];
+                var b = updSnap[i];
                 if (!IsActive(b)) continue;
                 try { b.Update(); }
                 catch (Exception ex)
@@ -219,9 +244,10 @@ namespace RoseEngine
             CoroutineScheduler.Process(Time.deltaTime);
 
             // 5. LateUpdate all behaviours
-            for (int i = 0; i < _behaviours.Count; i++)
+            var lateSnap = _behaviours.Snapshot();
+            for (int i = 0; i < lateSnap.Length; i++)
             {
-                var b = _behaviours[i];
+                var b = lateSnap[i];
                 if (!IsActive(b)) continue;
                 try { b.LateUpdate(); }
                 catch (Exception ex)
@@ -279,7 +305,11 @@ namespace RoseEngine
 
         internal static void ScheduleDestroy(Object obj, float delay)
         {
-            _destroyQueue.Add(new DestroyEntry { target = obj, timer = delay });
+            ThreadGuard.DebugCheckMainThread("SceneManager.ScheduleDestroy");
+            lock (_destroyQueueLock)
+            {
+                _destroyQueue.Add(new DestroyEntry { target = obj, timer = delay });
+            }
         }
 
         internal static void DestroyImmediate(Object obj)
@@ -289,19 +319,25 @@ namespace RoseEngine
 
         private static void ProcessDestroyQueue(float deltaTime)
         {
-            for (int i = _destroyQueue.Count - 1; i >= 0; i--)
+            // ScheduleDestroy / ProcessDestroyQueue 는 메인에서만 호출되지만,
+            // 방어적으로 lock 으로 감싼다. C# lock 은 동일 스레드 재진입을 허용하므로
+            // ExecuteDestroy 내부에서 ScheduleDestroy 가 재호출되어도 데드락 없음.
+            lock (_destroyQueueLock)
             {
-                var entry = _destroyQueue[i];
-                entry.timer -= deltaTime;
+                for (int i = _destroyQueue.Count - 1; i >= 0; i--)
+                {
+                    var entry = _destroyQueue[i];
+                    entry.timer -= deltaTime;
 
-                if (entry.timer <= 0f)
-                {
-                    ExecuteDestroy(entry.target);
-                    _destroyQueue.RemoveAt(i);
-                }
-                else
-                {
-                    _destroyQueue[i] = entry;
+                    if (entry.timer <= 0f)
+                    {
+                        ExecuteDestroy(entry.target);
+                        _destroyQueue.RemoveAt(i);
+                    }
+                    else
+                    {
+                        _destroyQueue[i] = entry;
+                    }
                 }
             }
         }
@@ -321,8 +357,8 @@ namespace RoseEngine
                 }
                 CoroutineScheduler.StopAllCoroutines(mb);
                 InvokeScheduler.CancelAll(mb);
-                _behaviours.Remove(mb);
-                _pendingStart.Remove(mb);
+                _behaviours.Unregister(mb);
+                _pendingStart.Unregister(mb);
             }
 
             comp.OnComponentDestroy();
@@ -342,7 +378,7 @@ namespace RoseEngine
                     DestroyComponent(comp);
 
                 go.transform.SetParent(null, false);
-                _allGameObjects.Remove(go);
+                _allGameObjects.Unregister(go);
                 go._isDestroyed = true;
             }
             else if (obj is Component comp)
@@ -358,7 +394,9 @@ namespace RoseEngine
 
         public static void Clear()
         {
-            foreach (var b in _behaviours)
+            ThreadGuard.DebugCheckMainThread("SceneManager.Clear");
+            var snap = _behaviours.Snapshot();
+            foreach (var b in snap)
             {
                 try
                 {
@@ -376,7 +414,7 @@ namespace RoseEngine
             _allGameObjects.Clear();
             CoroutineScheduler.Clear();
             InvokeScheduler.Clear();
-            _destroyQueue.Clear();
+            lock (_destroyQueueLock) { _destroyQueue.Clear(); }
 
             MeshRenderer.ClearAll();
             SpriteRenderer.ClearAll();

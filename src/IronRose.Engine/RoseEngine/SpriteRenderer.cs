@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace RoseEngine
 {
     public class SpriteRenderer : Component
@@ -16,10 +14,20 @@ namespace RoseEngine
         private bool _cachedFlipX;
         private bool _cachedFlipY;
 
-        internal static readonly List<SpriteRenderer> _allSpriteRenderers = new();
+        internal static readonly ComponentRegistry<SpriteRenderer> _allSpriteRenderers = new();
 
-        internal override void OnAddedToGameObject() => _allSpriteRenderers.Add(this);
-        internal override void OnComponentDestroy() => _allSpriteRenderers.Remove(this);
+        internal override void OnAddedToGameObject()
+        {
+            ThreadGuard.DebugCheckMainThread("SpriteRenderer.Register");
+            _allSpriteRenderers.Register(this);
+        }
+
+        internal override void OnComponentDestroy()
+        {
+            ThreadGuard.DebugCheckMainThread("SpriteRenderer.Unregister");
+            _allSpriteRenderers.Unregister(this);
+        }
+
         internal static void ClearAll() => _allSpriteRenderers.Clear();
 
         internal void EnsureMesh()
