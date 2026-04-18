@@ -82,10 +82,18 @@ namespace RoseEngine
             if (clip == null) return;
             if (_targets == null || _targets.Length == 0)
                 BuildTargets();
-            if (_targets == null) return;
 
-            for (int i = 0; i < _targets.Length; i++)
-                _targets[i].Evaluate(time);
+            // InvalidateTargets 가 다른 스레드/경로에서 _targets 를 null 로 치환할 수 있으므로
+            // Volatile.Read 로 스냅샷을 확보한 뒤 로컬 배열만 순회한다.
+            var targets = Volatile.Read(ref _targets);
+            if (targets == null) return;
+
+            for (int i = 0; i < targets.Length; i++)
+            {
+                var t = targets[i];
+                if (t == null) continue;
+                t.Evaluate(time);
+            }
         }
 
         /// <summary>
@@ -112,11 +120,16 @@ namespace RoseEngine
             if (clip == null) return;
             if (_targets == null || _targets.Length == 0)
                 BuildTargets();
-            if (_targets == null || _targets.Length == 0) return;
 
-            _previewSnapshot = new float[_targets.Length];
-            for (int i = 0; i < _targets.Length; i++)
-                _previewSnapshot[i] = _targets[i].ReadCurrentValue();
+            var targets = Volatile.Read(ref _targets);
+            if (targets == null || targets.Length == 0) return;
+
+            _previewSnapshot = new float[targets.Length];
+            for (int i = 0; i < targets.Length; i++)
+            {
+                var t = targets[i];
+                _previewSnapshot[i] = t == null ? 0f : t.ReadCurrentValue();
+            }
         }
 
         /// <summary>
@@ -124,11 +137,16 @@ namespace RoseEngine
         /// </summary>
         public void RestorePreviewSnapshot()
         {
-            if (_previewSnapshot == null || _targets == null) return;
+            var targets = Volatile.Read(ref _targets);
+            if (_previewSnapshot == null || targets == null) return;
 
-            int count = Math.Min(_previewSnapshot.Length, _targets.Length);
+            int count = Math.Min(_previewSnapshot.Length, targets.Length);
             for (int i = 0; i < count; i++)
-                _targets[i].ApplyValue(_previewSnapshot[i]);
+            {
+                var t = targets[i];
+                if (t == null) continue;
+                t.ApplyValue(_previewSnapshot[i]);
+            }
 
             _previewSnapshot = null;
         }
@@ -164,13 +182,20 @@ namespace RoseEngine
             {
                 Parallel.For(0, targets.Length, i =>
                 {
-                    targets[i].Evaluate(evalTime);
+                    // 에디터/런타임에서 clip 교체로 배열 원소가 null 인 상태가 관측될 수 있다.
+                    var t = targets[i];
+                    if (t == null) return;
+                    t.Evaluate(evalTime);
                 });
             }
             else
             {
                 for (int i = 0; i < targets.Length; i++)
-                    targets[i].Evaluate(evalTime);
+                {
+                    var t = targets[i];
+                    if (t == null) continue;
+                    t.Evaluate(evalTime);
+                }
             }
 
             // ── 이벤트 수집 (멀티스레드 안전 — ConcurrentQueue) ──

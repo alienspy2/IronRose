@@ -2,7 +2,8 @@
 // @file    EditorAssetSelection.cs
 // @brief   에디터의 에셋 브라우저 전역 선택 상태. Project 패널, Inspector,
 //          CLI(asset.select 계열)가 공유한다. 경로(string) 기반 멀티셀렉션.
-// @deps    (none) — 순수 상태 저장소. 경로 유효성 검증은 호출자가 담당한다.
+// @deps    RoseEngine/ThreadGuard — public API 진입부에서 메인 스레드 가드 수행.
+//          경로 유효성 검증은 호출자가 담당한다.
 // @exports
 //   static class EditorAssetSelection
 //     PrimaryPath: string?                              — 마지막 클릭/선택된 에셋 경로 (Primary)
@@ -18,11 +19,14 @@
 //     Contains(string): bool                            — 포함 여부
 // @note    경로는 내부적으로 Normalize()로 정규화(역슬래시→슬래시, 양끝 공백 제거).
 //          Null/빈 문자열은 무시된다. thread-safe 아님 — 에디터 메인 스레드에서만 호출할 것.
+//          모든 public 쓰기/조회 API(Contains/Select/SelectMany/Add/Remove/Clear)는
+//          ThreadGuard.CheckMainThread 로 가드된다. 위반 시 LogError 후 조기 반환.
 //          SelectionChanged는 SelectionVersion이 실제로 증가한 경우에만 발화한다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using RoseEngine;
 
 namespace IronRose.Engine.Editor
 {
@@ -50,16 +54,19 @@ namespace IronRose.Engine.Editor
         /// <summary>선택된 항목 수.</summary>
         public static int Count => _paths.Count;
 
-        /// <summary>O(1) 포함 여부.</summary>
+        /// <summary>O(1) 포함 여부. 메인 스레드 전용 (내부 컬렉션이 lock-free).</summary>
         public static bool Contains(string path)
         {
+            if (!ThreadGuard.CheckMainThread("EditorAssetSelection.Contains")) return false;
             var normalized = Normalize(path);
             return normalized != null && _pathSet.Contains(normalized);
         }
 
-        /// <summary>단일 선택으로 교체. null/empty면 Clear와 동일.</summary>
+        /// <summary>단일 선택으로 교체. null/empty면 Clear와 동일. 메인 스레드 전용.</summary>
         public static void Select(string path)
         {
+            if (!ThreadGuard.CheckMainThread("EditorAssetSelection.Select")) return;
+
             var normalized = Normalize(path);
             if (normalized == null)
             {
@@ -78,9 +85,11 @@ namespace IronRose.Engine.Editor
             BumpAndNotify();
         }
 
-        /// <summary>여러 개로 교체. 순서대로 추가하며 마지막이 Primary가 된다.</summary>
+        /// <summary>여러 개로 교체. 순서대로 추가하며 마지막이 Primary가 된다. 메인 스레드 전용.</summary>
         public static void SelectMany(IEnumerable<string> paths)
         {
+            if (!ThreadGuard.CheckMainThread("EditorAssetSelection.SelectMany")) return;
+
             if (paths == null)
             {
                 Clear();
@@ -111,9 +120,11 @@ namespace IronRose.Engine.Editor
             BumpAndNotify();
         }
 
-        /// <summary>기존 선택에 추가. 이미 있으면 Primary로 끌어올린다.</summary>
+        /// <summary>기존 선택에 추가. 이미 있으면 Primary로 끌어올린다. 메인 스레드 전용.</summary>
         public static void Add(string path)
         {
+            if (!ThreadGuard.CheckMainThread("EditorAssetSelection.Add")) return;
+
             var normalized = Normalize(path);
             if (normalized == null) return;
 
@@ -132,9 +143,11 @@ namespace IronRose.Engine.Editor
             BumpAndNotify();
         }
 
-        /// <summary>선택 해제. 없으면 no-op.</summary>
+        /// <summary>선택 해제. 없으면 no-op. 메인 스레드 전용.</summary>
         public static void Remove(string path)
         {
+            if (!ThreadGuard.CheckMainThread("EditorAssetSelection.Remove")) return;
+
             var normalized = Normalize(path);
             if (normalized == null) return;
             if (!_pathSet.Remove(normalized)) return;
@@ -142,9 +155,11 @@ namespace IronRose.Engine.Editor
             BumpAndNotify();
         }
 
-        /// <summary>전체 해제. 이미 비어있으면 no-op.</summary>
+        /// <summary>전체 해제. 이미 비어있으면 no-op. 메인 스레드 전용.</summary>
         public static void Clear()
         {
+            if (!ThreadGuard.CheckMainThread("EditorAssetSelection.Clear")) return;
+
             if (_paths.Count == 0) return;
             _paths.Clear();
             _pathSet.Clear();

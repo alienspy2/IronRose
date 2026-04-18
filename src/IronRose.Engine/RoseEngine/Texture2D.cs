@@ -29,6 +29,7 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 using BCnEncoder.Decoder;
 using BCnEncoder.Shared;
 using SixLabors.ImageSharp;
@@ -204,15 +205,20 @@ namespace RoseEngine
             return new Texture2D(1, 1, data);
         }
 
-        // Shared default texture instances (lazy-initialized)
-        private static Texture2D? _defaultNormal;
-        private static Texture2D? _defaultMRO;
+        // Shared default texture instances (thread-safe lazy).
+        // LazyThreadSafetyMode.ExecutionAndPublication: 여러 스레드가 동시에 Value 를 읽어도
+        // CreateDefault* 는 정확히 한 번만 실행된다. _defaultNormal/_defaultMRO 필드 대입은 없음
+        // (Lazy<T>.Value 가 내부 초기화를 관리).
+        private static readonly Lazy<Texture2D> _defaultNormal =
+            new(CreateDefaultNormal, LazyThreadSafetyMode.ExecutionAndPublication);
+        private static readonly Lazy<Texture2D> _defaultMRO =
+            new(CreateDefaultMRO, LazyThreadSafetyMode.ExecutionAndPublication);
 
         /// <summary>Shared flat normal map (1x1). Thread-safe lazy init.</summary>
-        public static Texture2D DefaultNormal => _defaultNormal ??= CreateDefaultNormal();
+        public static Texture2D DefaultNormal => _defaultNormal.Value;
 
         /// <summary>Shared default MRO map (M=0, R=0.5, O=1). Thread-safe lazy init.</summary>
-        public static Texture2D DefaultMRO => _defaultMRO ??= CreateDefaultMRO();
+        public static Texture2D DefaultMRO => _defaultMRO.Value;
 
         public void SetPixels(byte[] rgbaData)
         {

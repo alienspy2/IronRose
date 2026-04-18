@@ -17,7 +17,9 @@
 //     Save(): void
 // @note    값은 메모리에 캐시되며 Save() 호출 시 디스크에 기록된다.
 //          앱 종료 시 자동으로 Save()가 호출된다.
-//          스레드 안전성: lock으로 보호한다.
+//          스레드 안전성: _data 접근은 lock으로 보호된다.
+//          Save()/Shutdown()은 snapshot 패턴 — lock 안에서 _data 얕은 복사본을 만든 뒤
+//          파일 I/O 는 lock 밖에서 수행한다. 파일 쓰기 실패 시 _dirty 가 복구되어 재시도 가능.
 //          TOML I/O는 TomlConfig 래퍼 API만 사용한다.
 // ------------------------------------------------------------
 using System;
@@ -183,9 +185,24 @@ namespace RoseEngine
 
         public static void Save()
         {
+            // 1) lock 안에서는 얕은 복사본만 만든다 (파일 I/O 를 들고 있지 않는다).
+            Dictionary<string, PrefEntry> snapshot;
             lock (_lock)
             {
-                SaveInternal();
+                EnsureLoaded();
+                snapshot = new Dictionary<string, PrefEntry>(_data);
+                _dirty = false;
+            }
+
+            // 2) lock 밖에서 실제 파일 쓰기 수행. 예외 시 _dirty 복구.
+            try
+            {
+                SaveInternal(snapshot);
+            }
+            catch
+            {
+                lock (_lock) { _dirty = true; }
+                throw;
             }
         }
 
@@ -207,10 +224,27 @@ namespace RoseEngine
 
         internal static void Shutdown()
         {
+            Dictionary<string, PrefEntry>? snapshot = null;
             lock (_lock)
             {
                 if (_dirty)
-                    SaveInternal();
+                {
+                    snapshot = new Dictionary<string, PrefEntry>(_data);
+                    _dirty = false;
+                }
+            }
+
+            if (snapshot != null)
+            {
+                try
+                {
+                    SaveInternal(snapshot);
+                }
+                catch
+                {
+                    lock (_lock) { _dirty = true; }
+                    throw;
+                }
             }
         }
 
@@ -268,9 +302,13 @@ namespace RoseEngine
             }
         }
 
-        private static void SaveInternal()
+        /// <summary>
+        /// lock 외부에서 호출되는 파일 I/O 경로.
+        /// 인자 snapshot 은 호출자가 lock 안에서 확보한 _data 의 얕은 복사본이다.
+        /// _data / _dirty 에 직접 접근하지 않는다.
+        /// </summary>
+        private static void SaveInternal(Dictionary<string, PrefEntry> snapshot)
         {
-            // lock 내부에서만 호출됨 (lock은 호출자가 잡음)
             var config = TomlConfig.CreateEmpty();
 
             // 타입별 섹션 생성
@@ -278,7 +316,7 @@ namespace RoseEngine
             var floatSection = TomlConfig.CreateEmpty();
             var stringSection = TomlConfig.CreateEmpty();
 
-            foreach (var kvp in _data)
+            foreach (var kvp in snapshot)
             {
                 switch (kvp.Value.Type)
                 {
@@ -300,7 +338,6 @@ namespace RoseEngine
 
             var filePath = GetPrefsFilePath();
             config.SaveToFile(filePath, "[PlayerPrefs]");
-            _dirty = false;
         }
 
         private static string GetPrefsFilePath()

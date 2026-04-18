@@ -26,6 +26,9 @@
 //     Dispose(): void                                           — 리소스 해제
 // @note    Sweep은 BepuPhysics Simulation.Sweep을 사용하며, sweepDuration=1로 velocity=direction*maxDistance 방식.
 //          UserData 매핑은 Dictionary<int,object>로 BodyHandle.Value/StaticHandle.Value를 키로 사용.
+//          스레드 모델: Step/Reset/Dispose 및 Body/Static 수정 API 는 메인 스레드 전용.
+//          Step() 진입부에서 ThreadGuard.CheckMainThread 로 위반을 감지한다 (로그 후 조기 리턴).
+//          ContactEventCollector.RecordContact 만 worker thread 에서 호출되며 내부 lock 으로 보호.
 // ------------------------------------------------------------
 using BepuPhysics;
 using BepuPhysics.Collidables;
@@ -42,7 +45,13 @@ namespace IronRose.Physics
 {
     // --- 충돌 이벤트 수집기 (NarrowPhaseCallbacks에서 스레드 안전하게 접촉 쌍을 기록) ---
 
-    /// <summary>현재 프레임에서 접촉 중인 collidable 쌍을 수집합니다. 멀티스레드 안전.</summary>
+    /// <summary>
+    /// 현재 프레임에서 접촉 중인 collidable 쌍을 수집합니다.
+    /// 스레드 모델:
+    /// - <see cref="RecordContact"/> 는 BepuPhysics worker thread 에서 호출되며 내부 lock 으로 보호.
+    /// - <see cref="Flush"/> / <see cref="Clear"/> / <see cref="GetContactingIds"/> 는 **메인 스레드 전용**.
+    ///   Timestep 종료 직후에 호출되므로 worker thread 의 RecordContact 와 시간적으로 겹치지 않는다.
+    /// </summary>
     internal class ContactEventCollector
     {
         private readonly object _lock = new();
@@ -293,6 +302,14 @@ namespace IronRose.Physics
         }
     }
 
+    /// <summary>
+    /// BepuPhysics Simulation 래퍼. 3D 물리 월드를 관리한다.
+    /// 스레드 모델:
+    /// - <see cref="Step"/> 및 <see cref="Flush"/> / <see cref="Reset"/> / <see cref="Dispose"/> 는 **메인 스레드 전용**.
+    /// - Body/Static 추가·제거·수정 계열 API 도 메인 스레드 전용.
+    /// - <see cref="ContactEventCollector.RecordContact"/> 는 BepuPhysics worker thread 에서 호출되며 내부 lock 으로 보호된다.
+    /// - <see cref="ContactEventCollector.Flush"/> 는 Step 내부에서만 호출되며, 이 시점에는 worker thread 의 RecordContact 가 완료된 것이 보장된다.
+    /// </summary>
     public class PhysicsWorld3D : IDisposable
     {
         private Simulation _simulation = null!;
@@ -336,6 +353,9 @@ namespace IronRose.Physics
 
         public void Step(float deltaTime)
         {
+            // 메인 전용 — 위반 시 LogError 후 안전하게 조기 리턴 (unsafe 상태에서 Timestep 호출 금지).
+            if (!ThreadGuard.CheckMainThread("PhysicsWorld3D.Step")) return;
+
             _stepCount++;
             if (_stepCount <= 3 || _stepCount % 300 == 0)
             {
@@ -343,7 +363,9 @@ namespace IronRose.Physics
             }
             _simulation.Timestep(deltaTime, _threadDispatcher);
 
-            // Narrow phase에서 수집된 접촉 쌍을 Enter/Stay/Exit로 분류
+            // Narrow phase에서 수집된 접촉 쌍을 Enter/Stay/Exit로 분류.
+            // _contactCollector.Flush 자체는 lock 이 없으나, 호출 시점이 Timestep 직후이고
+            // 메인 스레드이므로 worker thread 의 RecordContact 는 이미 종료되어 있다.
             _contactCollector.Flush(out _enteredPairs, out _stayingPairs, out _exitedPairs);
         }
 
