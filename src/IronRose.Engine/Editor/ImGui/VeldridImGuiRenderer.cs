@@ -224,8 +224,22 @@ namespace IronRose.Engine.Editor.ImGuiEditor
                 uint vtxSize = (uint)(cmdList.VtxBuffer.Size * Unsafe.SizeOf<ImDrawVert>());
                 uint idxSize = (uint)(cmdList.IdxBuffer.Size * sizeof(ushort));
 
-                cl.UpdateBuffer(_vertexBuffer, vtxOffset, cmdList.VtxBuffer.Data, vtxSize);
-                cl.UpdateBuffer(_indexBuffer, idxOffset, cmdList.IdxBuffer.Data, idxSize);
+                try
+                {
+                    cl.UpdateBuffer(_vertexBuffer, vtxOffset, cmdList.VtxBuffer.Data, vtxSize);
+                    cl.UpdateBuffer(_indexBuffer, idxOffset, cmdList.IdxBuffer.Data, idxSize);
+                }
+                catch (Exception ex)
+                {
+                    RoseEngine.EditorDebug.LogError(
+                        $"[VeldridImGuiRenderer.Render] UpdateBuffer FAILED " +
+                        $"(n={n}/{drawData.CmdListsCount}, " +
+                        $"vtxOffset={vtxOffset}, vtxSize={vtxSize}, vtxBufSize={_vertexBufferSize}, " +
+                        $"idxOffset={idxOffset}, idxSize={idxSize}, idxBufSize={_indexBufferSize}, " +
+                        $"totalVtx={drawData.TotalVtxCount}, totalIdx={drawData.TotalIdxCount}): " +
+                        $"{ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
+                    return;
+                }
 
                 vtxOffset += vtxSize;
                 idxOffset += idxSize;
