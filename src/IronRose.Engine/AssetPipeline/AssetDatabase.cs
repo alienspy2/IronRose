@@ -113,6 +113,10 @@ namespace IronRose.AssetPipeline
         // ─── Play-mode deferred cache ops ───────────────────────
         private readonly ConcurrentQueue<(string path, Texture2D tex, RoseMetadata meta)> _pendingCacheTextures = new();
         private readonly ConcurrentQueue<(string path, MeshImportResult result, RoseMetadata meta)> _pendingCacheMeshes = new();
+        // (Phase 3) Warmup 비동기 경로가 만들어낸 사전 압축 텍스처 전용 큐. 기존 _pendingCacheTextures
+        // 튜플 타입과 섞지 않도록 별도 큐로 유지한다 (옵션 C). 각 원소는 이미 (mipData, format) 까지
+        // 계산된 상태이므로 Flush 시 StoreTexturePrecompressed 만 호출하면 된다.
+        private readonly ConcurrentQueue<(string path, Texture2D tex, RoseMetadata meta, byte[][] mipData, Veldrid.PixelFormat format)> _pendingPrecompressedTextures = new();
 
         /// <summary>true면 Reimport, Scan, FileWatcher 등 상세 로그를 출력한다.</summary>
         public static bool VerboseLogging { get; set; }
@@ -614,6 +618,22 @@ namespace IronRose.AssetPipeline
             _roseCache.StoreMesh(path, result, meta);
         }
 
+        /// <summary>
+        /// (Phase 3) Warmup 비동기 경로용. 이미 mipData/format까지 계산된 텍스처를 받아
+        /// 플레이모드 중이면 별도 큐로 지연, 아니면 즉시 StoreTexturePrecompressed로 저장한다.
+        /// </summary>
+        private void StoreCacheOrDefer(
+            string path, Texture2D tex, RoseMetadata meta,
+            byte[][] mipData, Veldrid.PixelFormat format)
+        {
+            if (EditorPlayMode.IsInPlaySession)
+            {
+                _pendingPrecompressedTextures.Enqueue((path, tex, meta, mipData, format));
+                return;
+            }
+            _roseCache.StoreTexturePrecompressed(path, tex, meta, mipData, format);
+        }
+
         /// <summary>플레이모드 종료 후, 보류 중인 캐시 저장을 일괄 수행한다.</summary>
         public void FlushPendingCacheOps()
         {
@@ -621,6 +641,11 @@ namespace IronRose.AssetPipeline
             while (_pendingCacheTextures.TryDequeue(out var item))
             {
                 _roseCache.StoreTexture(item.path, item.tex, item.meta);
+                count++;
+            }
+            while (_pendingPrecompressedTextures.TryDequeue(out var item))
+            {
+                _roseCache.StoreTexturePrecompressed(item.path, item.tex, item.meta, item.mipData, item.format);
                 count++;
             }
             while (_pendingCacheMeshes.TryDequeue(out var item))
@@ -663,6 +688,143 @@ namespace IronRose.AssetPipeline
                         }
                     }
                     break;
+            }
+        }
+
+        // ─── Warmup async texture pipeline (Phase 3) ───────────────────
+        // PrepareTextureWarmupBackground는 백그라운드 Task.Run 람다에서 호출되는 "순수" 단계로,
+        // 파일 디코드 + CLI/CPU 압축까지 수행한다. _loadedAssets/_guidToPath/Veldrid 등 공유 상태에
+        // 절대 접근하지 않는다. 예외는 throw하지 않고 WarmupHandoff.Failed 로 감싸 반환한다.
+        // FinalizeTextureWarmupOnMain은 메인 스레드에서 handoff를 받아 GPU 마무리 + 디스크 저장 +
+        // Sprite sub-asset 등록을 수행한다. 진입부에 ThreadGuard.CheckMainThread 가드가 있다.
+
+        /// <summary>
+        /// 백그라운드 스레드 전용. 텍스처 에셋을 디코드하고 CLI/CPU 압축까지 수행한다.
+        /// GPU 경로가 필요한 경우 Stage == NeedsGpu 로 FinalizeTextureWarmupOnMain 에서 메인에서 마무리.
+        ///
+        /// 이 메서드는 다음 자료구조에 절대 접근하지 않는다:
+        ///   _loadedAssets, _guidToPath, _materialToGuid, _textureToGuid 등 공유 dict
+        ///   GraphicsDevice / Veldrid 리소스
+        ///   _allRenderers 등 컴포넌트 _all* 리스트
+        /// 허용되는 접근:
+        ///   파일 I/O (RoseMetadata.LoadOrCreate, TextureImporter.Import)
+        ///   RoseCache 의 static API (PlanTextureCompression, CompressTextureBackground)
+        ///
+        /// HDR 경로는 현재 RoseCache 에 대응 Precompressed 저장 함수가 없어
+        /// WarmupHandoff.Deferred 로 반환되고, 메인에서 기존 동기 EnsureDiskCached 로 폴백된다.
+        /// </summary>
+        public WarmupHandoff PrepareTextureWarmupBackground(string path)
+        {
+            try
+            {
+                if (RoseConfig.DontUseCache)
+                    return WarmupHandoff.Skip(path, reason: "DontUseCache");
+
+                var meta = RoseMetadata.LoadOrCreate(path);
+                var importerType = GetImporterType(meta);
+                if (importerType != "TextureImporter")
+                    return WarmupHandoff.Skip(path, reason: $"importerType={importerType}");
+
+                var tex = _textureImporter.Import(path, meta);
+                if (tex == null)
+                    return WarmupHandoff.Skip(path, reason: "Import returned null");
+
+                // HDR 경로: 현재 RoseCache 에 StoreTextureHdrPrecompressed 가 없으므로
+                // 메인에서 기존 동기 경로(EnsureDiskCached)로 폴백 처리한다.
+                // warmup 로그상 HDR 에셋은 거의 등장하지 않으므로 실질 영향 없음.
+                if (tex._hdrPixelData != null)
+                    return WarmupHandoff.Deferred(path, reason: "HDR path not yet supported in async pipeline");
+
+                // LDR 경로
+                if (tex._pixelData == null)
+                    return WarmupHandoff.Skip(path, reason: "LDR texture with null _pixelData");
+
+                var plan = RoseCache.PlanTextureCompression(meta, tex.width, tex.height);
+                var result = RoseCache.CompressTextureBackground(plan, tex._pixelData, tex.width, tex.height);
+                return WarmupHandoff.ForLdr(path, meta, tex, tex._pixelData, plan, result);
+            }
+            catch (Exception ex)
+            {
+                return WarmupHandoff.Failed(path, ex);
+            }
+        }
+
+        /// <summary>
+        /// 메인 스레드 전용. PrepareTextureWarmupBackground 가 반환한 handoff 를 소비하여
+        /// GPU 경로 마무리 + 디스크 캐시 저장 + Sprite sub-asset 등록을 수행한다.
+        /// ThreadGuard 위반 시 throw 하지 않고 LogError + return (호출자가 _warmUpNext++ 진행).
+        /// </summary>
+        public void FinalizeTextureWarmupOnMain(WarmupHandoff handoff)
+        {
+            if (!ThreadGuard.CheckMainThread("AssetDatabase.FinalizeTextureWarmupOnMain"))
+                return;
+
+            if (handoff.IsSkip)
+            {
+                if (VerboseLogging)
+                    EditorDebug.Log($"[AssetDatabase] Warmup skip: {handoff.AssetPath} ({handoff.SkipReason})");
+                return;
+            }
+
+            if (handoff.Error != null)
+            {
+                EditorDebug.LogError($"[AssetDatabase] Warmup bg failure: {handoff.AssetPath} — {handoff.Error.Message}");
+                return;
+            }
+
+            // HDR/기타 미지원 경로: 기존 동기 EnsureDiskCached 로 폴백 (메인 블로킹 발생 가능하나
+            // warmup 로그상 HDR 에셋은 거의 없으므로 실질 영향 없음).
+            if (handoff.IsDeferred)
+            {
+                try
+                {
+                    EnsureDiskCached(handoff.AssetPath);
+                }
+                catch (Exception ex)
+                {
+                    EditorDebug.LogError($"[AssetDatabase] Warmup deferred EnsureDiskCached failed for {handoff.AssetPath}: {ex.Message}");
+                }
+                return;
+            }
+
+            // HDR handoff (현재 경로에서는 Deferred 로 처리되어 들어오지 않지만, 미래 확장 대비 처리).
+            if (handoff.IsHdr)
+            {
+                EditorDebug.LogWarning($"[AssetDatabase] Warmup HDR handoff received but no precompressed store path — falling back to EnsureDiskCached for {handoff.AssetPath}");
+                try
+                {
+                    EnsureDiskCached(handoff.AssetPath);
+                }
+                catch (Exception ex)
+                {
+                    EditorDebug.LogError($"[AssetDatabase] Warmup HDR fallback failed for {handoff.AssetPath}: {ex.Message}");
+                }
+                return;
+            }
+
+            // LDR 정상 경로: GPU 마무리 + 디스크 저장 + Sprite 등록.
+            if (handoff.Meta == null || handoff.Texture == null || handoff.Rgba == null || handoff.Result == null)
+            {
+                EditorDebug.LogError($"[AssetDatabase] Warmup LDR handoff missing required fields for {handoff.AssetPath}");
+                return;
+            }
+
+            try
+            {
+                var (mipData, format) = RoseCache.FinalizeTextureOnMain(
+                    handoff.Plan, handoff.Result, handoff.Rgba, handoff.Texture.width, handoff.Texture.height);
+
+                StoreCacheOrDefer(handoff.AssetPath, handoff.Texture, handoff.Meta, mipData, format);
+
+                if (IsSpriteTexture(handoff.Meta))
+                {
+                    var sr = BuildSpriteImportResult(handoff.Texture, handoff.Meta);
+                    RegisterSpriteSubAssets(handoff.AssetPath, sr, handoff.Meta);
+                }
+            }
+            catch (Exception ex)
+            {
+                EditorDebug.LogError($"[AssetDatabase] Warmup finalize failed for {handoff.AssetPath}: {ex.Message}");
             }
         }
 

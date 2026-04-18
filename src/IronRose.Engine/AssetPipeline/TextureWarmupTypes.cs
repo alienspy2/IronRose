@@ -1,9 +1,10 @@
 // ------------------------------------------------------------
 // @file    TextureWarmupTypes.cs
 // @brief   Warmup/Reimport 텍스처 파이프라인의 2단계 분리 (Plan / Background / Finalize)
-//          에서 공유되는 불변 값 타입들. RoseCache와 (향후 Phase 2/3에서) AssetWarmupManager,
-//          AssetDatabase가 함께 참조한다.
-// @deps    Veldrid (PixelFormat enum)
+//          에서 공유되는 불변 값 타입들. RoseCache, AssetWarmupManager, AssetDatabase가
+//          함께 참조한다. Phase 2/3: WarmupHandoff 클래스 추가 — 백그라운드 Task에서
+//          메인 스레드로 넘기는 단일 불변 객체.
+// @deps    Veldrid (PixelFormat enum), RoseEngine (Texture2D), IronRose.AssetPipeline (RoseMetadata)
 // @exports
 //   enum TextureCompressionStage
 //     Completed      — mipData 완전 (CLI 또는 CPU fallback 성공)
@@ -23,11 +24,22 @@
 //     DurationMs / BC1FallbackApplied / Error
 //   record struct HdrCompressionPlan                         — HDR 텍스처 압축 계획
 //   class HdrCompressionResult                               — HDR 압축 결과 (BC6H 또는 Half float)
+//   class WarmupHandoff                                      — Phase 2/3: 백그라운드 → 메인 전달용 불변 객체
+//     static Skip(path, reason)                              — 처리 대상 아님 (e.g., importerType != TextureImporter)
+//     static Failed(path, ex)                                — 백그라운드 예외 발생
+//     static ForLdr(path, meta, tex, rgba, plan, result)     — LDR 경로 준비 완료
+//     static ForHdr(path, meta, tex, plan, result)           — HDR 경로 준비 완료 (현재 경로에서는 미사용/예비)
+//     static Deferred(path, reason)                          — 메인에서 동기 EnsureDiskCached로 폴백
 // @note    모든 타입은 백그라운드 스레드에서 생성/전달 가능한 불변 객체로 설계됨.
-//          Texture2D, RoseMetadata 등 mutable 엔진 객체 참조는 포함하지 않는다.
+//          Texture2D 레퍼런스를 들고 있으나 Veldrid 리소스는 메인 업로드 전까지 null 이므로
+//          백그라운드 전달 자체는 안전 (메인이 소비할 때까지 해당 객체 수정 금지).
+//          RoseMetadata는 참조 타입이지만 Save/OnSaved는 이미 snapshot-then-invoke로 thread-safe.
 //          SourceTag는 기존 RoseCache 로그 메시지와 호환되는 문자열("CLI"/"CPU"/"GPU") 유지.
+//          WarmupHandoff.IsDeferred 는 "메인에서 기존 동기 EnsureDiskCached 로 폴백" 신호.
+//          HDR(BC6H) 경로는 현재 RoseCache 에 StoreTextureHdrPrecompressed 가 없어 Deferred 로 처리한다.
 // ------------------------------------------------------------
 using System;
+using RoseEngine;
 
 namespace IronRose.AssetPipeline
 {
@@ -119,5 +131,68 @@ namespace IronRose.AssetPipeline
         public byte[] Data { get; init; } = Array.Empty<byte>();
         public int FormatInt { get; init; }
         public long DurationMs { get; init; }
+    }
+
+    /// <summary>
+    /// Warmup 파이프라인에서 백그라운드 Task.Run이 메인 프레임으로 전달하는 단일 불변 객체.
+    /// PrepareTextureWarmupBackground가 채워서 반환하고, FinalizeTextureWarmupOnMain이 소비한다.
+    ///
+    /// 팩토리 메서드만 사용하여 상태 일관성을 보장한다:
+    ///   Skip    — 처리 대상이 아닌 에셋 (e.g., importerType 불일치, DontUseCache).
+    ///   Failed  — 백그라운드 예외 (메인에서 LogError 후 스킵).
+    ///   ForLdr  — LDR 압축 완료 (Plan/Result + rgba 포함).
+    ///   ForHdr  — HDR 압축 완료 (현재는 Deferred 로 대체되어 사용 빈도 낮음).
+    ///   Deferred — HDR 등 현 파이프라인이 미지원인 경로. 메인에서 기존 동기 EnsureDiskCached 로 폴백.
+    /// </summary>
+    public sealed class WarmupHandoff
+    {
+        public string AssetPath { get; init; } = "";
+        public RoseMetadata? Meta { get; init; }
+        public Texture2D? Texture { get; init; }
+        public byte[]? Rgba { get; init; }
+        public TextureCompressionPlan Plan { get; init; }
+        public TextureCompressionResult? Result { get; init; }
+        public HdrCompressionPlan HdrPlan { get; init; }
+        public HdrCompressionResult? HdrResult { get; init; }
+        public bool IsHdr { get; init; }
+        public bool IsSkip { get; init; }
+        public bool IsDeferred { get; init; }
+        public string? SkipReason { get; init; }
+        public Exception? Error { get; init; }
+
+        public static WarmupHandoff Skip(string path, string reason) =>
+            new() { AssetPath = path, IsSkip = true, SkipReason = reason };
+
+        public static WarmupHandoff Failed(string path, Exception ex) =>
+            new() { AssetPath = path, Error = ex };
+
+        public static WarmupHandoff ForLdr(
+            string path, RoseMetadata meta, Texture2D tex, byte[] rgba,
+            TextureCompressionPlan plan, TextureCompressionResult result) =>
+            new()
+            {
+                AssetPath = path,
+                Meta = meta,
+                Texture = tex,
+                Rgba = rgba,
+                Plan = plan,
+                Result = result,
+            };
+
+        public static WarmupHandoff ForHdr(
+            string path, RoseMetadata meta, Texture2D tex,
+            HdrCompressionPlan plan, HdrCompressionResult result) =>
+            new()
+            {
+                AssetPath = path,
+                Meta = meta,
+                Texture = tex,
+                HdrPlan = plan,
+                HdrResult = result,
+                IsHdr = true,
+            };
+
+        public static WarmupHandoff Deferred(string path, string reason) =>
+            new() { AssetPath = path, IsDeferred = true, SkipReason = reason };
     }
 }
