@@ -28,7 +28,8 @@ namespace IronRose.Rendering
     {
         private void DrawOpaqueRenderers(CommandList cl, System.Numerics.Matrix4x4 viewProj)
         {
-            foreach (var renderer in MeshRenderer._allRenderers)
+            var renderersSnap = MeshRenderer._allRenderers.Snapshot();
+            foreach (var renderer in renderersSnap)
             {
                 if (!renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
                 if (renderer.gameObject._isEditorInternal) continue;
@@ -59,7 +60,8 @@ namespace IronRose.Rendering
             var transparentList = new System.Collections.Generic.List<(MeshRenderer renderer, Material mat, float distSq)>();
             var camPos = camera.transform.position;
 
-            foreach (var renderer in MeshRenderer._allRenderers)
+            var transparentSnap = MeshRenderer._allRenderers.Snapshot();
+            foreach (var renderer in transparentSnap)
             {
                 if (!renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
                 if (renderer.gameObject._isEditorInternal) continue;
@@ -112,7 +114,8 @@ namespace IronRose.Rendering
 
         private void DrawAllRenderers(CommandList cl, System.Numerics.Matrix4x4 viewProj, bool useWireframeColor)
         {
-            foreach (var renderer in MeshRenderer._allRenderers)
+            var allSnap = MeshRenderer._allRenderers.Snapshot();
+            foreach (var renderer in allSnap)
             {
                 if (!renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
                 if (renderer.gameObject._isEditorInternal) continue;
@@ -159,7 +162,7 @@ namespace IronRose.Rendering
             SetUnlitLightData(cl, camera);
             cl.SetPipeline(_spritePipeline);
 
-            var active = SpriteRenderer._allSpriteRenderers
+            var active = SpriteRenderer._allSpriteRenderers.Snapshot()
                 .Where(sr => sr.enabled && sr.sprite != null &&
                              sr.gameObject.activeInHierarchy && !sr._isDestroyed)
                 .ToList();
@@ -202,7 +205,7 @@ namespace IronRose.Rendering
             SetUnlitLightData(cl, camera);
             cl.SetPipeline(_spritePipeline);
 
-            var active = TextRenderer._allTextRenderers
+            var active = TextRenderer._allTextRenderers.Snapshot()
                 .Where(tr => tr.enabled && tr.font?.atlasTexture != null &&
                              !string.IsNullOrEmpty(tr.text) &&
                              tr.gameObject.activeInHierarchy && !tr._isDestroyed)

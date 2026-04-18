@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace RoseEngine
 {
     public class MipMeshFilter : Component
@@ -32,16 +30,18 @@ namespace RoseEngine
         internal int _sceneViewLod;
 
         // 전역 레지스트리 (매 프레임 LOD 업데이트용)
-        internal static readonly List<MipMeshFilter> _allMipMeshFilters = new();
+        internal static readonly ComponentRegistry<MipMeshFilter> _allMipMeshFilters = new();
 
         internal override void OnAddedToGameObject()
         {
-            _allMipMeshFilters.Add(this);
+            ThreadGuard.DebugCheckMainThread("MipMeshFilter.Register");
+            _allMipMeshFilters.Register(this);
         }
 
         internal override void OnComponentDestroy()
         {
-            _allMipMeshFilters.Remove(this);
+            ThreadGuard.DebugCheckMainThread("MipMeshFilter.Unregister");
+            _allMipMeshFilters.Unregister(this);
         }
 
         internal static void ClearAll() => _allMipMeshFilters.Clear();

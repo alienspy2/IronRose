@@ -20,10 +20,20 @@ namespace RoseEngine
         private float _cachedFontSize;
         private float _cachedPixelsPerUnit;
 
-        internal static readonly List<TextRenderer> _allTextRenderers = new();
+        internal static readonly ComponentRegistry<TextRenderer> _allTextRenderers = new();
 
-        internal override void OnAddedToGameObject() => _allTextRenderers.Add(this);
-        internal override void OnComponentDestroy() => _allTextRenderers.Remove(this);
+        internal override void OnAddedToGameObject()
+        {
+            ThreadGuard.DebugCheckMainThread("TextRenderer.Register");
+            _allTextRenderers.Register(this);
+        }
+
+        internal override void OnComponentDestroy()
+        {
+            ThreadGuard.DebugCheckMainThread("TextRenderer.Unregister");
+            _allTextRenderers.Unregister(this);
+        }
+
         internal static void ClearAll() => _allTextRenderers.Clear();
 
         /// <summary>Detect text/font/alignment changes and rebuild mesh</summary>

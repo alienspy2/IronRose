@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 namespace RoseEngine
 {
@@ -52,10 +51,20 @@ namespace RoseEngine
         public ShadowCullMode shadowCullMode { get; set; } = ShadowCullMode.TwoFace;
         public float shadowSoftness { get; set; } = 1.0f;   // PCSS light size (0=hard, higher=softer penumbra)
 
-        internal static readonly List<Light> _allLights = new();
+        internal static readonly ComponentRegistry<Light> _allLights = new();
 
-        internal override void OnAddedToGameObject() => _allLights.Add(this);
-        internal override void OnComponentDestroy() => _allLights.Remove(this);
+        internal override void OnAddedToGameObject()
+        {
+            ThreadGuard.DebugCheckMainThread("Light.Register");
+            _allLights.Register(this);
+        }
+
+        internal override void OnComponentDestroy()
+        {
+            ThreadGuard.DebugCheckMainThread("Light.Unregister");
+            _allLights.Unregister(this);
+        }
+
         internal static void ClearAll() => _allLights.Clear();
 
         // ── Gizmos ──

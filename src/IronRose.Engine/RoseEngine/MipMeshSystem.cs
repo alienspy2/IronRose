@@ -26,7 +26,8 @@ namespace RoseEngine
         /// <summary>Inspector 표시 전환: 활성 뷰에 따라 currentLod 값을 설정.</summary>
         public static void SetActiveViewForInspector(bool sceneView)
         {
-            foreach (var mipFilter in MipMeshFilter._allMipMeshFilters)
+            var inspectorSnap = MipMeshFilter._allMipMeshFilters.Snapshot();
+            foreach (var mipFilter in inspectorSnap)
                 mipFilter.currentLod = sceneView ? mipFilter._sceneViewLod : mipFilter._gameViewLod;
         }
 
@@ -37,7 +38,8 @@ namespace RoseEngine
             float fovRad = fov * (MathF.PI / 180f);
             float halfTanFov = MathF.Tan(fovRad * 0.5f);
 
-            foreach (var mipFilter in MipMeshFilter._allMipMeshFilters)
+            var lodSnap = MipMeshFilter._allMipMeshFilters.Snapshot();
+            foreach (var mipFilter in lodSnap)
             {
                 if (mipFilter.mipMesh == null || mipFilter.mipMesh.LodCount <= 1)
                     continue;

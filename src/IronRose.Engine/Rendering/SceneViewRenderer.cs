@@ -463,7 +463,8 @@ namespace IronRose.Rendering
             cl.SetPipeline(activePipeline);
 
             // Draw all mesh renderers
-            foreach (var renderer in MeshRenderer._allRenderers)
+            var sceneViewMeshSnap = MeshRenderer._allRenderers.Snapshot();
+            foreach (var renderer in sceneViewMeshSnap)
             {
                 if (!renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
                 if (renderer.gameObject._isEditorInternal) continue;
@@ -731,7 +732,8 @@ namespace IronRose.Rendering
 
             // Find selected renderer
             MeshRenderer? selectedRenderer = null;
-            foreach (var r in MeshRenderer._allRenderers)
+            var outlineMeshSnap = MeshRenderer._allRenderers.Snapshot();
+            foreach (var r in outlineMeshSnap)
             {
                 if (r.gameObject.GetInstanceID() == selectedId && r.enabled && r.gameObject.activeInHierarchy)
                 { selectedRenderer = r; break; }
@@ -792,7 +794,8 @@ namespace IronRose.Rendering
             // --- Phase 1: Mesh picking (with depth test) ---
             pickCl.SetPipeline(_pickPipeline);
 
-            foreach (var renderer in MeshRenderer._allRenderers)
+            var pickMeshSnap = MeshRenderer._allRenderers.Snapshot();
+            foreach (var renderer in pickMeshSnap)
             {
                 if (!renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
                 if (renderer.gameObject._isEditorInternal) continue;

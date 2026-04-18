@@ -74,7 +74,8 @@ namespace IronRose.Rendering
             _atlasRowHeight = 0;
 
             bool hasShadowLights = false;
-            foreach (var light in Light._allLights)
+            var checkLightSnap = Light._allLights.Snapshot();
+            foreach (var light in checkLightSnap)
             {
                 if (light.enabled && light.shadows)
                 { hasShadowLights = true; break; }
@@ -87,7 +88,8 @@ namespace IronRose.Rendering
             var shadowResourceSet = _device!.ResourceFactory.CreateResourceSet(new ResourceSetDescription(
                 _shadowLayout, _shadowTransformBuffer));
 
-            foreach (var light in Light._allLights)
+            var shadowLightSnap = Light._allLights.Snapshot();
+            foreach (var light in shadowLightSnap)
             {
                 if (!light.enabled || !light.shadows) continue;
 
@@ -152,7 +154,8 @@ namespace IronRose.Rendering
             cl.SetViewport(0, new Viewport((uint)tileX, (uint)tileY, (uint)res, (uint)res, 0, 1));
             cl.SetScissorRect(0, (uint)tileX, (uint)tileY, (uint)res, (uint)res);
 
-            foreach (var renderer in MeshRenderer._allRenderers)
+            var shadowMeshSnap = MeshRenderer._allRenderers.Snapshot();
+            foreach (var renderer in shadowMeshSnap)
             {
                 if (!renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
                 if (renderer.gameObject._isEditorInternal) continue;
@@ -207,6 +210,7 @@ namespace IronRose.Rendering
 
             var depthParams = new Vector4(1, light.shadowNearPlane, light.range, 0);
 
+            var pointShadowMeshSnap = MeshRenderer._allRenderers.Snapshot();
             for (int face = 0; face < 6; face++)
             {
                 var ap = faceAtlasParams[face];
@@ -216,7 +220,7 @@ namespace IronRose.Rendering
                 cl.SetViewport(0, new Viewport((uint)tileX, (uint)tileY, (uint)res, (uint)res, 0, 1));
                 cl.SetScissorRect(0, (uint)tileX, (uint)tileY, (uint)res, (uint)res);
 
-                foreach (var renderer in MeshRenderer._allRenderers)
+                foreach (var renderer in pointShadowMeshSnap)
                 {
                     if (!renderer.enabled || !renderer.gameObject.activeInHierarchy) continue;
                     if (renderer.gameObject._isEditorInternal) continue;

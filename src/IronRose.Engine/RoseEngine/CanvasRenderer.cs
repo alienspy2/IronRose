@@ -112,7 +112,8 @@ namespace RoseEngine
             }
 
             _sorted.Clear();
-            foreach (var c in Canvas._allCanvases)
+            var renderAllSnap = Canvas._allCanvases.Snapshot();
+            foreach (var c in renderAllSnap)
             {
                 if (!c._isDestroyed && c.gameObject.activeInHierarchy)
                     _sorted.Add(c);
@@ -261,7 +262,8 @@ namespace RoseEngine
             if (Canvas._allCanvases.Count == 0) return null;
 
             _sorted.Clear();
-            foreach (var c in Canvas._allCanvases)
+            var hitTestSnap = Canvas._allCanvases.Snapshot();
+            foreach (var c in hitTestSnap)
             {
                 if (!c._isDestroyed && c.gameObject.activeInHierarchy)
                     _sorted.Add(c);
@@ -304,7 +306,8 @@ namespace RoseEngine
             if (Canvas._allCanvases.Count == 0) return;
 
             _sorted.Clear();
-            foreach (var c in Canvas._allCanvases)
+            var hitTestAllSnap = Canvas._allCanvases.Snapshot();
+            foreach (var c in hitTestAllSnap)
             {
                 if (!c._isDestroyed && c.gameObject.activeInHierarchy)
                     _sorted.Add(c);
@@ -383,7 +386,8 @@ namespace RoseEngine
             if (Canvas._allCanvases.Count == 0) return;
 
             _sorted.Clear();
-            foreach (var c in Canvas._allCanvases)
+            var rectHitSnap = Canvas._allCanvases.Snapshot();
+            foreach (var c in rectHitSnap)
             {
                 if (!c._isDestroyed && c.gameObject.activeInHierarchy)
                     _sorted.Add(c);

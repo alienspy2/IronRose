@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 namespace RoseEngine
 {
@@ -24,18 +23,24 @@ namespace RoseEngine
         public CanvasScaleMode scaleMode = CanvasScaleMode.ScaleWithScreenSize;
         public float matchWidthOrHeight = 0.5f;
 
-        internal static readonly List<Canvas> _allCanvases = new();
+        internal static readonly ComponentRegistry<Canvas> _allCanvases = new();
 
         internal override void OnAddedToGameObject()
         {
-            _allCanvases.Add(this);
+            ThreadGuard.DebugCheckMainThread("Canvas.Register");
+            _allCanvases.Register(this);
 
             // Canvas가 있는 GO에는 RectTransform이 필수
             if (gameObject.GetComponent<RectTransform>() == null)
                 gameObject.AddComponent<RectTransform>();
         }
 
-        internal override void OnComponentDestroy() => _allCanvases.Remove(this);
+        internal override void OnComponentDestroy()
+        {
+            ThreadGuard.DebugCheckMainThread("Canvas.Unregister");
+            _allCanvases.Unregister(this);
+        }
+
         internal static void ClearAll() => _allCanvases.Clear();
 
         /// <summary>Canvas Scaler: 기준 해상도 대비 스크린 크기 비율 계산.</summary>

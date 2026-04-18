@@ -861,8 +861,8 @@ namespace IronRose.AssetPipeline
                             if (!string.IsNullOrEmpty(meta.guid))
                                 _ppProfileToGuid[newPp] = meta.guid;
 
-                            // Volume의 stale profile 참조 갱신
-                            foreach (var vol in PostProcessVolume._allVolumes)
+                            // Volume의 stale profile 참조 갱신 (D-II 범위 — 임시 .ToArray())
+                            foreach (var vol in PostProcessVolume._allVolumes.ToArray())
                             {
                                 if (vol.profileGuid == meta.guid)
                                     vol.profile = newPp;
@@ -2182,7 +2182,8 @@ namespace IronRose.AssetPipeline
 
         private static void ReplaceMeshInScene(MeshImportResult newResult)
         {
-            foreach (var renderer in MeshRenderer._allRenderers)
+            var meshSnap = MeshRenderer._allRenderers.Snapshot();
+            foreach (var renderer in meshSnap)
             {
                 var filter = renderer.gameObject.GetComponent<MeshFilter>();
                 if (filter?.mesh == null) continue;
@@ -2209,7 +2210,8 @@ namespace IronRose.AssetPipeline
         {
             var texName = newTex.name;
 
-            foreach (var renderer in MeshRenderer._allRenderers)
+            var texMeshSnap = MeshRenderer._allRenderers.Snapshot();
+            foreach (var renderer in texMeshSnap)
             {
                 var mat = renderer.material;
                 if (mat == null) continue;
@@ -2234,7 +2236,8 @@ namespace IronRose.AssetPipeline
                 }
             }
 
-            foreach (var sr in SpriteRenderer._allSpriteRenderers)
+            var texSpriteSnap = SpriteRenderer._allSpriteRenderers.Snapshot();
+            foreach (var sr in texSpriteSnap)
             {
                 if (sr.sprite == null) continue;
                 var spriteTex = sr.sprite.texture;
@@ -2280,7 +2283,8 @@ namespace IronRose.AssetPipeline
             if (oldToNew.Count == 0) return;
 
             // Replace in SpriteRenderers
-            foreach (var sr in SpriteRenderer._allSpriteRenderers)
+            var spriteSnap = SpriteRenderer._allSpriteRenderers.Snapshot();
+            foreach (var sr in spriteSnap)
             {
                 if (sr.sprite != null && oldToNew.TryGetValue(sr.sprite, out var newSprite))
                 {
@@ -2311,7 +2315,8 @@ namespace IronRose.AssetPipeline
         private static void ReplaceMaterialInScene(Material newMat, Material? oldMat)
         {
             if (oldMat == null) return;
-            foreach (var renderer in MeshRenderer._allRenderers)
+            var matSnap = MeshRenderer._allRenderers.Snapshot();
+            foreach (var renderer in matSnap)
             {
                 if (ReferenceEquals(renderer.material, oldMat))
                     renderer.material = newMat;
@@ -2321,7 +2326,8 @@ namespace IronRose.AssetPipeline
         private static void ReplaceFontInScene(Font newFont)
         {
             var fontName = newFont.name;
-            foreach (var tr in TextRenderer._allTextRenderers)
+            var textSnap = TextRenderer._allTextRenderers.Snapshot();
+            foreach (var tr in textSnap)
             {
                 if (tr.font?.name == fontName)
                 {
@@ -2329,12 +2335,13 @@ namespace IronRose.AssetPipeline
                     tr._cachedMesh = null;
                 }
             }
-            foreach (var ut in UIText._allUITexts)
+            // UIText / UIInputField 는 Phase D-II 범위 — 임시 .ToArray() 스냅샷으로 방어.
+            foreach (var ut in UIText._allUITexts.ToArray())
             {
                 if (ut.font?.name == fontName)
                     ut.font = newFont;
             }
-            foreach (var uif in UIInputField._allUIInputFields)
+            foreach (var uif in UIInputField._allUIInputFields.ToArray())
             {
                 if (uif.font?.name == fontName)
                     uif.font = newFont;

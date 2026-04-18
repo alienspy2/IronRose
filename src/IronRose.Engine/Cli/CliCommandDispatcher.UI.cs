@@ -359,7 +359,8 @@ namespace IronRose.Engine.Cli
                     }
                     else
                     {
-                        foreach (var canvas in Canvas._allCanvases)
+                        var uiTreeSnap = Canvas._allCanvases.Snapshot();
+                        foreach (var canvas in uiTreeSnap)
                         {
                             if (canvas._isDestroyed || !canvas.gameObject.activeInHierarchy) continue;
                             var go = canvas.gameObject;
@@ -400,7 +401,8 @@ namespace IronRose.Engine.Cli
                     }
                     else
                     {
-                        foreach (var canvas in Canvas._allCanvases)
+                        var uiListSnap = Canvas._allCanvases.Snapshot();
+                        foreach (var canvas in uiListSnap)
                         {
                             if (canvas._isDestroyed || !canvas.gameObject.activeInHierarchy) continue;
                             CollectUIElements(canvas.gameObject, elements);
@@ -463,7 +465,8 @@ namespace IronRose.Engine.Cli
                 return ExecuteOnMainThread(() =>
                 {
                     var list = new List<object>();
-                    foreach (var canvas in Canvas._allCanvases)
+                    var canvasListSnap = Canvas._allCanvases.Snapshot();
+                    foreach (var canvas in canvasListSnap)
                     {
                         if (canvas._isDestroyed) continue;
                         var go = canvas.gameObject;
@@ -2500,7 +2503,8 @@ namespace IronRose.Engine.Cli
                     }
                     else
                     {
-                        foreach (var canvas in Canvas._allCanvases)
+                        var overlapSnap = Canvas._allCanvases.Snapshot();
+                        foreach (var canvas in overlapSnap)
                         {
                             if (canvas._isDestroyed || !canvas.gameObject.activeInHierarchy) continue;
                             CollectRectsForOverlap(canvas.gameObject, rects);
