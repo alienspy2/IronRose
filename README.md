@@ -124,6 +124,7 @@ new project 를 하거나
 
 https://github.com/alienspy2/IronRoseSimpleGameDemoProject 를 받고 open project 
 
+이후, 안내대로, 생성된 workspace 파일로 vs code 열기
 
 ---
 
