@@ -169,6 +169,11 @@ namespace IronRose.Engine.Cli
             // ----------------------------------------------------------------
             // ping -- 백그라운드 스레드에서 직접 실행
             // ----------------------------------------------------------------
+            // [WARNING] 이 핸들러는 CLI 파이프 스레드에서 직접 실행된다 (ExecuteOnMainThread 미사용).
+            // 메인 스레드 전용 상태(씬/컴포넌트/GL 리소스 등)에 접근하면 안 된다.
+            // 현재 ProjectContext.ProjectName 은 프로세스 수명 동안 불변(immutable) 문자열이므로
+            // 백그라운드 읽기가 안전하다. 수정 시 thread-safety 를 직접 입증해야 한다.
+            // (Phase D-III, #threading-safety)
             _handlers["ping"] = args => JsonOk(new { pong = true, project = ProjectContext.ProjectName });
 
             // ----------------------------------------------------------------
@@ -460,6 +465,10 @@ namespace IronRose.Engine.Cli
             // ----------------------------------------------------------------
             // log.recent -- 최근 로그 조회 (스레드 안전, 직접 실행)
             // ----------------------------------------------------------------
+            // [WARNING] log.recent 는 ExecuteOnMainThread 없이 백그라운드 스레드에서 직접 실행된다.
+            // CliLogBuffer 가 내부 lock 으로 thread-safe 를 보장하므로 현재 구현은 안전하다.
+            // 수정 시 LogEntry 접근이 모두 thread-safe 한지 재확인할 것.
+            // (Phase D-III, #threading-safety)
             _handlers["log.recent"] = args =>
             {
                 int count = 50;

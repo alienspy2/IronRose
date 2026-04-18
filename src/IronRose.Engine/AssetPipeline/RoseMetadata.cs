@@ -12,7 +12,7 @@
 //   class RoseMetadata
 //     guid, version, labels, importer (TomlTable), subAssets    — 메타데이터 필드
 //     internal _migrated: bool                                  — FromToml에서 마이그레이션 수행 플래그 (직렬화 X)
-//     static OnSaved: event Action<string>                      — 저장 시 이벤트
+//     static OnSaved: event Action<string>                      — 저장 시 이벤트 (thread-safe)
 //     static LoadOrCreate(string): RoseMetadata                 — .rose 파일 로드 또는 생성. 마이그레이션 시 자동 재저장
 //     Save(string): void                                        — .rose 파일 저장
 //     GetOrCreateSubAsset(string, string, int): SubAssetEntry  — 서브에셋 찾기/생성
@@ -26,6 +26,9 @@
 //          Phase 1 변경: TextureImporter InferImporter에서 compression 키 제거,
 //          .hdr/.exr는 quality="High" 추가. FromToml에서 TextureMetadataMigration.Apply
 //          호출하여 구버전 compression 키 정리. _migrated=true이면 LoadOrCreate가 자동 저장.
+//          Phase D-III 변경: OnSaved를 explicit add/remove accessor + snapshot-then-invoke
+//          패턴으로 전환. _onSavedLock 하에서 구독/해제하며, invoke는 락 밖에서 수행되어
+//          멀티스레드 환경에서 안전하게 호출 가능 (#threading-safety).
 // ------------------------------------------------------------
 using Tomlyn.Model;
 using IronRose.Engine;
@@ -64,8 +67,17 @@ namespace IronRose.AssetPipeline
         /// <summary>
         /// .rose 파일이 저장될 때 발생. 인자는 에셋 경로 (.rose 제외).
         /// AssetDatabase가 구독하여 자동 reimport 처리.
+        /// Thread-safe: add/remove/invoke 모두 _onSavedLock 하에서 수행되며,
+        /// invoke 시에는 snapshot-then-invoke 패턴으로 락 밖에서 안전하게 호출된다.
         /// </summary>
-        public static event Action<string>? OnSaved;
+        private static Action<string>? _onSaved;
+        private static readonly object _onSavedLock = new();
+
+        public static event Action<string>? OnSaved
+        {
+            add { lock (_onSavedLock) _onSaved += value; }
+            remove { lock (_onSavedLock) _onSaved -= value; }
+        }
 
         public static RoseMetadata LoadOrCreate(string assetPath)
         {
@@ -99,7 +111,14 @@ namespace IronRose.AssetPipeline
             config.SaveToFile(rosePath);
 
             if (rosePath.EndsWith(".rose", StringComparison.OrdinalIgnoreCase))
-                OnSaved?.Invoke(rosePath[..^5]);
+            {
+                // snapshot-then-invoke: 락 내부에서 델리게이트 참조만 복사하고,
+                // 실제 호출은 락 밖에서 수행한다. 구독자가 핸들러 내부에서
+                // OnSaved 자체를 수정하더라도 재진입 데드락이 발생하지 않는다.
+                Action<string>? copy;
+                lock (_onSavedLock) copy = _onSaved;
+                copy?.Invoke(rosePath[..^5]);
+            }
         }
 
         /// <summary>
