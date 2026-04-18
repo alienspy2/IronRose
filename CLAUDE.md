@@ -67,3 +67,33 @@ IronRose는 개발 중인 엔진이다. 게임(Scripts) 구현 중 문제가 발
 
 게임 코드의 workaround는 엔진 수정이 불가능하거나 비합리적인 경우에만 허용한다.
 
+---
+
+## 스레드 안전 규칙
+
+IronRose는 메인 + 백그라운드 Task + CLI 서버 + FileSystemWatcher 스레드로 돌아간다. 다음 규칙을 어기면 바로 race/crash로 이어진다.
+
+### 절대 금지
+- **`Task.Run` 람다 안에서 GPU API(`GraphicsDevice`, Veldrid, `Texture2D` 생성), 씬 라이프사이클(`GameObject.Instantiate/Destroy`), 에셋 자료구조(`_loadedAssets`, `_all*` 리스트) 수정.** 순수 계산(파일 I/O, CPU 디코드/인코드)만 허용.
+- **`FileSystemWatcher` 콜백에서 공유 상태를 직접 수정.** 반드시 `ConcurrentQueue`/dedup 맵 등에 enqueue 후 메인에서 pull.
+- **CLI 핸들러에서 씬/에셋 접근은 `ExecuteOnMainThread` 바깥에서 수행 금지.** 순수 조회(`ping`, 로그 스냅샷)만 예외이며 주석으로 명시할 것.
+- **`_all*` 정적 리스트를 락 없이 Add/Remove/순회 금지.** `ComponentRegistry<T>`를 사용하고 외부 순회는 `.Snapshot()`으로.
+- **`static event`를 lock 없이 `+=`/`-=`/`Invoke` 금지.** Invoke 전에 로컬 변수로 스냅샷 후 호출 (snapshot-then-invoke).
+- **락 보유 상태에서 파일 I/O / 네트워크 호출 / 다른 락 획득 금지.** 데드락/장기 정체 원인.
+
+### 필수 관례
+- 메인 전용 메서드 진입점에 `ThreadGuard.CheckMainThread("Class.Method")` 삽입. 위반 시 `EditorDebug.LogError` + `false` 반환 (throw 없음). 호출자는 `false` 반환 시 작업을 스킵.
+- GPU 리소스 생성/파괴 지점, 씬 라이프사이클 등록/해제에는 반드시 `ThreadGuard.CheckMainThread` 또는 `ThreadGuard.DebugCheckMainThread` 삽입.
+- 백그라운드 Task → 메인 전달은 **단일 불변 객체**로. `Task<TResult>` 반환 + 메인 `Update`에서 `IsCompleted` + `IsFaulted` 체크 후 결과 소비.
+- 컴포넌트 `_all*` 리스트 순회는 `.Snapshot()` → foreach.
+- CLI 핸들러가 씬/에셋 접근 필요 시 `ExecuteOnMainThread(() => { /* 씬 접근 */ })`로 감쌀 것.
+- FSW 콜백은 dedup 맵 기반 큐에 enqueue 후 `ProcessFileChanges` 같은 메인 드레인 메서드에서 처리.
+
+### 참고
+- `ThreadGuard`: [src/IronRose.Contracts/ThreadGuard.cs](src/IronRose.Contracts/ThreadGuard.cs) — 스레드 체크 유틸
+- `ComponentRegistry<T>`: [src/IronRose.Contracts/ComponentRegistry.cs](src/IronRose.Contracts/ComponentRegistry.cs) — 스레드 안전 컴포넌트 리스트
+- 스레드 안전성 마스터 계획: [plans/threading-safety-fix-master.md](plans/threading-safety-fix-master.md)
+- 정적 분석 보고서: [plans/static-analysis-threading-race-deadlock.md](plans/static-analysis-threading-race-deadlock.md)
+
+의심스러우면 `ThreadGuard`를 먼저 심고 로그를 관찰할 것. 위반 로그는 동일 call site 기준 5초 쿨다운.
+
