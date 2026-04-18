@@ -80,6 +80,13 @@ namespace IronRose.Engine
         private AssetWarmupManager? _warmupManager;
         private Editor.ThumbnailGenerator? _thumbnailGenerator;
 
+        // Warmup/Thumbnail/Reimport 가 Update 중에 끝나도 같은 프레임의 Render 를
+        // 모달 경로로 고정하기 위한 transition flag. ProcessFrame 이 내부적으로
+        // OnComplete 콜백(LoadSceneChain 등 동기 GPU 작업)을 실행하면 IsWarmingUp 이
+        // false 로 바뀌어 Render 가 일반 경로로 들어가는데, 이 프레임의 ImGui drawData 는
+        // 모달만 큐잉된 상태이므로 불일치가 생긴다. true 이면 Render 는 모달 경로를 유지.
+        private bool _modalRenderOverride;
+
         // Initialize() 이전에 설정된 콜백을 버퍼링하는 backing field
         private Action? _pendingOnAfterReload;
         private Action? _pendingOnWarmUpComplete;
@@ -258,6 +265,10 @@ namespace IronRose.Engine
             if (_warmupManager is { IsWarmingUp: true })
             {
                 _warmupManager.ProcessFrame();
+                // ProcessFrame 이 Finish → OnWarmUpComplete(LoadSceneChain 등) 을 동기 실행하면
+                // IsWarmingUp 이 false 로 바뀐다. 이 프레임의 ImGui 는 이미 모달만 큐잉되므로
+                // Render 를 모달 경로로 고정한다.
+                _modalRenderOverride = true;
                 // 워밍업 진행 모달 표시 (에디터 패널 대신)
                 if (_imguiOverlay != null)
                     _imguiOverlay.UpdateWarmup((float)deltaTime,
@@ -282,6 +293,8 @@ namespace IronRose.Engine
                     _assetDatabase.ProcessReimport();
 
                 _thumbnailGenerator.ProcessFrame();
+                // ProcessFrame 이 IsGenerating 을 false 로 바꿀 수 있으므로 Render 를 모달 경로로 고정.
+                _modalRenderOverride = true;
                 if (_imguiOverlay != null)
                     _imguiOverlay.UpdateWarmup((float)deltaTime,
                         _thumbnailGenerator.CurrentIndex, _thumbnailGenerator.TotalCount,
@@ -362,9 +375,13 @@ namespace IronRose.Engine
                 return;
 
             // Warmup / Reimport / Thumbnail 중: game/scene 렌더링 skip, ImGui만 렌더
+            // _modalRenderOverride: Update 도중 ProcessFrame 이 IsWarmingUp 을 false 로 뒤집어도
+            // 같은 프레임은 모달 경로를 유지하기 위한 transition flag.
             if (_warmupManager is { IsWarmingUp: true } || _assetDatabase is { IsReimporting: true }
-                || _thumbnailGenerator is { IsGenerating: true })
+                || _thumbnailGenerator is { IsGenerating: true }
+                || _modalRenderOverride)
             {
+                _modalRenderOverride = false;
                 _graphicsManager.BeginFrame();
                 if (_imguiOverlay != null && _graphicsManager.CommandList != null)
                     _imguiOverlay.Render(_graphicsManager.CommandList);

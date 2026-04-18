@@ -228,6 +228,9 @@ namespace RoseEngine
 
         public void UploadToGPU(GraphicsDevice device, bool generateMipmaps = false)
         {
+            if (!ThreadGuard.CheckMainThread("Texture2D.UploadToGPU"))
+                return;
+
             bool isCompressed = _mipData != null && _gpuFormat != PixelFormat.R8_G8_B8_A8_UNorm;
             if (isCompressed)
             {
