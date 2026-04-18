@@ -17,7 +17,7 @@
 //     AiComfyUrl: string                        — AlienHS 서버가 사용할 ComfyUI URL 오버라이드 (기본 "")
 //     AiPythonPath: string                      — CLI 실행 파이썬 경로 (기본 "python")
 //     AiGenerationModel: string                 — ComfyUI 이미지 생성 모델 파일명 (기본 "z_image_turbo_nvfp4.safetensors")
-//     FocusGameViewOnPlay: bool                 — Play 모드 진입 시 Game View를 자동 포커스 (기본 false)
+//     FocusGameViewOnPlay: bool                 — Play 모드 진입 시 Game View를 자동 포커스 (기본 true)
 //     Load(): void                              — settings.toml [preferences] 로드
 //     Save(): void                              — settings.toml [preferences] 저장 (read-modify-write)
 //     MigrateFromEditorState(float?, string?): void — 레거시 EditorState 값 1회성 이전 훅
@@ -92,7 +92,7 @@ namespace IronRose.Engine
         /// Play 모드 진입 시 Game View 패널을 자동으로 포커스. Play 종료 시 이전 포커스 패널로 복귀.
         /// Game View 탭 우클릭 컨텍스트 메뉴에서 토글한다.
         /// </summary>
-        public static bool FocusGameViewOnPlay { get; set; } = false;
+        public static bool FocusGameViewOnPlay { get; set; } = true;
 
         /// <summary>글로벌 설정 디렉토리 (~/.ironrose/).</summary>
         private static string GlobalSettingsDir =>
