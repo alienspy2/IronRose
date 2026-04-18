@@ -9,6 +9,10 @@ obj/
 *.exe
 *.pdb
 
+# External tools (vendored binaries are allowed)
+!externalTools/**/*.dll
+!externalTools/**/*.exe
+
 # Hot reload temporary builds
 bin-hot/
 temp-hot/
