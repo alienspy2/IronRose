@@ -138,6 +138,9 @@ namespace IronRose.Engine
 
         public void Initialize(IWindow window)
         {
+            // 메인 스레드 ID 캡처 — 이후 모든 ThreadGuard.CheckMainThread 호출의 기준
+            ThreadGuard.CaptureMainThread();
+
             // CLI 로그 버퍼 생성 (LogSink 연결 전에 생성)
             _cliLogBuffer = new CliLogBuffer();
 
