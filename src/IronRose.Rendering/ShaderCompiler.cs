@@ -164,6 +164,11 @@ namespace IronRose.Rendering
         {
             try
             {
+                // RoseCache 초기화 타이밍에 shaders 서브폴더가 날아갈 수 있어 방어적으로 재생성.
+                var dir = Path.GetDirectoryName(cachePath);
+                if (!string.IsNullOrEmpty(dir))
+                    Directory.CreateDirectory(dir);
+
                 using var fs = File.Create(cachePath);
                 using var writer = new BinaryWriter(fs);
                 writer.Write(sourceHash);           // 32B SHA256
