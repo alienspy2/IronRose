@@ -30,6 +30,10 @@
 //          관측된다. Task 람다는 _loadedAssets/_guidToPath/_spriteToGuid/GPU 리소스를 건드리지 않는
 //          순수 CPU 디코드만 수행하고, RegisterSubAssets/RegisterSpriteSubAssets/StoreCacheOrDefer는
 //          메인 ProcessReimport 경로에서 호출된다.
+//          (Phase B-4) FSW 디바운스 큐(_pendingChanges)는 Dictionary<path, AssetChangeEvent> dedup
+//          맵 기반이며, EnqueueChange가 같은 path를 덮어써 "최신 타임스탬프"만 유지한다.
+//          ProcessFileChanges는 동일 lock 블록 안에서 debounce 판정과 맵 제거를 동시에 수행하여
+//          re-enqueue race를 제거한다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Concurrent;
@@ -79,7 +83,10 @@ namespace IronRose.AssetPipeline
 
         // ─── FileSystemWatcher ───────────────────────────────────
         private FileSystemWatcher? _watcher;
-        private readonly Queue<AssetChangeEvent> _pendingChanges = new();
+        // dedup 맵: path → 최신 AssetChangeEvent. FSW 콜백은 락 안에서 키를 덮어쓰므로
+        // 같은 파일의 중복 이벤트가 큐에 누적되지 않고 "최신 타임스탬프"만 보관된다.
+        // ProcessFileChanges는 락 안에서 debounce 통과 항목만 뽑아내고 나머지는 맵에 남겨둔다.
+        private readonly Dictionary<string, AssetChangeEvent> _pendingChanges = new(StringComparer.OrdinalIgnoreCase);
         private readonly object _changeLock = new();
         private readonly HashSet<string> _suppressedPaths = new(StringComparer.OrdinalIgnoreCase);
         private string? _assetsPath;
@@ -1721,13 +1728,20 @@ namespace IronRose.AssetPipeline
             {
                 lock (_changeLock)
                 {
-                    _pendingChanges.Enqueue(new AssetChangeEvent
+                    // Renamed는 즉시 처리 대상이지만 같은 path로 여러 이벤트가 연속될 수 있으므로
+                    // 맵 upsert. 기존 Deleted가 남아 있으면 덮어쓰지 않는다 (삭제 우선 정책).
+                    if (_pendingChanges.TryGetValue(e.FullPath, out var existing)
+                        && existing.Type == AssetChangeType.Deleted)
+                    {
+                        return;
+                    }
+                    _pendingChanges[e.FullPath] = new AssetChangeEvent
                     {
                         Type = AssetChangeType.Renamed,
                         FullPath = e.FullPath,
                         OldFullPath = e.OldFullPath,
                         TimestampTicks = DateTime.UtcNow.Ticks,
-                    });
+                    };
                 }
             };
 
@@ -1761,12 +1775,19 @@ namespace IronRose.AssetPipeline
                 if (_suppressedPaths.Remove(fullPath))
                     return;
 
-                _pendingChanges.Enqueue(new AssetChangeEvent
+                // dedup upsert: 기존 Deleted가 남아 있으면 덮어쓰지 않음 (삭제 우선).
+                // 그 외에는 최신 이벤트로 교체하여 timestamp만 갱신 (debounce 연장).
+                if (_pendingChanges.TryGetValue(fullPath, out var existing)
+                    && existing.Type == AssetChangeType.Deleted)
+                {
+                    return;
+                }
+                _pendingChanges[fullPath] = new AssetChangeEvent
                 {
                     Type = type,
                     FullPath = fullPath,
                     TimestampTicks = DateTime.UtcNow.Ticks,
-                });
+                };
             }
         }
 
@@ -1778,61 +1799,41 @@ namespace IronRose.AssetPipeline
         /// </summary>
         public void ProcessFileChanges()
         {
-            List<AssetChangeEvent> events;
+            // dedup 맵에서 debounce 통과한 항목만 추출하고 나머지는 맵에 남겨둔다.
+            // 락 안에서 판정하므로 FSW 스레드가 새 이벤트를 넣어도 다음 프레임 판정에 반영된다.
+            // (기존 구조는 "큐를 Clear → 락 밖에서 판정 → 락 안에 re-enqueue" 순서라,
+            //  판정과 재투입 사이에 FSW가 새 이벤트를 넣으면 이전 이벤트가 큐에 두 번 나타나는
+            //  race가 있었다 — 정적 분석 보고서 H2 참조.)
+            List<AssetChangeEvent> ready;
+            var nowTicks = DateTime.UtcNow.Ticks;
+            var debounceTicks = TimeSpan.FromMilliseconds(FileChangeDebounceMs).Ticks;
+
             lock (_changeLock)
             {
                 if (_pendingChanges.Count == 0) return;
-                events = new List<AssetChangeEvent>(_pendingChanges);
-                _pendingChanges.Clear();
-            }
 
-            // Deduplicate: keep only the last (most recent) event per file path.
-            // Created/Deleted/Renamed는 type을 그대로 유지하되 timestamp는 최신으로 갱신한다.
-            var deduped = new Dictionary<string, AssetChangeEvent>(StringComparer.OrdinalIgnoreCase);
-            foreach (var evt in events)
-            {
-                if (deduped.TryGetValue(evt.FullPath, out var existing))
+                ready = new List<AssetChangeEvent>();
+                var readyKeys = new List<string>();
+                foreach (var kvp in _pendingChanges)
                 {
-                    // Deleted가 들어오면 이후 이벤트로 덮어쓰지 않고 Deleted 유지.
-                    // 그 외에는 최신 이벤트로 교체하면서 타임스탬프 갱신 → debounce 연장.
-                    if (existing.Type == AssetChangeType.Deleted) continue;
-                }
-                deduped[evt.FullPath] = evt;
-            }
-
-            // Debounce: 아직 안정화 대기 시간이 지나지 않은 이벤트는 큐에 되돌린다.
-            // 쓰기 중에는 Changed가 연속으로 도착하여 타임스탬프가 계속 갱신되므로 처리가 지연된다.
-            var nowTicks = DateTime.UtcNow.Ticks;
-            var debounceTicks = TimeSpan.FromMilliseconds(FileChangeDebounceMs).Ticks;
-            var toRequeue = new List<AssetChangeEvent>();
-            var ready = new List<AssetChangeEvent>();
-            foreach (var evt in deduped.Values)
-            {
-                // Deleted/Renamed는 debounce하지 않음 (원자적 이벤트로 간주)
-                if (evt.Type == AssetChangeType.Created || evt.Type == AssetChangeType.Changed)
-                {
-                    if (nowTicks - evt.TimestampTicks < debounceTicks)
+                    var evt = kvp.Value;
+                    // Deleted/Renamed는 debounce 없이 즉시 처리
+                    if (evt.Type == AssetChangeType.Created || evt.Type == AssetChangeType.Changed)
                     {
-                        toRequeue.Add(evt);
-                        continue;
+                        if (nowTicks - evt.TimestampTicks < debounceTicks)
+                            continue; // 맵에 남겨두고 다음 프레임 재평가
                     }
+                    ready.Add(evt);
+                    readyKeys.Add(kvp.Key);
                 }
-                ready.Add(evt);
-            }
 
-            if (toRequeue.Count > 0)
-            {
-                lock (_changeLock)
-                {
-                    foreach (var evt in toRequeue)
-                        _pendingChanges.Enqueue(evt);
-                }
+                // 처리 대상 항목만 맵에서 제거. 미경과 항목은 맵에 남겨 FSW가 갱신 가능.
+                foreach (var k in readyKeys)
+                    _pendingChanges.Remove(k);
             }
 
             if (ready.Count == 0) return;
 
-            // ready 리스트는 이미 path-unique한 deduped.Values에서 debounce 통과한 것만 추린 것이라
-            // FullPath가 유일하다. 별도 Dictionary 재집계(deduped_ready)는 no-op이므로 제거.
             foreach (var evt in ready)
             {
                 try
