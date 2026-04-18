@@ -110,6 +110,11 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
         private int _previewFontSize;
         private float _previewFontLineHeight;
 
+        // Texture2D → ImGui binding 캐시. 같은 Texture2D 가 매 프레임 BindTexture 를 호출해도
+        // 새 ResourceSet 을 무한 등록하지 않도록 한다. TextureView 가 바뀌면(재업로드/리임포트)
+        // UpdateImGuiBinding 으로 갱신한다.
+        private readonly Dictionary<Texture2D, (TextureView View, IntPtr Id)> _textureBindingCache = new();
+
         private enum PreviewType { None, Texture, Material, Mesh, Font }
 
         // ── Material 에셋 편집 ──
@@ -3706,8 +3711,22 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
             if (tex == null) return IntPtr.Zero;
             if (tex.TextureView == null)
                 tex.UploadToGPU(_device);
-            if (tex.TextureView == null) return IntPtr.Zero;
-            return _imguiRenderer.GetOrCreateImGuiBinding(tex.TextureView);
+            var view = tex.TextureView;
+            if (view == null) return IntPtr.Zero;
+
+            if (_textureBindingCache.TryGetValue(tex, out var entry))
+            {
+                if (ReferenceEquals(entry.View, view))
+                    return entry.Id;
+                // TextureView 가 바뀜(재업로드) → 같은 IntPtr 에 새 ResourceSet 바인딩
+                _imguiRenderer.UpdateImGuiBinding(entry.Id, view);
+                _textureBindingCache[tex] = (view, entry.Id);
+                return entry.Id;
+            }
+
+            var id = _imguiRenderer.GetOrCreateImGuiBinding(view);
+            _textureBindingCache[tex] = (view, id);
+            return id;
         }
 
         private void CacheTexture(Texture2D? tex)

@@ -30,6 +30,9 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         private TextureView _fontTextureView = null!;
         private ResourceSet _fontResourceSet = null!;
         private Sampler _linearSampler = null!;
+        // Font atlas IntPtr 는 RecreateFontAtlas 에서 매번 새로 발급하지 않고 재사용한다.
+        // 새로 발급하면 _textureBindings 에 이전 폰트가 dangling ResourceSet 으로 남아 렌더 시 크래시.
+        private IntPtr _fontTextureId = IntPtr.Zero;
 
         // Dynamic buffers
         private DeviceBuffer _vertexBuffer = null!;
@@ -142,7 +145,17 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             _fontTextureView = _factory.CreateTextureView(_fontTexture);
             _fontResourceSet = _factory.CreateResourceSet(new ResourceSetDescription(_textureLayout, _fontTextureView, _linearSampler));
 
-            io.Fonts.SetTexID(GetOrRegisterTexture(_fontResourceSet));
+            // 첫 생성: 새 IntPtr 발급. 재생성: 기존 IntPtr 에 새 ResourceSet 을 rebind 하여
+            // _textureBindings 에 이전 폰트 entry 가 dangling 으로 남지 않게 한다.
+            if (_fontTextureId == IntPtr.Zero)
+            {
+                _fontTextureId = GetOrRegisterTexture(_fontResourceSet);
+            }
+            else
+            {
+                _textureBindings[_fontTextureId] = _fontResourceSet;
+            }
+            io.Fonts.SetTexID(_fontTextureId);
             io.Fonts.ClearTexData();
         }
 
@@ -172,7 +185,17 @@ namespace IronRose.Engine.Editor.ImGuiEditor
 
         public void Render(CommandList cl, ImDrawDataPtr drawData)
         {
+            if (!RoseEngine.ThreadGuard.CheckMainThread("VeldridImGuiRenderer.Render"))
+                return;
+
             if (drawData.CmdListsCount == 0) return;
+
+            // GPU 리소스 sanity check — disposed 상태에서 native 크래시 방지
+            if (_vertexBuffer == null || _indexBuffer == null || _pipeline == null || _projectionSet == null)
+            {
+                RoseEngine.EditorDebug.LogError("[VeldridImGuiRenderer.Render] GPU resource is null; skipping frame.");
+                return;
+            }
 
             // Calculate total vertex/index counts
             uint totalVertexBytes = (uint)(drawData.TotalVtxCount * Unsafe.SizeOf<ImDrawVert>());
