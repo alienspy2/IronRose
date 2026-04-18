@@ -24,6 +24,12 @@
 //          oldAsset을 _loadedAssets에 되돌려 씬 참조가 dangling되지 않고 후속 Reimport가 가능하게 한다.
 //          sync Reimport 성공 경로와 async ProcessReimport 성공 경로는 둘 다
 //          ProjectDirty = true; ReimportVersion++ 로 종료되어 Inspector preview가 최신 상태를 반영한다.
+//          (Phase B-1/B-2/B-3) _loadedAssets는 ConcurrentDictionary로 전환되어 백그라운드 Read
+//          경합으로부터 안전해졌고, 순회는 모두 .ToArray() 스냅샷을 사용한다. 비동기 reimport는
+//          개별 _reimport* 필드 대신 단일 Task<ReimportResult>로 통합되어 Task 완료 fence 위에서만
+//          관측된다. Task 람다는 _loadedAssets/_guidToPath/_spriteToGuid/GPU 리소스를 건드리지 않는
+//          순수 CPU 디코드만 수행하고, RegisterSubAssets/RegisterSpriteSubAssets/StoreCacheOrDefer는
+//          메인 ProcessReimport 경로에서 호출된다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Concurrent;
@@ -40,7 +46,10 @@ namespace IronRose.AssetPipeline
     public class AssetDatabase : IAssetDatabase
     {
         private readonly Dictionary<string, string> _guidToPath = new();
-        private readonly Dictionary<string, object> _loadedAssets = new();
+        // 백그라운드 Task(ReimportAsync 람다)가 RegisterSubAssets/RegisterSpriteSubAssets 경로를
+        // 거쳐 _loadedAssets를 쓰던 경로는 B-3에서 메인으로 이동하지만, 과도기 안전 + 미래 회귀 방지를
+        // 위해 ConcurrentDictionary로 유지한다. 순회 지점은 ToArray() 스냅샷으로 보호한다.
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> _loadedAssets = new();
         private readonly HashSet<string> _failedImports = new();
         private readonly Dictionary<Mesh, string> _meshToGuid = new();
         private readonly Dictionary<Material, string> _materialToGuid = new();
@@ -434,8 +443,8 @@ namespace IronRose.AssetPipeline
             var inst = prefab.GetComponent<PrefabInstance>();
             if (inst != null && !string.IsNullOrEmpty(inst.prefabGuid))
                 return inst.prefabGuid;
-            // 로드된 에셋에서 역검색
-            foreach (var (path, asset) in _loadedAssets)
+            // 로드된 에셋에서 역검색. ConcurrentDictionary는 순회 중 수정에 약하므로 스냅샷.
+            foreach (var (path, asset) in _loadedAssets.ToArray())
             {
                 if (ReferenceEquals(asset, prefab) && path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
                     return GetGuidFromPath(path);
@@ -467,7 +476,7 @@ namespace IronRose.AssetPipeline
         public string? FindPathForMesh(Mesh mesh)
         {
             if (mesh == null) return null;
-            foreach (var (path, asset) in _loadedAssets)
+            foreach (var (path, asset) in _loadedAssets.ToArray())
             {
                 if (asset is MeshImportResult result)
                 {
@@ -512,7 +521,7 @@ namespace IronRose.AssetPipeline
         public void InvalidateScriptPrefabCache()
         {
             var toRemove = new List<string>();
-            foreach (var kvp in _loadedAssets)
+            foreach (var kvp in _loadedAssets.ToArray())
             {
                 if (kvp.Value is not GameObject go) continue;
                 if (HasScriptComponent(go))
@@ -520,7 +529,7 @@ namespace IronRose.AssetPipeline
             }
 
             foreach (var key in toRemove)
-                _loadedAssets.Remove(key);
+                _loadedAssets.TryRemove(key, out _);
 
             if (toRemove.Count > 0)
                 EditorDebug.Log($"[AssetDatabase] InvalidateScriptPrefabCache: evicted {toRemove.Count} prefab(s) with script components", force: true);
@@ -715,7 +724,7 @@ namespace IronRose.AssetPipeline
                 //    예외가 나도 catch에서 oldAsset으로 복원 가능하다.
                 if (_loadedAssets.TryGetValue(path, out var cur))
                     oldAsset = cur;
-                _loadedAssets.Remove(path);
+                _loadedAssets.TryRemove(path, out _);
 
                 // 기존 sub-asset 캐시/역참조 맵 정리
                 if (oldAsset is MeshImportResult oldResult)
@@ -979,22 +988,43 @@ namespace IronRose.AssetPipeline
 
         // ─── Async Reimport (비동기 재임포트 + 진행 UI) ──────────────
 
-        private System.Threading.Tasks.Task? _reimportTask;
-        private string? _reimportPath;
-        private object? _reimportOldAsset;
-        private System.Diagnostics.Stopwatch? _reimportTimer;
-
-        // 백그라운드 작업 결과 (FinalizeReimport에서 메인 스레드로 처리)
-        private MeshImportResult? _reimportMeshResult;
-        private RoseMetadata? _reimportMeta;
-        private string? _reimportType;
-        private Texture2D? _reimportTexResult;
-        private SpriteImportResult? _reimportSpriteResult;
+        // 비동기 reimport가 진행 중일 때만 non-null. Task 완료 후 메인 ProcessReimport가
+        // result를 꺼내 처리하고 null로 복구한다. 개별 _reimport* 필드들은 Task 완료 fence에
+        // 의존하는 happens-before가 불명확하여, 단일 Task<ReimportResult>로 통합한다.
+        private System.Threading.Tasks.Task<ReimportResult>? _reimportTask;
 
         /// <summary>리임포트 진행 중 여부 (EngineCore에서 오버레이 표시용)</summary>
+        // 진행 중 상태를 Task.AsyncState(= ReimportPrototype)에서 조회.
+        // _reimportTask는 Task.Factory.StartNew 호출 직후 할당하고, Task factory delegate가
+        // result 객체 전체를 반환하지만, 진행 중에도 path/timer를 UI에 노출하기 위해 경량
+        // prototype을 AsyncState로 전달한다.
         public bool IsReimporting => _reimportTask != null;
-        public string? ReimportAssetName => _reimportPath != null ? Path.GetFileName(_reimportPath) : null;
-        public double ReimportElapsed => _reimportTimer?.Elapsed.TotalSeconds ?? 0;
+        public string? ReimportAssetName =>
+            (_reimportTask?.AsyncState as ReimportPrototype)?.Path is string p ? Path.GetFileName(p) : null;
+        public double ReimportElapsed =>
+            (_reimportTask?.AsyncState as ReimportPrototype)?.Timer.Elapsed.TotalSeconds ?? 0;
+
+        /// <summary>Task.Factory.StartNew에 AsyncState로 전달하는 진행 중 정보. Task 완료 전까지 UI에서 참조한다.</summary>
+        private sealed record ReimportPrototype(string Path, System.Diagnostics.Stopwatch Timer);
+
+        /// <summary>
+        /// ReimportAsync의 백그라운드 Task가 반환하는 불변 결과 객체.
+        /// Task 완료 fence를 통해 모든 필드가 메인 스레드에서 happens-before로 관측된다.
+        /// 개별 _reimport* 필드를 대체한다.
+        /// </summary>
+        private sealed record ReimportResult(
+            string Path,
+            string ImporterType,
+            RoseMetadata Meta,
+            object? OldAsset,
+            System.Diagnostics.Stopwatch Timer,
+            // 백그라운드 계산 산출물 (importerType에 따라 일부만 non-null)
+            MeshImportResult? Mesh,
+            Texture2D? Tex,
+            SpriteImportResult? Sprite,
+            // 백그라운드에서 발생한 예외 (null이면 성공)
+            Exception? Error
+        );
 
         /// <summary>
         /// 비동기 재임포트 시작. 무거운 임포트 + 캐시 저장을 백그라운드에서 수행하고
@@ -1010,68 +1040,62 @@ namespace IronRose.AssetPipeline
 
             if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Async reimport starting: {path}");
             _failedImports.Remove(path);
-            _reimportPath = path;
-            _reimportTimer = System.Diagnostics.Stopwatch.StartNew();
 
             var meta = RoseMetadata.LoadOrCreate(path);
             var importerType = GetImporterType(meta);
-            _reimportMeta = meta;
-            _reimportType = importerType;
+            var timer = System.Diagnostics.Stopwatch.StartNew();
 
-            // 1. 기존 에셋 보존
+            // 1. 기존 에셋 보존 + 메모리 캐시에서 잠시 제거 (백그라운드 작업 중 누가 Load해도 stale 반환 방지)
             _loadedAssets.TryGetValue(path, out var oldAsset);
-            _reimportOldAsset = oldAsset;
-            _loadedAssets.Remove(path);
+            _loadedAssets.TryRemove(path, out _);
 
-            if (oldAsset is MeshImportResult oldResult)
-                RemoveSubAssetCaches(path, oldResult);
-            else if (oldAsset is SpriteImportResult oldSprResult)
-                RemoveSpriteSubAssetCaches(path, oldSprResult);
+            if (oldAsset is MeshImportResult oldMesh)
+                RemoveSubAssetCaches(path, oldMesh);
+            else if (oldAsset is SpriteImportResult oldSpr)
+                RemoveSpriteSubAssetCaches(path, oldSpr);
 
             // 2. 디스크 캐시 무효화
             _roseCache.InvalidateCache(path);
 
-            // 3. 백그라운드 임포트 시작
+            // 3. 백그라운드 임포트 시작. 람다는 _loadedAssets / _guidToPath / _spriteToGuid /
+            // GPU 리소스를 건드리지 않는다 (순수 CPU 디코드만). 모든 공유 상태 쓰기는
+            // ProcessReimport가 메인에서 수행한다.
             _importDepth++;
-            _reimportTask = System.Threading.Tasks.Task.Run(() =>
-            {
-                switch (importerType)
+            var prototype = new ReimportPrototype(path, timer);
+            _reimportTask = System.Threading.Tasks.Task.Factory.StartNew<ReimportResult>(
+                state =>
                 {
-                    case "MeshImporter":
+                    MeshImportResult? mesh = null;
+                    Texture2D? tex = null;
+                    SpriteImportResult? sprite = null;
+                    Exception? error = null;
+                    try
                     {
-                        var result = ImportMesh(path, meta);
-                        if (result != null)
+                        switch (importerType)
                         {
-                            RegisterSubAssets(path, result, meta);
-                            StoreCacheOrDefer(path, result, meta);
+                            case "MeshImporter":
+                                mesh = ImportMesh(path, meta);
+                                break;
+                            case "TextureImporter":
+                                tex = _textureImporter.Import(path, meta);
+                                if (tex != null && IsSpriteTexture(meta))
+                                    sprite = BuildSpriteImportResult(tex, meta);
+                                break;
+                            case "FontImporter":
+                                // 폰트는 가볍고 GPU 필요 — 메인에서 ProcessReimport가 동기 import.
+                                break;
                         }
-                        _reimportMeshResult = result;
-                        break;
                     }
-                    case "TextureImporter":
+                    catch (Exception ex)
                     {
-                        var tex = _textureImporter.Import(path, meta);
-                        if (tex != null)
-                            StoreCacheOrDefer(path, tex, meta);
-                        // Sprite 서브 에셋 등록 (IO만 — bg 스레드 안전)
-                        if (tex != null && IsSpriteTexture(meta))
-                        {
-                            var sr = BuildSpriteImportResult(tex, meta);
-                            RegisterSpriteSubAssets(path, sr, meta);
-                            _reimportSpriteResult = sr;
-                        }
-                        else
-                            _reimportSpriteResult = null;
-                        _reimportTexResult = tex;
-                        break;
+                        error = ex;
                     }
-                    case "FontImporter":
-                    {
-                        // 폰트는 가볍고 GPU 불필요 — 동기 처리
-                        break;
-                    }
-                }
-            });
+                    return new ReimportResult(path, importerType, meta, oldAsset, timer, mesh, tex, sprite, error);
+                },
+                prototype,
+                System.Threading.CancellationToken.None,
+                System.Threading.Tasks.TaskCreationOptions.DenyChildAttach,
+                System.Threading.Tasks.TaskScheduler.Default);
         }
 
         /// <summary>
@@ -1080,89 +1104,99 @@ namespace IronRose.AssetPipeline
         /// </summary>
         public bool ProcessReimport()
         {
-            if (_reimportTask == null) return false;
-            if (!_reimportTask.IsCompleted) return false;
+            var task = _reimportTask;
+            if (task == null) return false;
+            if (!task.IsCompleted) return false;
 
-            var path = _reimportPath!;
-            bool faulted = _reimportTask.IsFaulted;
-
-            // 에러 처리: 실패 시 oldAsset을 _loadedAssets에 복원하여 씬 참조가 dangling되지 않도록
-            // 보장하고, 이후 파일 변경/Inspector Apply 경로에서 다시 Reimport가 트리거되도록 한다.
-            if (faulted)
+            // Task가 예외를 IsFaulted로 surface했더라도 (우리 람다는 try/catch로 포획하지만 방어),
+            // GetAwaiter().GetResult()로 rethrow되지 않도록 Task.Result 접근을 안전하게 처리.
+            ReimportResult result;
+            if (task.IsFaulted)
             {
-                var ex = _reimportTask.Exception?.InnerException;
-                EditorDebug.LogError($"[AssetDatabase] Async reimport failed: {ex?.Message}");
-
-                if (_reimportOldAsset != null)
+                // 람다 외부 예외 (ImportMesh/_textureImporter가 ThreadAbort 등): 복구 모드로 진행
+                var ex = task.Exception?.InnerException ?? task.Exception;
+                EditorDebug.LogError($"[AssetDatabase] Async reimport task faulted: {ex?.Message}");
+                FinalizeReimportReset();
+                return true;
+            }
+            else
+            {
+                try { result = task.Result; }
+                catch (Exception ex)
                 {
-                    _loadedAssets[path] = _reimportOldAsset;
-                    if (_reimportOldAsset is MeshImportResult oldMeshR)
-                    {
-                        var meta2 = _reimportMeta ?? RoseMetadata.LoadOrCreate(path);
-                        CacheSubAssets(path, oldMeshR, meta2);
-                    }
-                    else if (_reimportOldAsset is SpriteImportResult oldSprR)
-                    {
-                        var meta2 = _reimportMeta ?? RoseMetadata.LoadOrCreate(path);
-                        CacheSpriteSubAssets(path, oldSprR, meta2);
-                    }
+                    EditorDebug.LogError($"[AssetDatabase] Async reimport result retrieval failed: {ex.Message}");
+                    FinalizeReimportReset();
+                    return true;
+                }
+            }
+
+            var path = result.Path;
+
+            // 에러 처리: 람다 내부 예외는 result.Error로 전달됨
+            if (result.Error != null)
+            {
+                EditorDebug.LogError($"[AssetDatabase] Async reimport failed: {result.Error.Message}");
+
+                if (result.OldAsset != null)
+                {
+                    _loadedAssets[path] = result.OldAsset;
+                    if (result.OldAsset is MeshImportResult oldMeshR)
+                        CacheSubAssets(path, oldMeshR, result.Meta);
+                    else if (result.OldAsset is SpriteImportResult oldSprR)
+                        CacheSpriteSubAssets(path, oldSprR, result.Meta);
                 }
 
-                // GPU 정리 스킵하고 바로 상태 초기화로.
-                _reimportTimer?.Stop();
-                _reimportTask = null;
-                _reimportPath = null;
-                _reimportOldAsset = null;
-                _reimportTimer = null;
-                _reimportMeshResult = null;
-                _reimportTexResult = null;
-                _reimportSpriteResult = null;
-                _reimportMeta = null;
-                _reimportType = null;
-                _importDepth--;
-                ProjectDirty = true;
+                result.Timer.Stop();
+                FinalizeReimportReset();
                 return true;
             }
 
-            // 메인 스레드 마무리
-            switch (_reimportType)
+            // ─── 성공 경로: 메인 스레드에서 GPU 캐시/sub-asset 등록/씬 교체 ───
+            switch (result.ImporterType)
             {
                 case "MeshImporter":
                 {
-                    if (_reimportMeshResult != null)
+                    if (result.Mesh != null)
                     {
-                        _loadedAssets[path] = _reimportMeshResult;
-                        CacheSubAssets(path, _reimportMeshResult, _reimportMeta!);
-                        ReplaceMeshInScene(_reimportMeshResult);
+                        // B-3에서 Task 람다로부터 이동된 메인 전용 작업들
+                        RegisterSubAssets(path, result.Mesh, result.Meta);
+                        StoreCacheOrDefer(path, result.Mesh, result.Meta);
 
+                        _loadedAssets[path] = result.Mesh;
+                        CacheSubAssets(path, result.Mesh, result.Meta);
+                        ReplaceMeshInScene(result.Mesh);
                     }
                     break;
                 }
                 case "TextureImporter":
                 {
-                    if (_reimportTexResult != null)
+                    if (result.Tex != null)
                     {
-                        var oldTex = _reimportOldAsset is SpriteImportResult oldSpr
-                            ? oldSpr.Texture : _reimportOldAsset as Texture2D;
-                        if (_reimportSpriteResult != null)
+                        // B-3에서 Task 람다로부터 이동된 메인 전용 작업
+                        StoreCacheOrDefer(path, result.Tex, result.Meta);
+
+                        var oldTexForReplace = result.OldAsset is SpriteImportResult oldSpr
+                            ? oldSpr.Texture : result.OldAsset as Texture2D;
+                        if (result.Sprite != null)
                         {
-                            _loadedAssets[path] = _reimportSpriteResult;
-                            CacheSpriteSubAssets(path, _reimportSpriteResult, _reimportMeta!);
-                            var oldSprResult = _reimportOldAsset as SpriteImportResult;
-                            ReplaceSpriteInScene(oldSprResult, _reimportSpriteResult);
+                            // B-3에서 Task 람다로부터 이동
+                            RegisterSpriteSubAssets(path, result.Sprite, result.Meta);
+
+                            _loadedAssets[path] = result.Sprite;
+                            CacheSpriteSubAssets(path, result.Sprite, result.Meta);
+                            ReplaceSpriteInScene(result.OldAsset as SpriteImportResult, result.Sprite);
                         }
                         else
                         {
-                            _loadedAssets[path] = _reimportTexResult;
+                            _loadedAssets[path] = result.Tex;
                         }
-                        ReplaceTextureInScene(_reimportTexResult, oldTex);
+                        ReplaceTextureInScene(result.Tex, oldTexForReplace);
                     }
                     break;
                 }
                 case "FontImporter":
                 {
-                    var meta = _reimportMeta ?? RoseMetadata.LoadOrCreate(path);
-                    var newFont = _fontImporter.Import(path, meta);
+                    var newFont = _fontImporter.Import(path, result.Meta);
                     if (newFont != null)
                     {
                         _loadedAssets[path] = newFont;
@@ -1173,7 +1207,7 @@ namespace IronRose.AssetPipeline
             }
 
             // 이전 에셋 GPU 정리 (텍스처 공유로 인한 이중 Dispose 방지)
-            if (_reimportOldAsset is MeshImportResult oldMeshResult)
+            if (result.OldAsset is MeshImportResult oldMeshResult)
             {
                 var disposed = new HashSet<Texture2D>();
                 foreach (var tex in oldMeshResult.Textures)
@@ -1191,39 +1225,33 @@ namespace IronRose.AssetPipeline
                         DisposeIfNotDefault(mat.MROMap);
                 }
             }
-            else if (_reimportOldAsset is SpriteImportResult oldSpriteResult)
+            else if (result.OldAsset is SpriteImportResult oldSpriteResult)
             {
                 oldSpriteResult.Texture?.Dispose();
             }
-            else if (_reimportOldAsset is Texture2D oldTex)
+            else if (result.OldAsset is Texture2D oldTex)
             {
                 oldTex.Dispose();
             }
-            else if (_reimportOldAsset is Font oldFont)
+            else if (result.OldAsset is Font oldFont)
             {
                 oldFont.atlasTexture?.Dispose();
             }
 
-            _reimportTimer?.Stop();
-            if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Async reimport complete: {path} ({_reimportTimer?.Elapsed.TotalSeconds:F1}s)");
+            result.Timer.Stop();
+            if (VerboseLogging) EditorDebug.Log($"[AssetDatabase] Async reimport complete: {path} ({result.Timer.Elapsed.TotalSeconds:F1}s)");
 
-            // 상태 초기화
+            FinalizeReimportReset();
+            ReimportVersion++;
+            return true;
+        }
+
+        /// <summary>ReimportAsync 완료 후 공통 상태 초기화. 성공/실패 경로 양쪽에서 호출.</summary>
+        private void FinalizeReimportReset()
+        {
             _reimportTask = null;
-            _reimportPath = null;
-            _reimportOldAsset = null;
-            _reimportTimer = null;
-            _reimportMeshResult = null;
-            _reimportTexResult = null;
-            _reimportSpriteResult = null;
-            _reimportMeta = null;
-            _reimportType = null;
             _importDepth--;
             ProjectDirty = true;
-            // sync Reimport의 finally 경로(ProjectDirty = true; ReimportVersion++)와 대칭.
-            // Inspector preview 등 ReimportVersion을 구독하는 UI가 async 경로에서도 갱신되도록 보장.
-            ReimportVersion++;
-
-            return true;
         }
 
         public void Unload(string path)
@@ -1234,7 +1262,7 @@ namespace IronRose.AssetPipeline
                     RemoveSubAssetCaches(path, result);
                 if (asset is IDisposable disposable)
                     disposable.Dispose();
-                _loadedAssets.Remove(path);
+                _loadedAssets.TryRemove(path, out _);
             }
         }
 
@@ -1257,7 +1285,7 @@ namespace IronRose.AssetPipeline
 
                 // 캐시에서 제거
                 var path = GetPathFromGuid(current);
-                if (path != null && _loadedAssets.Remove(path) && VerboseLogging)
+                if (path != null && _loadedAssets.TryRemove(path, out _) && VerboseLogging)
                     EditorDebug.Log($"[AssetDatabase] Invalidated prefab cache: {Path.GetFileName(path)} (guid={current})");
 
                 // 이 프리팹을 참조하는 부모들도 무효화
@@ -1375,7 +1403,7 @@ namespace IronRose.AssetPipeline
         {
             RoseMetadata.OnSaved -= OnRoseMetadataSaved;
 
-            foreach (var asset in _loadedAssets.Values)
+            foreach (var asset in _loadedAssets.Values.ToArray())
             {
                 if (asset is IDisposable disposable)
                     disposable.Dispose();
@@ -1643,31 +1671,31 @@ namespace IronRose.AssetPipeline
         {
             for (int i = 0; i < result.Meshes.Length; i++)
             {
-                _loadedAssets.Remove(SubAssetPath.Build(filePath, "Mesh", i));
+                _loadedAssets.TryRemove(SubAssetPath.Build(filePath, "Mesh", i), out _);
                 _meshToGuid.Remove(result.Meshes[i].Mesh);
             }
 
             for (int i = 0; i < result.Materials.Length; i++)
             {
-                _loadedAssets.Remove(SubAssetPath.Build(filePath, "Material", i));
+                _loadedAssets.TryRemove(SubAssetPath.Build(filePath, "Material", i), out _);
                 _materialToGuid.Remove(result.Materials[i]);
             }
 
             for (int i = 0; i < result.Textures.Length; i++)
             {
-                _loadedAssets.Remove(SubAssetPath.Build(filePath, "Texture2D", i));
+                _loadedAssets.TryRemove(SubAssetPath.Build(filePath, "Texture2D", i), out _);
                 _textureToGuid.Remove(result.Textures[i]);
             }
 
             for (int i = 0; i < result.MipMeshes.Length; i++)
-                _loadedAssets.Remove(SubAssetPath.Build(filePath, "MipMesh", i));
+                _loadedAssets.TryRemove(SubAssetPath.Build(filePath, "MipMesh", i), out _);
         }
 
         private void RemoveSpriteSubAssetCaches(string filePath, SpriteImportResult result)
         {
             for (int i = 0; i < result.Sprites.Length; i++)
             {
-                _loadedAssets.Remove(SubAssetPath.Build(filePath, "Sprite", i));
+                _loadedAssets.TryRemove(SubAssetPath.Build(filePath, "Sprite", i), out _);
                 _spriteToGuid.Remove(result.Sprites[i]);
             }
         }
@@ -1955,7 +1983,7 @@ namespace IronRose.AssetPipeline
                     RemoveSubAssetCaches(fullPath, result);
                 if (asset is IDisposable disposable)
                     disposable.Dispose();
-                _loadedAssets.Remove(fullPath);
+                _loadedAssets.TryRemove(fullPath, out _);
             }
 
             // Remove sub-asset GUIDs from map (.rose가 있을 때만 로드, 없으면 생성하지 않음)
@@ -2015,7 +2043,7 @@ namespace IronRose.AssetPipeline
 
             // 4. _loadedAssets 캐시 키 갱신 (메인 + 서브에셋 + MipMesh)
             var assetUpdates = new List<(string oldKey, string newKey, object val)>();
-            foreach (var kvp in _loadedAssets)
+            foreach (var kvp in _loadedAssets.ToArray())
             {
                 if (kvp.Key == oldPath)
                     assetUpdates.Add((kvp.Key, newPath, kvp.Value));
@@ -2024,7 +2052,7 @@ namespace IronRose.AssetPipeline
             }
             foreach (var (ok, nk, v) in assetUpdates)
             {
-                _loadedAssets.Remove(ok);
+                _loadedAssets.TryRemove(ok, out _);
                 _loadedAssets[nk] = v;
             }
 
@@ -2060,14 +2088,14 @@ namespace IronRose.AssetPipeline
 
             // 2. _loadedAssets 캐시 키 갱신
             var assetUpdates = new List<(string oldKey, string newKey, object val)>();
-            foreach (var kvp in _loadedAssets)
+            foreach (var kvp in _loadedAssets.ToArray())
             {
                 if (kvp.Key.StartsWith(oldAbsFolderPath, StringComparison.Ordinal))
                     assetUpdates.Add((kvp.Key, newAbsFolderPath + kvp.Key.Substring(oldAbsFolderPath.Length), kvp.Value));
             }
             foreach (var (ok, nk, v) in assetUpdates)
             {
-                _loadedAssets.Remove(ok);
+                _loadedAssets.TryRemove(ok, out _);
                 _loadedAssets[nk] = v;
             }
 
