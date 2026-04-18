@@ -39,7 +39,8 @@ namespace IronRose.Engine
             float totalWeight = 0f;
             var activeVolumes = new List<(PostProcessVolume vol, float effectiveWeight)>();
 
-            foreach (var vol in PostProcessVolume._allVolumes)
+            var vols = PostProcessVolume._allVolumes.Snapshot();
+            foreach (var vol in vols)
             {
                 if (vol.profile == null || vol.weight <= 0f)
                     continue;

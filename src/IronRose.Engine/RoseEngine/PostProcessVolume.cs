@@ -1,5 +1,21 @@
-﻿using System.Collections.Generic;
-
+// ------------------------------------------------------------
+// @file    PostProcessVolume.cs
+// @brief   카메라가 내부에 있을 때 Post Processing 을 적용하는 Volume 컴포넌트.
+//          BoxCollider 기반 inner/outer bounds + blendDistance 페이드를 제공한다.
+// @deps    MonoBehaviour, PostProcessProfile, BoxCollider, Bounds, ComponentRegistry<T>
+// @exports
+//   class PostProcessVolume : MonoBehaviour
+//     static ComponentRegistry<PostProcessVolume> _allVolumes  — 전역 Volume 레지스트리(스레드 안전)
+//     float blendDistance                                       — Volume 외벽 페이드 거리
+//     float weight                                              — Volume 가중치 (0~1)
+//     PostProcessProfile? profile                               — 연결된 프로필 에셋
+//     string? profileGuid                                       — 프로필 에셋 GUID (직렬화용)
+//     Bounds GetInflatedBounds()                                — outer bounds (blendDistance 확장)
+//     Bounds GetInnerBounds()                                   — inner bounds (순수 BoxCollider 월드 크기)
+//     static void ClearAll()                                    — 레지스트리 초기화 (씬 클리어용)
+// @note    Register/Unregister 는 메인 스레드에서만 호출돼야 한다 (ThreadGuard 검증).
+//          외부 순회는 `_allVolumes.Snapshot()` 을 사용하여 라이프사이클 경합을 회피한다.
+// ------------------------------------------------------------
 namespace RoseEngine
 {
     /// <summary>
@@ -9,7 +25,7 @@ namespace RoseEngine
     /// </summary>
     public class PostProcessVolume : MonoBehaviour
     {
-        internal static readonly List<PostProcessVolume> _allVolumes = new();
+        internal static readonly ComponentRegistry<PostProcessVolume> _allVolumes = new();
 
         /// <summary>블렌드 거리 (Volume 외벽에서 이 거리 안에서 페이드).</summary>
         public float blendDistance { get; set; } = 0f;
@@ -26,12 +42,14 @@ namespace RoseEngine
 
         internal override void OnAddedToGameObject()
         {
-            _allVolumes.Add(this);
+            ThreadGuard.DebugCheckMainThread("PostProcessVolume.Register");
+            _allVolumes.Register(this);
         }
 
         internal override void OnComponentDestroy()
         {
-            _allVolumes.Remove(this);
+            ThreadGuard.DebugCheckMainThread("PostProcessVolume.Unregister");
+            _allVolumes.Unregister(this);
         }
 
         internal static void ClearAll() => _allVolumes.Clear();
