@@ -1170,10 +1170,10 @@ namespace IronRose.AssetPipeline
                     if (process == null)
                         return null;
 
-                    bool exited = process.WaitForExit(60000);
+                    bool exited = process.WaitForExit(300000);
                     if (!exited)
                     {
-                        Debug.LogWarning("[RoseCache] Compressonator CLI timed out (60s)");
+                        Debug.LogWarning("[RoseCache] Compressonator CLI timed out (300s)");
                         try { process.Kill(); } catch { }
                         return null;
                     }
