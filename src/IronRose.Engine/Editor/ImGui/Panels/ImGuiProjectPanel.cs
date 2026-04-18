@@ -894,7 +894,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                     _deleteTargetPaths = _selectedAssetPaths
                         .Where(p => !SubAssetPath.IsSubAssetPath(p) && File.Exists(p))
                         .ToList();
-                    if (!_deleteTargetPaths.Contains(asset.FullPath) && File.Exists(asset.FullPath))
+                    if (!_selectedAssetPaths.Contains(asset.FullPath) && File.Exists(asset.FullPath))
                         _deleteTargetPaths.Add(asset.FullPath);
                     if (_deleteTargetPaths.Count > 0)
                         _openDeleteConfirmPopup = true;
