@@ -14,6 +14,7 @@
 //     Load<T>(string): T?                   — 경로로 에셋 로드
 //     LoadByGuid<T>(string): T?             — GUID로 에셋 로드
 //     Reimport(string): void                — 에셋 재임포트
+//     ProcessMetadataSavedQueue(): void     — 메인에서 매 프레임 호출. FSW/백그라운드에서 enqueue된 .rose 저장 이벤트 일괄 처리
 //     AssetCount: int                       — 등록된 에셋 수
 //     ProjectDirty: bool                    — 프로젝트 변경 여부
 // @note    ScanAssets 루프에서 100개 파일마다 EngineCore.PumpWindowEvents()를 호출하여
@@ -34,6 +35,9 @@
 //          맵 기반이며, EnqueueChange가 같은 path를 덮어써 "최신 타임스탬프"만 유지한다.
 //          ProcessFileChanges는 동일 lock 블록 안에서 debounce 판정과 맵 제거를 동시에 수행하여
 //          re-enqueue race를 제거한다.
+//          (Phase B-5 / H4) OnRoseMetadataSaved는 FSW 스레드에서도 호출되므로 Reimport를 직접
+//          호출하지 않고 _metadataSavedQueue(ConcurrentQueue)에 enqueue만 수행한다.
+//          실제 GUID 등록/Reimport 트리거는 메인 ProcessMetadataSavedQueue()에서 일괄 처리된다.
 // ------------------------------------------------------------
 using System;
 using System.Collections.Concurrent;
@@ -98,6 +102,10 @@ namespace IronRose.AssetPipeline
         public void PopImportGuard() => _importDepth--;
         // Reimport queue filled by OnSaved when async reimport is busy
         private readonly Queue<string> _pendingReimports = new();
+        // (Phase B-5 / H4) FSW/백그라운드 스레드에서 RoseMetadata.OnSaved가 들어올 때 즉시
+        // Reimport를 호출하지 않고 이 큐에 쌓아, 메인 ProcessMetadataSavedQueue()에서 일괄 처리한다.
+        // ConcurrentQueue로 FSW 콜백 스레드에서 enqueue, 메인에서 dequeue 한다.
+        private readonly ConcurrentQueue<string> _metadataSavedQueue = new();
         public bool ProjectDirty { get; set; }
         /// <summary>Reimport가 완료될 때마다 증가. UI가 프리뷰 갱신 여부를 판단하는 데 사용.</summary>
         public int ReimportVersion { get; private set; }
@@ -1888,43 +1896,63 @@ namespace IronRose.AssetPipeline
 
         /// <summary>
         /// RoseMetadata.OnSaved 이벤트 핸들러.
-        /// .rose 파일이 저장되면 해당 에셋을 자동으로 reimport 한다.
-        /// _importDepth가 0보다 크면 import 중 발생한 재귀 호출이므로 무시.
+        /// FSW/백그라운드 스레드에서도 호출될 수 있으므로 여기서는 큐에 enqueue만 하고,
+        /// 실제 처리는 메인 스레드의 ProcessMetadataSavedQueue()에서 수행한다. (Phase B-5 / H4)
+        /// _importDepth 빠른 필터링만 이 핸들러에서 수행 (메인에서 변경되지만 int read는 atomic).
         /// </summary>
         private void OnRoseMetadataSaved(string assetPath)
         {
             // 임포트 중 RegisterSpriteSubAssets/RegisterSubAssets가 .rose를 저장할 때
-            // 재귀 reimport를 방지
+            // 재귀 reimport를 방지. _importDepth는 메인에서만 ++/-- 하지만 int read는 atomic.
+            // (완전히 정확하지 않더라도 메인 처리 경로에서 다시 체크되므로 안전.)
             if (_importDepth > 0) return;
 
-            // GUID 등록 갱신 (새 sub-asset이 추가됐을 수 있음)
-            if (File.Exists(assetPath))
-            {
-                var meta = RoseMetadata.LoadOrCreate(assetPath);
-                if (!string.IsNullOrEmpty(meta.guid))
-                    _guidToPath[meta.guid] = assetPath;
-                foreach (var sub in meta.subAssets)
-                    _guidToPath[sub.guid] = SubAssetPath.Build(assetPath, sub.type, sub.index);
-            }
+            _metadataSavedQueue.Enqueue(assetPath);
+        }
 
-            // 이미 로드된 에셋이면 reimport
-            if (_loadedAssets.ContainsKey(assetPath))
+        /// <summary>
+        /// 메인 스레드에서 매 프레임 호출. FSW/백그라운드에서 enqueue된 .rose 저장 이벤트를
+        /// 일괄 처리한다. GUID 등록 갱신 + (로드된 에셋이면) Reimport 트리거를 수행하며,
+        /// 비동기 reimport 진행 중이면 _pendingReimports 큐로 넘긴다. (Phase B-5)
+        /// </summary>
+        public void ProcessMetadataSavedQueue()
+        {
+            while (_metadataSavedQueue.TryDequeue(out var assetPath))
             {
-                if (_reimportTask != null)
+                // 메인 진입 시점의 _importDepth를 다시 체크 (enqueue와 dequeue 사이에
+                // 변경 가능성 있음). 재귀 구간 안에 들어온 이벤트는 버린다 (기존 로직과 동일).
+                if (_importDepth > 0)
+                    continue;
+
+                // GUID 등록 갱신 (새 sub-asset이 추가됐을 수 있음)
+                if (File.Exists(assetPath))
                 {
-                    // 비동기 reimport 진행 중이면 큐에 추가
-                    _pendingReimports.Enqueue(assetPath);
+                    var meta = RoseMetadata.LoadOrCreate(assetPath);
+                    if (!string.IsNullOrEmpty(meta.guid))
+                        _guidToPath[meta.guid] = assetPath;
+                    foreach (var sub in meta.subAssets)
+                        _guidToPath[sub.guid] = SubAssetPath.Build(assetPath, sub.type, sub.index);
+                }
+
+                // 이미 로드된 에셋이면 reimport
+                if (_loadedAssets.ContainsKey(assetPath))
+                {
+                    if (_reimportTask != null)
+                    {
+                        // 비동기 reimport 진행 중이면 큐에 추가
+                        _pendingReimports.Enqueue(assetPath);
+                    }
+                    else
+                    {
+                        ReimportAsync(assetPath);
+                    }
                 }
                 else
                 {
-                    ReimportAsync(assetPath);
+                    // 로드되지 않은 에셋은 캐시만 무효화하고 Project 패널 갱신
+                    _roseCache.InvalidateCache(assetPath);
+                    ProjectDirty = true;
                 }
-            }
-            else
-            {
-                // 로드되지 않은 에셋은 캐시만 무효화하고 Project 패널 갱신
-                _roseCache.InvalidateCache(assetPath);
-                ProjectDirty = true;
             }
         }
 
