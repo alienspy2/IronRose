@@ -1,4 +1,21 @@
-using System.Collections.Generic;
+// ------------------------------------------------------------
+// @file    Collider.cs
+// @brief   3D Collider 추상 기반 클래스. Rigidbody 가 없을 때 PhysicsManager 가
+//          이 컴포넌트들을 순회하며 static body 로 자가등록한다.
+// @deps    Component, PhysicsManager, BepuPhysics.StaticHandle, ComponentRegistry<T>
+// @exports
+//   abstract class Collider : Component
+//     static ComponentRegistry<Collider> _allColliders          — 전역 Collider 레지스트리(스레드 안전)
+//     bool isTrigger / Vector3 center                           — 공통 속성
+//     bool isRegistered / StaticHandle? _staticHandle / bool _staticRegistered
+//     abstract void RegisterAsStatic(PhysicsManager)            — 서브클래스가 shape 결정
+//     void UnregisterStatic()                                   — static body 제거
+//     static void ClearAll()                                    — 레지스트리 초기화
+//     SysVector3 GetWorldPosition() / SysQuaternion GetWorldRotation()
+// @note    OnComponentDestroy 순서: UnregisterStatic -> _allColliders.Unregister.
+//          Register/Unregister 는 메인 스레드 한정 (ThreadGuard 검증).
+//          외부(PhysicsManager)는 _allColliders.Snapshot() 을 사용해야 한다.
+// ------------------------------------------------------------
 using BepuPhysics;
 using SysVector3 = System.Numerics.Vector3;
 using SysQuaternion = System.Numerics.Quaternion;
@@ -13,19 +30,21 @@ namespace RoseEngine
         internal bool isRegistered = false;
 
         // --- Static collider 자가등록 (Unity 규칙: Rigidbody 없으면 static body) ---
-        internal static readonly List<Collider> _allColliders = new();
+        internal static readonly ComponentRegistry<Collider> _allColliders = new();
         internal StaticHandle? _staticHandle;
         internal bool _staticRegistered;
 
         internal override void OnAddedToGameObject()
         {
-            _allColliders.Add(this);
+            ThreadGuard.DebugCheckMainThread("Collider.Register");
+            _allColliders.Register(this);
         }
 
         internal override void OnComponentDestroy()
         {
+            ThreadGuard.DebugCheckMainThread("Collider.Unregister");
             UnregisterStatic();
-            _allColliders.Remove(this);
+            _allColliders.Unregister(this);
         }
 
         /// <summary>Rigidbody가 없을 때 static body로 등록 (서브클래스가 shape 결정)</summary>

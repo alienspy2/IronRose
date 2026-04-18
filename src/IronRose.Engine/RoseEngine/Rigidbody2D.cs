@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using nkast.Aether.Physics2D.Dynamics;
 using AetherVector2 = nkast.Aether.Physics2D.Common.Vector2;
 
@@ -6,7 +5,7 @@ namespace RoseEngine
 {
     public class Rigidbody2D : PhysicsComponent
     {
-        internal static readonly List<Rigidbody2D> _rigidbodies2D = new();
+        internal static readonly ComponentRegistry<Rigidbody2D> _rigidbodies2D = new();
         internal Body? aetherBody;
 
         public RigidbodyType2D bodyType { get; set; } = RigidbodyType2D.Dynamic;
@@ -75,7 +74,8 @@ namespace RoseEngine
 
         internal override void OnAddedToGameObject()
         {
-            _rigidbodies2D.Add(this);
+            ThreadGuard.DebugCheckMainThread("Rigidbody2D.Register");
+            _rigidbodies2D.Register(this);
             // Rigidbody2D가 추가되면 같은 GO의 static collider2D를 해제
             UnregisterSiblingStaticColliders();
             // Deferred: 첫 FixedUpdate 시점에 등록 (bodyType 등 프로퍼티 설정 이후)
@@ -83,8 +83,9 @@ namespace RoseEngine
 
         internal override void OnComponentDestroy()
         {
+            ThreadGuard.DebugCheckMainThread("Rigidbody2D.Unregister");
             RemoveFromPhysics();
-            _rigidbodies2D.Remove(this);
+            _rigidbodies2D.Unregister(this);
             // Rigidbody2D 제거 시 남은 Collider2D를 다시 static으로 등록되게 표시
             MarkSiblingCollidersForStaticReregistration();
         }

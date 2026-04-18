@@ -33,10 +33,18 @@ namespace RoseEngine
         public TextAnchor alignment = TextAnchor.UpperLeft;
         public TextOverflow overflow = TextOverflow.Overflow;
 
-        internal static readonly List<UIText> _allUITexts = new();
+        internal static readonly ComponentRegistry<UIText> _allUITexts = new();
 
-        internal override void OnAddedToGameObject() => _allUITexts.Add(this);
-        internal override void OnComponentDestroy() => _allUITexts.Remove(this);
+        internal override void OnAddedToGameObject()
+        {
+            ThreadGuard.DebugCheckMainThread("UIText.Register");
+            _allUITexts.Register(this);
+        }
+        internal override void OnComponentDestroy()
+        {
+            ThreadGuard.DebugCheckMainThread("UIText.Unregister");
+            _allUITexts.Unregister(this);
+        }
         internal static void ClearAll() => _allUITexts.Clear();
 
         public int renderOrder => 1;

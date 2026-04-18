@@ -82,13 +82,15 @@ namespace IronRose.Engine
 
         private void EnsureRigidbodies()
         {
-            foreach (var rb in Rigidbody._rigidbodies)
+            var rbs = Rigidbody._rigidbodies.Snapshot();
+            foreach (var rb in rbs)
             {
                 if (!IsActiveBody(rb)) continue;
                 rb.EnsureRegistered();
             }
 
-            foreach (var rb2d in Rigidbody2D._rigidbodies2D)
+            var rb2ds = Rigidbody2D._rigidbodies2D.Snapshot();
+            foreach (var rb2d in rb2ds)
             {
                 if (!IsActiveBody(rb2d)) continue;
                 rb2d.EnsureRegistered();
@@ -99,7 +101,8 @@ namespace IronRose.Engine
         private void EnsureStaticColliders()
         {
             // 3D Colliders
-            foreach (var col in Collider._allColliders)
+            var colliders = Collider._allColliders.Snapshot();
+            foreach (var col in colliders)
             {
                 if (col._isDestroyed || col.gameObject._isEditorInternal || !col.gameObject.activeInHierarchy) continue;
                 if (col._staticRegistered) continue;
@@ -116,7 +119,8 @@ namespace IronRose.Engine
             }
 
             // 2D Colliders
-            foreach (var col2d in Collider2D._allColliders2D)
+            var colliders2D = Collider2D._allColliders2D.Snapshot();
+            foreach (var col2d in colliders2D)
             {
                 if (col2d._isDestroyed || col2d.gameObject._isEditorInternal || !col2d.gameObject.activeInHierarchy) continue;
                 if (col2d._staticRegistered) continue;
@@ -128,14 +132,16 @@ namespace IronRose.Engine
 
         private void PushTransformsToPhysics()
         {
-            foreach (var rb in Rigidbody._rigidbodies)
+            var rbs = Rigidbody._rigidbodies.Snapshot();
+            foreach (var rb in rbs)
             {
                 if (!IsActiveBody(rb)) continue;
                 if (rb.isKinematic)
                     rb.PushToPhysics();
             }
 
-            foreach (var rb2d in Rigidbody2D._rigidbodies2D)
+            var rb2ds = Rigidbody2D._rigidbodies2D.Snapshot();
+            foreach (var rb2d in rb2ds)
             {
                 if (!IsActiveBody(rb2d)) continue;
                 if (rb2d.bodyType == RigidbodyType2D.Kinematic)
@@ -149,7 +155,8 @@ namespace IronRose.Engine
         /// <summary>CharacterController의 static body pose를 현재 Transform에 맞게 동기화합니다.</summary>
         private void SyncCharacterControllerPoses()
         {
-            foreach (var col in Collider._allColliders)
+            var colliders = Collider._allColliders.Snapshot();
+            foreach (var col in colliders)
             {
                 if (col is CharacterController cc && cc._kinematicHandle != null && cc._staticRegistered)
                 {
@@ -261,14 +268,16 @@ namespace IronRose.Engine
 
         private void PullPhysicsToTransforms()
         {
-            foreach (var rb in Rigidbody._rigidbodies)
+            var rbs = Rigidbody._rigidbodies.Snapshot();
+            foreach (var rb in rbs)
             {
                 if (!IsActiveBody(rb)) continue;
                 if (!rb.isKinematic)
                     rb.PullFromPhysics();
             }
 
-            foreach (var rb2d in Rigidbody2D._rigidbodies2D)
+            var rb2ds = Rigidbody2D._rigidbodies2D.Snapshot();
+            foreach (var rb2d in rb2ds)
             {
                 if (!IsActiveBody(rb2d)) continue;
                 if (rb2d.bodyType == RigidbodyType2D.Dynamic)

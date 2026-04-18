@@ -861,8 +861,8 @@ namespace IronRose.AssetPipeline
                             if (!string.IsNullOrEmpty(meta.guid))
                                 _ppProfileToGuid[newPp] = meta.guid;
 
-                            // Volume의 stale profile 참조 갱신 (D-II 범위 — 임시 .ToArray())
-                            foreach (var vol in PostProcessVolume._allVolumes.ToArray())
+                            // Volume의 stale profile 참조 갱신 (D-II: ComponentRegistry Snapshot)
+                            foreach (var vol in PostProcessVolume._allVolumes.Snapshot())
                             {
                                 if (vol.profileGuid == meta.guid)
                                     vol.profile = newPp;
@@ -2335,13 +2335,13 @@ namespace IronRose.AssetPipeline
                     tr._cachedMesh = null;
                 }
             }
-            // UIText / UIInputField 는 Phase D-II 범위 — 임시 .ToArray() 스냅샷으로 방어.
-            foreach (var ut in UIText._allUITexts.ToArray())
+            // UIText / UIInputField: D-II ComponentRegistry Snapshot 기반 스냅샷 순회.
+            foreach (var ut in UIText._allUITexts.Snapshot())
             {
                 if (ut.font?.name == fontName)
                     ut.font = newFont;
             }
-            foreach (var uif in UIInputField._allUIInputFields.ToArray())
+            foreach (var uif in UIInputField._allUIInputFields.Snapshot())
             {
                 if (uif.font?.name == fontName)
                     uif.font = newFont;

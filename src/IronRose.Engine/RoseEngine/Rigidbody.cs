@@ -17,9 +17,9 @@
 //     PushToPhysics(): void                — Transform을 시뮬레이션에 반영
 //     RemoveFromPhysics(): void            — 물리 body 제거
 // @note    RegisterWithPhysics에서 Collider 타입에 따라 shape을 결정하고 UserData로 자신을 등록.
-//          _rigidbodies static 리스트로 전역 관리됨.
+//          _rigidbodies 는 ComponentRegistry<Rigidbody> 로 전역 관리되며,
+//          외부(PhysicsManager)는 Snapshot() 을 통해 순회한다.
 // ------------------------------------------------------------
-using System.Collections.Generic;
 using BepuPhysics;
 using SysVector3 = System.Numerics.Vector3;
 using SysQuaternion = System.Numerics.Quaternion;
@@ -28,7 +28,7 @@ namespace RoseEngine
 {
     public class Rigidbody : PhysicsComponent
     {
-        internal static readonly List<Rigidbody> _rigidbodies = new();
+        internal static readonly ComponentRegistry<Rigidbody> _rigidbodies = new();
         internal BodyHandle? bodyHandle;
         internal StaticHandle? staticHandle;
 
@@ -173,7 +173,8 @@ namespace RoseEngine
 
         internal override void OnAddedToGameObject()
         {
-            _rigidbodies.Add(this);
+            ThreadGuard.DebugCheckMainThread("Rigidbody.Register");
+            _rigidbodies.Register(this);
             // Rigidbody가 추가되면 같은 GO의 static collider를 해제 (Rigidbody가 shape을 관리)
             UnregisterSiblingStaticColliders();
             // Deferred: 첫 FixedUpdate 시점에 등록 (isKinematic 등 프로퍼티 설정 이후)
@@ -181,8 +182,9 @@ namespace RoseEngine
 
         internal override void OnComponentDestroy()
         {
+            ThreadGuard.DebugCheckMainThread("Rigidbody.Unregister");
             RemoveFromPhysics();
-            _rigidbodies.Remove(this);
+            _rigidbodies.Unregister(this);
             // Rigidbody 제거 시 남은 Collider를 다시 static으로 등록되게 표시
             MarkSiblingCollidersForStaticReregistration();
         }

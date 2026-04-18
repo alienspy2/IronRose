@@ -60,10 +60,18 @@ namespace RoseEngine
         // Global focus tracking (only one UIInputField can be focused at a time)
         private static UIInputField? _currentFocused;
 
-        internal static readonly List<UIInputField> _allUIInputFields = new();
+        internal static readonly ComponentRegistry<UIInputField> _allUIInputFields = new();
 
-        internal override void OnAddedToGameObject() => _allUIInputFields.Add(this);
-        internal override void OnComponentDestroy() => _allUIInputFields.Remove(this);
+        internal override void OnAddedToGameObject()
+        {
+            ThreadGuard.DebugCheckMainThread("UIInputField.Register");
+            _allUIInputFields.Register(this);
+        }
+        internal override void OnComponentDestroy()
+        {
+            ThreadGuard.DebugCheckMainThread("UIInputField.Unregister");
+            _allUIInputFields.Unregister(this);
+        }
         internal static void ClearAll() => _allUIInputFields.Clear();
 
         public int renderOrder => 5;
