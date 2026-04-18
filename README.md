@@ -116,16 +116,15 @@ cd IronRose
 
 # Vulkan SDK 설치 (Linux)
 ./install_vulkan.sh
-
-# 빌드
-dotnet build
-
-# 에디터 실행
-dotnet run --project src/IronRose.RoseEditor
-
-# Standalone (게임 런타임) 실행
-dotnet run --project src/IronRose.Standalone
 ```
+
+vs code 에서 열고 F5
+
+new project 를 하거나
+
+https://github.com/alienspy2/IronRoseSimpleGameDemoProject 를 받고 open project 
+
+이후, 안내대로, 생성된 workspace 파일로 vs code 열기
 
 ---
 
