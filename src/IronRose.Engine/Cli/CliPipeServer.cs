@@ -13,6 +13,10 @@
 //          최대 메시지 크기: 16MB.
 //          Linux: /tmp/CoreFxPipe_{pipeName} (Unix Domain Socket)
 //          Windows: \\.\pipe\{pipeName}
+//          IsRunning 은 volatile bool 백킹으로 가시성 보장 (Phase C-2, H1).
+//          Stop() 은 Join 성공 후에만 CancellationTokenSource 를 Dispose 한다
+//          (Phase C-1, C6). Join 타임아웃 시 CTS 를 leak 하고 경고 로그.
+//          ServerLoop 은 ObjectDisposedException 을 graceful break 로 취급.
 // ------------------------------------------------------------
 using System;
 using System.IO;
@@ -30,9 +34,22 @@ namespace IronRose.Engine.Cli
         private CancellationTokenSource? _cts;
         private readonly string _pipeName;
 
-        public bool IsRunning { get; private set; }
+        // (H1) Start(메인) → ServerLoop(백그라운드) → Stop(메인) 세 스레드 경로에서
+        // 쓰기가 발생하므로 가시성 확보를 위해 volatile 로 선언한다. 읽기는 public
+        // property 로 노출, 쓰기는 SetRunning() 로 래핑하여 호출 지점을 명시적으로
+        // 남긴다.
+        private volatile bool _isRunning;
+        public bool IsRunning => _isRunning;
+
+        private void SetRunning(bool value) => _isRunning = value;
 
         private const int MAX_MESSAGE_SIZE = 16 * 1024 * 1024; // 16MB
+
+        // Stop() 에서 ServerLoop 종료를 기다리는 최대 시간. 이 시간을 넘기면
+        // CancellationTokenSource 를 Dispose 하지 않고 leak 하는 대신 경고 로그를 남긴다.
+        // 에디터 종료가 지나치게 느려지지 않으면서도 장기요청 처리 중인 클라이언트를 기다릴
+        // 여유를 확보하는 균형점 (마스터 플랜 Phase C-1 확정값).
+        private const int ServerJoinTimeoutMs = 5000;
 
         public CliPipeServer()
         {
@@ -43,7 +60,7 @@ namespace IronRose.Engine.Cli
         {
             _dispatcher = dispatcher;
             _cts = new CancellationTokenSource();
-            IsRunning = true;
+            SetRunning(true);
 
             _serverThread = new Thread(ServerLoop)
             {
@@ -73,16 +90,47 @@ namespace IronRose.Engine.Cli
                 try { if (File.Exists(socketPath)) File.Delete(socketPath); } catch { }
             }
 
-            _serverThread?.Join(TimeSpan.FromSeconds(3));
-            _cts?.Dispose();
-            IsRunning = false;
+            // (C6) Join 성공 후에만 CancellationTokenSource 를 Dispose 한다.
+            // Join 타임아웃 시 Dispose 를 건너뛰어 ServerLoop 이 disposed token 에
+            // 접근해 ObjectDisposedException 이 발생하는 것을 방지한다. 소유권을
+            // ServerLoop 쪽에 이전하는 셈이며, 해당 스레드가 결국 종료되면 GC 가 수거한다.
+            bool joined = _serverThread?.Join(ServerJoinTimeoutMs) ?? true;
+            if (joined)
+            {
+                _cts?.Dispose();
+                _cts = null;
+            }
+            else
+            {
+                EditorDebug.LogWarning(
+                    $"[CLI] Pipe server thread did not terminate within {ServerJoinTimeoutMs}ms; " +
+                    "leaking CancellationTokenSource to avoid ObjectDisposedException in ServerLoop.");
+            }
+
+            SetRunning(false);
             EditorDebug.Log("[CLI] Pipe server stopped");
         }
 
         private void ServerLoop()
         {
-            while (!_cts!.Token.IsCancellationRequested)
+            while (true)
             {
+                // (C6) Stop() 과의 경합으로 _cts 가 null/disposed 상태가 될 수 있으므로
+                // 매 루프에서 snapshot 을 잡고 ODE 를 정상 종료로 취급한다.
+                var cts = _cts;
+                if (cts == null) break;
+
+                CancellationToken token;
+                try
+                {
+                    token = cts.Token;
+                    if (token.IsCancellationRequested) break;
+                }
+                catch (ObjectDisposedException)
+                {
+                    break;
+                }
+
                 NamedPipeServerStream? pipe = null;
                 try
                 {
@@ -93,9 +141,9 @@ namespace IronRose.Engine.Cli
                         PipeTransmissionMode.Byte);
 
                     // WaitForConnectionAsync + CancellationToken으로 종료 가능하게
-                    pipe.WaitForConnectionAsync(_cts.Token).GetAwaiter().GetResult();
+                    pipe.WaitForConnectionAsync(token).GetAwaiter().GetResult();
 
-                    if (_cts.Token.IsCancellationRequested)
+                    if (token.IsCancellationRequested)
                         break;
 
                     HandleClient(pipe);
@@ -103,6 +151,12 @@ namespace IronRose.Engine.Cli
                 catch (OperationCanceledException)
                 {
                     // 정상 종료
+                    break;
+                }
+                catch (ObjectDisposedException)
+                {
+                    // (C6) Stop() 이 _cts.Dispose() 를 먼저 호출하면 token 접근 시 ODE.
+                    // 이 경로는 Join 이 성공한 뒤에만 발생할 수 있으므로 정상 종료로 본다.
                     break;
                 }
                 catch (Exception ex)
@@ -115,7 +169,9 @@ namespace IronRose.Engine.Cli
                 }
             }
 
-            IsRunning = false;
+            // IsRunning 은 Stop() 에서도 false 로 설정하지만, ServerLoop 이 자력으로
+            // 종료되는 케이스(예외 폭주 등)를 위해 여기서도 false 로 마킹한다.
+            SetRunning(false);
         }
 
         private void HandleClient(NamedPipeServerStream pipe)

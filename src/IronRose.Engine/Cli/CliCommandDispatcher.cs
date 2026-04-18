@@ -20,6 +20,9 @@
 // @note    백그라운드 스레드(Pipe)에서 Dispatch()가 호출된다.
 //          메인 스레드 접근이 필요한 명령은 _mainThreadQueue에 넣고
 //          ManualResetEventSlim으로 완료를 대기한다 (타임아웃 5초).
+//          (Phase C-3) ExecuteOnMainThread 는 stall 감지(>2000ms 미드레인 시 busy),
+//          재진입 방어(메인에서 호출 시 inline 실행 + LogError), 타임아웃 후 task
+//          MarkCancelled 로 ProcessMainThreadQueue 가 스킵하도록 정리한다.
 //          지원 명령: ping, scene.info, scene.list, scene.save, scene.load,
 //          go.get, go.find, go.set_active, go.set_field,
 //          select, play.enter, play.stop, play.pause, play.resume, play.state,
@@ -73,6 +76,16 @@ namespace IronRose.Engine.Cli
         /// <summary>CLI에서 요청한 스크린샷 경로. EngineCore.Update()에서 소비.</summary>
         internal static string? _pendingScreenshotPath;
 
+        // (C3) ExecuteOnMainThread 설정
+        //   TimeoutMs          : 큐에 넣은 task 가 완료되지 않을 때 포기하는 시간. 5초 유지.
+        //   StallThresholdMs   : 메인이 ProcessMainThreadQueue 를 마지막으로 돈 뒤 이 시간을
+        //                        넘었으면 메인이 stall 됐다고 판단, 큐에 넣지 않고 즉시 busy.
+        //   _lastDrainTicks    : ProcessMainThreadQueue 가 마지막으로 "완주"한 시각(UtcNow.Ticks).
+        //                        다중 스레드 읽기/쓰기이므로 Volatile 로 접근.
+        private const int TimeoutMs = 5000;
+        private const int StallThresholdMs = 2000;
+        private long _lastDrainTicks;
+
         private static readonly JsonSerializerOptions _jsonOptions = new()
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -83,6 +96,12 @@ namespace IronRose.Engine.Cli
             public required Func<string> Execute { get; init; }
             public ManualResetEventSlim Done { get; } = new(false);
             public string? Result { get; set; }
+
+            // (C3) 백그라운드가 타임아웃 후 큐에 남은 task 를 메인이 실행하지 않도록
+            // 표시한다. Volatile.Read/Write 로 접근하여 가시성 확보.
+            private int _cancelled;  // 0=alive, 1=cancelled
+            public bool IsCancelled => Volatile.Read(ref _cancelled) != 0;
+            public void MarkCancelled() => Volatile.Write(ref _cancelled, 1);
         }
 
         public CliCommandDispatcher(CliLogBuffer logBuffer)
@@ -115,8 +134,21 @@ namespace IronRose.Engine.Cli
 
         public void ProcessMainThreadQueue()
         {
+            // (C3) 루프 진입 시각을 기록 — ExecuteOnMainThread 가 "메인이 최근에 돌았는가"
+            // 를 판정하는 기준. 이 메서드는 EngineCore.Update() 에서 매 프레임 호출되므로
+            // 정상 동작 중에는 수 ms 간격으로 갱신된다.
+            Volatile.Write(ref _lastDrainTicks, DateTime.UtcNow.Ticks);
+
             while (_mainThreadQueue.TryDequeue(out var task))
             {
+                // (C3) 백그라운드가 이미 타임아웃하여 task 를 버린 경우 실행하지 않는다.
+                // Dispose 만 수행하여 핸들 누수를 방지한다.
+                if (task.IsCancelled)
+                {
+                    try { task.Done.Dispose(); } catch { }
+                    continue;
+                }
+
                 try
                 {
                     task.Result = task.Execute();
@@ -2729,10 +2761,56 @@ namespace IronRose.Engine.Cli
 
         private string ExecuteOnMainThread(Func<string> action)
         {
+            // (C3) 재진입 방어:
+            // ExecuteOnMainThread 는 본래 "백그라운드(CLI 파이프 스레드)에서 메인을 호출"
+            // 하기 위한 브리지다. 호출자가 이미 메인 스레드라면 큐에 넣고 기다리는 건
+            // 자기 자신을 기다리는 확정 데드락이 된다. 이 경로가 발생했다면 설계 오류이므로
+            // LogError 로 surface 하되, 프로세스를 멈추지 않기 위해 action 을 직접 동기
+            // 실행한다. ThreadGuard.CheckMainThread 는 "메인이어야 한다" 를 검증하는
+            // 방향이므로 여기서는 사용하지 않고 IsMainThread 만 확인한다.
+            if (ThreadGuard.IsMainThread)
+            {
+                EditorDebug.LogError(
+                    "[CLI] ExecuteOnMainThread called from main thread — recursive main-thread execution. " +
+                    "Running action inline to avoid self-deadlock; fix the calling code.");
+                try
+                {
+                    return action();
+                }
+                catch (Exception ex)
+                {
+                    return JsonError(ex.Message);
+                }
+            }
+
+            // (C3) 메인 stall 사전 감지:
+            // ProcessMainThreadQueue 가 마지막으로 돈 시각이 StallThresholdMs 보다 오래됐으면
+            // 큐에 넣어봤자 타임아웃까지 블로킹만 하므로 즉시 busy 를 반환한다.
+            // _lastDrainTicks == 0 인 초기 상태는 "아직 한 번도 돌지 않음" 으로, stall
+            // 판정에서 제외한다 (엔진 부팅 직후 CLI 요청 대응).
+            long lastTicks = Volatile.Read(ref _lastDrainTicks);
+            if (lastTicks != 0)
+            {
+                long elapsedMs = (DateTime.UtcNow.Ticks - lastTicks) / TimeSpan.TicksPerMillisecond;
+                if (elapsedMs > StallThresholdMs)
+                {
+                    return JsonError(
+                        $"Main thread busy (no drain for {elapsedMs}ms > {StallThresholdMs}ms)");
+                }
+            }
+
             var task = new MainThreadTask { Execute = action };
             _mainThreadQueue.Enqueue(task);
-            if (!task.Done.Wait(TimeSpan.FromSeconds(5)))
-                return JsonError("Main thread timeout (5s)");
+
+            if (!task.Done.Wait(TimeoutMs))
+            {
+                // (C3) 타임아웃 후 task 가 큐에 남아 있다가 나중에 엉뚱한 시점에 실행되는
+                // 걸 막는다. MarkCancelled 는 thread-safe. 큐에서 제거는 불가능하므로
+                // ProcessMainThreadQueue 가 dequeue 후 IsCancelled 를 보고 skip 한다.
+                task.MarkCancelled();
+                return JsonError($"Main thread timeout ({TimeoutMs}ms)");
+            }
+
             return task.Result!;
         }
 
