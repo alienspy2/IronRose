@@ -137,15 +137,29 @@ namespace IronRose.Engine
             RoseEngine.EditorDebug.Log("[Scripting] BuildScripts: running dotnet build...", force: true);
             var buildStart = DateTime.Now;
 
+            var scriptsDir = Path.GetDirectoryName(_scriptsCsprojPath)!;
+
+            // project.assets.json 이 없으면 (새로 clone된 프로젝트 등) restore 를 선행한다.
+            // 평상시엔 --no-restore 로 빌드 속도 유지.
+            var assetsFile = Path.Combine(scriptsDir, "obj", "project.assets.json");
+            bool needRestore = !File.Exists(assetsFile);
+
+            string buildArgs = needRestore
+                ? $"build \"{_scriptsCsprojPath}\" -c Debug -v q"
+                : $"build \"{_scriptsCsprojPath}\" --no-restore -c Debug -v q";
+
+            if (needRestore)
+                RoseEngine.EditorDebug.Log("[Scripting] BuildScripts: project.assets.json missing — running restore", force: true);
+
             var psi = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = $"build \"{_scriptsCsprojPath}\" --no-restore -c Debug -v q",
+                Arguments = buildArgs,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = Path.GetDirectoryName(_scriptsCsprojPath)!,
+                WorkingDirectory = scriptsDir,
             };
 
             string stdout, stderr;

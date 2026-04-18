@@ -158,6 +158,15 @@ namespace IronRose.Engine.Editor
             return rel.Replace('\\', '/');
         }
 
+        /// <summary>현재 OS 식별자 (상태 파일 호환성 체크용).</summary>
+        private static string CurrentOsKey()
+        {
+            if (OperatingSystem.IsWindows()) return "windows";
+            if (OperatingSystem.IsLinux()) return "linux";
+            if (OperatingSystem.IsMacOS()) return "osx";
+            return "other";
+        }
+
         public static void Load()
         {
             var path = FindOrCreatePath();
@@ -165,6 +174,14 @@ namespace IronRose.Engine.Editor
 
             var config = TomlConfig.LoadFile(path, "[EditorState]");
             if (config == null) return;
+
+            // 창 좌표/ImGui 레이아웃은 OS 간 호환 불가 — meta.os 가 다르면 해당 섹션 무시.
+            // (Linux GLFW Position: frame top-left, Windows GLFW Position: client-area top-left)
+            var meta = config.GetSection("meta");
+            string savedOs = meta?.GetString("os", "") ?? "";
+            bool osMatches = string.IsNullOrEmpty(savedOs) || savedOs == CurrentOsKey();
+            if (!osMatches)
+                EditorDebug.Log($"[EditorState] OS mismatch (saved={savedOs}, current={CurrentOsKey()}) — window/imgui_layout 섹션 무시");
 
             var editor = config.GetSection("editor");
             if (editor != null)
@@ -205,7 +222,7 @@ namespace IronRose.Engine.Editor
                 SnapGrid2D = Math.Max(snap.GetFloat("grid_2d", SnapGrid2D), 0.001f);
             }
 
-            var window = config.GetSection("window");
+            var window = osMatches ? config.GetSection("window") : null;
             if (window != null)
             {
                 if (window.HasKey("x")) WindowX = window.GetInt("x");
@@ -239,7 +256,7 @@ namespace IronRose.Engine.Editor
                 CanvasEditCustomHeight = Math.Max(canvasEdit.GetInt("custom_height", CanvasEditCustomHeight), 1);
             }
 
-            var layout = config.GetSection("imgui_layout");
+            var layout = osMatches ? config.GetSection("imgui_layout") : null;
             if (layout != null)
             {
                 var sd = layout.GetString("data", "");
@@ -257,7 +274,9 @@ namespace IronRose.Engine.Editor
             try
             {
                 var scenePath = string.IsNullOrEmpty(LastScenePath) ? "" : ToRelative(LastScenePath);
-                var toml = "[editor]\n";
+                var toml = "[meta]\n";
+                toml += $"os = \"{CurrentOsKey()}\"\n";
+                toml += "\n[editor]\n";
                 toml += $"last_scene = \"{scenePath}\"\n";
                 toml += $"scene_view_render_style = \"{SceneViewRenderStyle}\"\n";
                 toml += $"game_view_resolution = \"{GameViewResolution}\"\n";

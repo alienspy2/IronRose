@@ -11,6 +11,8 @@
 // @note    Linux에서 zenity 우선, 없으면 kdialog 폴백.
 //          Windows에서 comdlg32 GetSaveFileName/GetOpenFileName, shell32 SHBrowseForFolder 사용.
 //          initialDir 미지정 시 ProjectContext.ProjectRoot 우선, 미로드 시 CWD 폴백.
+//          Windows 다이얼로그는 STA(Single-Threaded Apartment) 스레드에서만 정상 작동하므로
+//          호출자가 ThreadPool(MTA)에서 호출해도 내부에서 STA 전용 스레드로 마샬링된다.
 // ------------------------------------------------------------
 using System;
 using System.Diagnostics;
@@ -18,6 +20,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 
 namespace IronRose.Engine.Editor.ImGuiEditor
 {
@@ -65,7 +68,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             string? result;
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                result = WindowsSaveDialog(title, defaultName, filter, initialDir);
+                result = RunOnStaThread(() => WindowsSaveDialog(title, defaultName, filter, initialDir));
             else
                 result = LinuxSaveDialog(title, defaultName, filter, initialDir);
 
@@ -80,7 +83,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             string? initialDir = null)
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                return WindowsOpenDialog(title, filter, initialDir);
+                return RunOnStaThread(() => WindowsOpenDialog(title, filter, initialDir));
             else
                 return LinuxOpenDialog(title, filter, initialDir);
         }
@@ -91,9 +94,32 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             string? initialDir = null)
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-                return WindowsPickFolder(title, initialDir);
+                return RunOnStaThread(() => WindowsPickFolder(title, initialDir));
             else
                 return LinuxPickFolder(title, initialDir);
+        }
+
+        /// <summary>
+        /// Windows 다이얼로그는 STA 스레드에서만 정상 동작하므로, ThreadPool(MTA)에서
+        /// 호출되더라도 항상 전용 STA 스레드에서 실행되도록 마샬링한다.
+        /// </summary>
+        private static string? RunOnStaThread(Func<string?> func)
+        {
+            if (!OperatingSystem.IsWindows())
+                return func();
+
+            string? result = null;
+            Exception? captured = null;
+            var thread = new Thread(() =>
+            {
+                try { result = func(); }
+                catch (Exception e) { captured = e; }
+            });
+            thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            thread.Join();
+            if (captured != null) throw captured;
+            return result;
         }
 
         private static string? EnsureExtension(string? path, string ext)
@@ -344,56 +370,119 @@ namespace IronRose.Engine.Editor.ImGuiEditor
         }
 
         // ================================================================
-        // Windows — SHBrowseForFolder (폴더 선택)
+        // Windows — IFileOpenDialog + FOS_PICKFOLDERS (폴더 선택, Vista+)
+        // 탐색기 스타일 현대 다이얼로그 (주소창/검색/즐겨찾기 지원)
         // ================================================================
 
-        private const int BIF_RETURNONLYFSDIRS = 0x00000001;
-        private const int BIF_NEWDIALOGSTYLE = 0x00000040;
+        private const uint FOS_PICKFOLDERS = 0x00000020;
+        private const uint FOS_FORCEFILESYSTEM = 0x00000040;
+        private const uint FOS_PATHMUSTEXIST = 0x00000800;
+        private const int SIGDN_FILESYSPATH = unchecked((int)0x80058000);
+        private const int ERROR_CANCELLED_HR = unchecked((int)0x800704C7);
 
-        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
-        private static extern IntPtr SHBrowseForFolder(ref BROWSEINFO lpbi);
+        private static readonly Guid CLSID_FileOpenDialog = new("DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7");
 
-        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
-        private static extern bool SHGetPathFromIDList(IntPtr pidl, StringBuilder pszPath);
+        [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+        private static extern void SHCreateItemFromParsingName(
+            [MarshalAs(UnmanagedType.LPWStr)] string pszPath,
+            IntPtr pbc,
+            [MarshalAs(UnmanagedType.LPStruct)] Guid riid,
+            [MarshalAs(UnmanagedType.Interface)] out IShellItem ppv);
 
-        [DllImport("ole32.dll")]
-        private static extern void CoTaskMemFree(IntPtr ptr);
-
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-        private struct BROWSEINFO
+        [ComImport]
+        [Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IShellItem
         {
-            public IntPtr hwndOwner;
-            public IntPtr pidlRoot;
-            public string pszDisplayName;
-            public string lpszTitle;
-            public int ulFlags;
-            public IntPtr lpfn;
-            public IntPtr lParam;
-            public int iImage;
+            void BindToHandler(IntPtr pbc, [In] ref Guid bhid, [In] ref Guid riid, out IntPtr ppv);
+            void GetParent(out IShellItem ppsi);
+            void GetDisplayName(int sigdnName, out IntPtr ppszName);
+            void GetAttributes(uint sfgaoMask, out uint psfgaoAttribs);
+            void Compare(IShellItem psi, uint hint, out int piOrder);
+        }
+
+        [ComImport]
+        [Guid("D57C7288-D4AD-4768-BE02-9D969532D960")]
+        [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IFileOpenDialog
+        {
+            // IModalWindow
+            [PreserveSig] int Show(IntPtr hwndOwner);
+            // IFileDialog
+            void SetFileTypes(uint cFileTypes, IntPtr rgFilterSpec);
+            void SetFileTypeIndex(uint iFileType);
+            void GetFileTypeIndex(out uint piFileType);
+            void Advise(IntPtr pfde, out uint pdwCookie);
+            void Unadvise(uint dwCookie);
+            void SetOptions(uint fos);
+            void GetOptions(out uint pfos);
+            void SetDefaultFolder(IShellItem psi);
+            void SetFolder(IShellItem psi);
+            void GetFolder(out IShellItem ppsi);
+            void GetCurrentSelection(out IShellItem ppsi);
+            void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string pszName);
+            void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string pszName);
+            void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string pszTitle);
+            void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string pszText);
+            void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string pszLabel);
+            void GetResult(out IShellItem ppsi);
+            void AddPlace(IShellItem psi, uint fdap);
+            void SetDefaultExtension([MarshalAs(UnmanagedType.LPWStr)] string pszDefaultExtension);
+            void Close(int hr);
+            void SetClientGuid([In] ref Guid guid);
+            void ClearClientData();
+            void SetFilter(IntPtr pFilter);
+            // IFileOpenDialog
+            void GetResults(out IntPtr ppenum);
+            void GetSelectedItems(out IntPtr ppsai);
         }
 
         private static string? WindowsPickFolder(string title, string? initialDir)
         {
-            var bi = new BROWSEINFO
-            {
-                lpszTitle = title,
-                ulFlags = BIF_RETURNONLYFSDIRS | BIF_NEWDIALOGSTYLE,
-                pszDisplayName = new string('\0', MAX_PATH),
-            };
+            if (!OperatingSystem.IsWindows()) return null;
 
-            var pidl = SHBrowseForFolder(ref bi);
-            if (pidl == IntPtr.Zero) return null;
+            Type? dialogType = Type.GetTypeFromCLSID(CLSID_FileOpenDialog);
+            if (dialogType == null) return null;
 
+            IFileOpenDialog? dialog = null;
             try
             {
-                var sb = new StringBuilder(MAX_PATH);
-                if (SHGetPathFromIDList(pidl, sb))
-                    return sb.ToString();
-                return null;
+                dialog = (IFileOpenDialog)Activator.CreateInstance(dialogType)!;
+                dialog.SetOptions(FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST);
+                dialog.SetTitle(title);
+
+                if (!string.IsNullOrEmpty(initialDir) && Directory.Exists(initialDir))
+                {
+                    try
+                    {
+                        SHCreateItemFromParsingName(
+                            initialDir, IntPtr.Zero, typeof(IShellItem).GUID, out IShellItem folderItem);
+                        if (folderItem != null)
+                        {
+                            dialog.SetFolder(folderItem);
+                            Marshal.ReleaseComObject(folderItem);
+                        }
+                    }
+                    catch { /* initialDir 실패는 무시 — 기본 위치에서 열림 */ }
+                }
+
+                int hr = dialog.Show(IntPtr.Zero);
+                if (hr == ERROR_CANCELLED_HR || hr != 0) return null;
+
+                dialog.GetResult(out IShellItem item);
+                if (item == null) return null;
+
+                try
+                {
+                    item.GetDisplayName(SIGDN_FILESYSPATH, out IntPtr pszName);
+                    try { return Marshal.PtrToStringUni(pszName); }
+                    finally { Marshal.FreeCoTaskMem(pszName); }
+                }
+                finally { Marshal.ReleaseComObject(item); }
             }
             finally
             {
-                CoTaskMemFree(pidl);
+                if (dialog != null) Marshal.ReleaseComObject(dialog);
             }
         }
     }

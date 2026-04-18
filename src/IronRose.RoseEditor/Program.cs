@@ -15,8 +15,10 @@
 // ------------------------------------------------------------
 using System;
 using System.IO;
+using System.Runtime.InteropServices;
 using Silk.NET.Maths;
 using Silk.NET.Windowing;
+
 using IronRose.Engine;
 using IronRose.Engine.Editor;
 using IronRose.Editor;
@@ -94,6 +96,27 @@ namespace IronRose.RoseEditor
 
             // 에디터 UI 즉시 표시
             _engine.ShowEditor();
+
+            // Windows는 윈도우 테두리 드래그 중 WM_ENTERSIZEMOVE modal loop에 진입하여
+            // Run 루프의 Update/Render 콜백이 블록된다. Resize 이벤트 내에서 한 프레임을
+            // 직접 렌더하여 드래그 중에도 화면이 새 크기로 갱신되도록 한다.
+            // GraphicsManager가 먼저 등록한 핸들러에서 ResizeMainWindow가 호출된 직후 실행됨.
+            // NewFrame/EndFrame 균형이 깨지지 않도록 Update→Render 쌍으로 호출한다.
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                _window.Resize += _ =>
+                {
+                    try
+                    {
+                        _engine?.Update(1.0 / 60.0);
+                        _engine?.Render();
+                    }
+                    catch (Exception ex)
+                    {
+                        EditorDebug.LogError($"[IronRose Editor] Resize Render ERROR: {ex.Message}");
+                    }
+                };
+            }
         }
 
         /// <summary>
