@@ -47,23 +47,41 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             // 1) EditorState에 저장된 레이아웃 데이터 우선
             if (!string.IsNullOrEmpty(EditorState.ImGuiLayoutData))
             {
-                ImGui.LoadIniSettingsFromMemory(EditorState.ImGuiLayoutData);
-                _needsDefaultLayout = false;
-                Debug.Log("[ImGui] Layout loaded from .rose_editor_state.toml");
-                return;
+                try
+                {
+                    ImGui.LoadIniSettingsFromMemory(EditorState.ImGuiLayoutData);
+                    _needsDefaultLayout = false;
+                    Debug.Log("[ImGui] Layout loaded from .rose_editor_state.toml");
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[ImGui] 저장된 레이아웃 로드 실패 ({ex.Message}) — 기본 레이아웃으로 바이패스합니다.");
+                    EditorState.ImGuiLayoutData = null;
+                    _needsDefaultLayout = true;
+                    return;
+                }
             }
 
             // 2) 레거시 EditorLayout.ini 파일에서 마이그레이션
             var legacyFullPath = Path.Combine(ProjectContext.ProjectRoot, LegacyLayoutPath);
             if (File.Exists(legacyFullPath))
             {
-                ImGui.LoadIniSettingsFromDisk(legacyFullPath);
-                _needsDefaultLayout = false;
+                try
+                {
+                    ImGui.LoadIniSettingsFromDisk(legacyFullPath);
+                    _needsDefaultLayout = false;
 
-                // 마이그레이션: INI → EditorState로 이관
-                EditorState.ImGuiLayoutData = ImGui.SaveIniSettingsToMemory();
-                EditorState.Save();
-                Debug.Log("[ImGui] Layout migrated from " + LegacyLayoutPath + " → .rose_editor_state.toml");
+                    // 마이그레이션: INI → EditorState로 이관
+                    EditorState.ImGuiLayoutData = ImGui.SaveIniSettingsToMemory();
+                    EditorState.Save();
+                    Debug.Log("[ImGui] Layout migrated from " + LegacyLayoutPath + " → .rose_editor_state.toml");
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[ImGui] 레거시 레이아웃 로드 실패 ({ex.Message}) — 기본 레이아웃으로 바이패스합니다.");
+                    _needsDefaultLayout = true;
+                }
             }
         }
 

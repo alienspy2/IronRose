@@ -167,12 +167,38 @@ namespace IronRose.Engine.Editor
             return "other";
         }
 
+        /// <summary>
+        /// 저장된 창 좌표/크기 값이 현실적 범위에 들어오는지 검증한다.
+        /// 범위 밖이면 false — 호출자는 창 섹션을 통째로 바이패스해야 한다.
+        /// </summary>
+        private static bool IsWindowGeometrySane(int? x, int? y, int? w, int? h)
+        {
+            const int MinSize = 100;
+            const int MaxSize = 16384;
+            const int MinCoord = -32768;
+            const int MaxCoord = 32767;
+            if (w.HasValue && (w.Value < MinSize || w.Value > MaxSize)) return false;
+            if (h.HasValue && (h.Value < MinSize || h.Value > MaxSize)) return false;
+            if (x.HasValue && (x.Value < MinCoord || x.Value > MaxCoord)) return false;
+            if (y.HasValue && (y.Value < MinCoord || y.Value > MaxCoord)) return false;
+            return true;
+        }
+
         public static void Load()
         {
             var path = FindOrCreatePath();
             if (!File.Exists(path)) return;
 
-            var config = TomlConfig.LoadFile(path, "[EditorState]");
+            TomlConfig? config;
+            try
+            {
+                config = TomlConfig.LoadFile(path, "[EditorState]");
+            }
+            catch (Exception ex)
+            {
+                EditorDebug.LogWarning($"[EditorState] TOML 파싱 실패 ({ex.Message}) — 상태 파일을 무시하고 기본값으로 시작합니다: {path}");
+                return;
+            }
             if (config == null) return;
 
             // 창 좌표/ImGui 레이아웃은 OS 간 호환 불가 — meta.os 가 다르면 해당 섹션 무시.
@@ -225,10 +251,19 @@ namespace IronRose.Engine.Editor
             var window = osMatches ? config.GetSection("window") : null;
             if (window != null)
             {
-                if (window.HasKey("x")) WindowX = window.GetInt("x");
-                if (window.HasKey("y")) WindowY = window.GetInt("y");
-                if (window.HasKey("w")) WindowW = window.GetInt("w");
-                if (window.HasKey("h")) WindowH = window.GetInt("h");
+                int? sx = window.HasKey("x") ? window.GetInt("x") : (int?)null;
+                int? sy = window.HasKey("y") ? window.GetInt("y") : (int?)null;
+                int? sw = window.HasKey("w") ? window.GetInt("w") : (int?)null;
+                int? sh = window.HasKey("h") ? window.GetInt("h") : (int?)null;
+
+                if (IsWindowGeometrySane(sx, sy, sw, sh))
+                {
+                    WindowX = sx; WindowY = sy; WindowW = sw; WindowH = sh;
+                }
+                else
+                {
+                    EditorDebug.LogWarning($"[EditorState] 창 좌표/크기가 비정상 (x={sx},y={sy},w={sw},h={sh}) — 기본값으로 바이패스합니다.");
+                }
             }
 
             var panels = config.GetSection("panels");
