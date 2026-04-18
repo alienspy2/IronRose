@@ -1893,7 +1893,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             var path = NativeFileDialog.SaveFileDialog(
                 title: "New Scene",
                 defaultName: "NewScene.scene",
-                filter: "*.scene");
+                filter: "*.scene",
+                initialDir: EditorPreferences.ResolveSaveInitialDir());
 
             if (string.IsNullOrEmpty(path)) return;
 
@@ -1911,6 +1912,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             IronRose.API.EditorScene.CreateDefaultScene();
 
             SceneSerializer.Save(path);
+            EditorPreferences.RememberSaveDir(path);
             EditorState.UpdateLastScene(scene.path);
             UpdateWindowTitle();
             Debug.Log($"[Scene] New scene created: {sceneName}");
@@ -1963,7 +1965,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             var path = NativeFileDialog.SaveFileDialog(
                 title: "Save Scene As",
                 defaultName: defaultName,
-                filter: "*.scene");
+                filter: "*.scene",
+                initialDir: EditorPreferences.ResolveSaveInitialDir());
 
             if (string.IsNullOrEmpty(path)) return;
 
@@ -1971,6 +1974,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor
             scene.name = Path.GetFileNameWithoutExtension(path);
 
             SceneSerializer.Save(path);
+            EditorPreferences.RememberSaveDir(path);
             EditorState.UpdateLastScene(scene.path);
             UpdateWindowTitle();
         }

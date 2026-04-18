@@ -281,7 +281,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 var savePath = NativeFileDialog.SaveFileDialog(
                     title: "Save Composed Texture",
                     defaultName: "composed.png",
-                    filter: "*.png");
+                    filter: "*.png",
+                    initialDir: EditorPreferences.ResolveSaveInitialDir());
 
                 if (string.IsNullOrEmpty(savePath)) { _statusMessage = "Save cancelled."; return; }
                 if (!Path.HasExtension(savePath)) savePath += ".png";
@@ -290,6 +291,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
                 output.SaveAsPng(savePath);
+                EditorPreferences.RememberSaveDir(savePath);
                 _statusMessage = $"Saved: {savePath} ({w}x{h})";
                 RoseEngine.EditorDebug.Log($"[TextureTool] Channel remix saved: {savePath} ({w}x{h})");
             }
@@ -417,7 +419,8 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 var savePath = NativeFileDialog.SaveFileDialog(
                     title: "Save Generated Texture",
                     defaultName: $"{_proceduralType.ToString().ToLowerInvariant()}.png",
-                    filter: "*.png");
+                    filter: "*.png",
+                    initialDir: EditorPreferences.ResolveSaveInitialDir());
 
                 if (string.IsNullOrEmpty(savePath)) { _statusMessage = "Save cancelled."; return; }
                 if (!Path.HasExtension(savePath)) savePath += ".png";
@@ -426,6 +429,7 @@ namespace IronRose.Engine.Editor.ImGuiEditor.Panels
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
                 output.SaveAsPng(savePath);
+                EditorPreferences.RememberSaveDir(savePath);
                 _statusMessage = $"Saved: {savePath} ({w}x{h})";
                 RoseEngine.EditorDebug.Log($"[TextureTool] Generated {_proceduralType}: {savePath} ({w}x{h})");
             }

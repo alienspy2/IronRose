@@ -18,8 +18,12 @@
 //     AiPythonPath: string                      — CLI 실행 파이썬 경로 (기본 "python")
 //     AiGenerationModel: string                 — ComfyUI 이미지 생성 모델 파일명 (기본 "z_image_turbo_nvfp4.safetensors")
 //     FocusGameViewOnPlay: bool                 — Play 모드 진입 시 Game View를 자동 포커스 (기본 true)
+//     LastSaveDirWindows: string                — Windows에서 마지막으로 성공한 저장 폴더 (기본 "")
+//     LastSaveDirLinux: string                  — Linux에서 마지막으로 성공한 저장 폴더 (기본 "")
 //     Load(): void                              — settings.toml [preferences] 로드
 //     Save(): void                              — settings.toml [preferences] 저장 (read-modify-write)
+//     ResolveSaveInitialDir(): string           — 저장 다이얼로그 초기 폴더 결정 (OS별 last → Assets 폴백)
+//     RememberSaveDir(string): void             — 성공한 저장 경로의 디렉터리를 OS별로 기록 + Save()
 //     MigrateFromEditorState(float?, string?): void — 레거시 EditorState 값 1회성 이전 훅
 // @note    Save()는 ProjectContext.SaveLastProjectPath()와 동일한 read-modify-write 패턴으로
 //          기존 [editor] last_project 등 다른 섹션을 절대 덮어쓰지 않는다.
@@ -94,6 +98,18 @@ namespace IronRose.Engine
         /// </summary>
         public static bool FocusGameViewOnPlay { get; set; } = true;
 
+        /// <summary>
+        /// Windows에서 마지막으로 성공한 저장 다이얼로그의 폴더 절대 경로.
+        /// 빈 문자열이면 Assets 폴더로 폴백한다. Linux 경로와 분리 저장.
+        /// </summary>
+        public static string LastSaveDirWindows { get; set; } = "";
+
+        /// <summary>
+        /// Linux에서 마지막으로 성공한 저장 다이얼로그의 폴더 절대 경로.
+        /// 빈 문자열이면 Assets 폴더로 폴백한다. Windows 경로와 분리 저장.
+        /// </summary>
+        public static string LastSaveDirLinux { get; set; } = "";
+
         /// <summary>글로벌 설정 디렉토리 (~/.ironrose/).</summary>
         private static string GlobalSettingsDir =>
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".ironrose");
@@ -157,6 +173,10 @@ namespace IronRose.Engine
                 // focus_game_view_on_play
                 FocusGameViewOnPlay = pref.GetBool("focus_game_view_on_play", FocusGameViewOnPlay);
 
+                // last_save_dir_windows / last_save_dir_linux (OS별 분리, 빈 문자열 허용)
+                LastSaveDirWindows = pref.GetString("last_save_dir_windows", LastSaveDirWindows) ?? "";
+                LastSaveDirLinux = pref.GetString("last_save_dir_linux", LastSaveDirLinux) ?? "";
+
                 EditorDebug.Log($"[EditorPreferences] Loaded: {GlobalSettingsPath}");
             }
             catch (Exception ex)
@@ -196,6 +216,8 @@ namespace IronRose.Engine
                 pref.SetValue("ai_python_path", AiPythonPath);
                 pref.SetValue("ai_generation_model", AiGenerationModel);
                 pref.SetValue("focus_game_view_on_play", FocusGameViewOnPlay);
+                pref.SetValue("last_save_dir_windows", LastSaveDirWindows);
+                pref.SetValue("last_save_dir_linux", LastSaveDirLinux);
 
                 config.SaveToFile(GlobalSettingsPath, "[EditorPreferences]");
                 EditorDebug.Log($"[EditorPreferences] Saved: {GlobalSettingsPath}");
@@ -204,6 +226,54 @@ namespace IronRose.Engine
             {
                 EditorDebug.LogWarning($"[EditorPreferences] Failed to save: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// 저장 다이얼로그의 초기 폴더를 결정한다.
+        /// OS별로 기록된 마지막 성공 폴더가 존재하고 실제로 존재하는 디렉터리면 그 값을,
+        /// 그렇지 않으면 현재 프로젝트의 Assets 폴더를 반환한다.
+        /// </summary>
+        public static string ResolveSaveInitialDir()
+        {
+            var saved = OperatingSystem.IsWindows() ? LastSaveDirWindows : LastSaveDirLinux;
+            if (!string.IsNullOrEmpty(saved) && Directory.Exists(saved))
+                return saved;
+            return ProjectContext.AssetsPath;
+        }
+
+        /// <summary>
+        /// 저장 다이얼로그에서 파일을 성공적으로 저장한 경로를 받아,
+        /// 그 디렉터리를 OS별로 마지막 저장 폴더에 기록하고 settings.toml에 영속화한다.
+        /// 파일 경로/디렉터리 경로 둘 다 허용한다.
+        /// </summary>
+        public static void RememberSaveDir(string savedPath)
+        {
+            if (string.IsNullOrEmpty(savedPath)) return;
+
+            string dir;
+            try
+            {
+                var full = Path.GetFullPath(savedPath);
+                dir = Directory.Exists(full) ? full : (Path.GetDirectoryName(full) ?? "");
+            }
+            catch
+            {
+                return;
+            }
+
+            if (string.IsNullOrEmpty(dir)) return;
+
+            if (OperatingSystem.IsWindows())
+            {
+                if (LastSaveDirWindows == dir) return;
+                LastSaveDirWindows = dir;
+            }
+            else
+            {
+                if (LastSaveDirLinux == dir) return;
+                LastSaveDirLinux = dir;
+            }
+            Save();
         }
 
         /// <summary>
