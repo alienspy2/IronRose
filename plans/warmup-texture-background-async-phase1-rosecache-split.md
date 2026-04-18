@@ -10,6 +10,7 @@ status: draft
 
 > 상위: [warmup-texture-background-async.md](warmup-texture-background-async.md)
 > 목표: `CompressTexture`를 백그라운드-가능 부분과 메인 전용 GPU 마무리 부분으로 분리하여 Phase 2/3에서 호출 가능한 API로 재설계.
+> 플랫폼: **Windows / Linux 공통**. 기존 `CompressWithCompressonator`의 `OperatingSystem.IsWindows()` 분기(`compressonatorcli.exe` vs `compressonatorcli-bin`)는 그대로 유지되며, Plan/Background/Finalize 분리는 플랫폼 분기 아래 레이어에서 일어난다.
 
 ---
 
@@ -266,6 +267,62 @@ if (tex._mipData != null) {
 
 ---
 
+## 정적 필드 race 보강 (멀티스레드 호출 대비)
+
+[RoseCache.cs:73-83](../src/IronRose.Engine/AssetPipeline/RoseCache.cs#L73-L83)의 세 static 필드는 현재 락 없이 평문 대입:
+
+```csharp
+private static string? _compressonatorCliPath;     // null / 실경로 / "" (없음)
+private static string? _compressonatorLibPath;
+private static bool? _bc1CpuSupported;             // null / true / false
+```
+
+현재는 모든 호출이 메인 직렬화 → 안전. Phase 2 이후에는 **Warmup Task.Run + ReimportAsync Task.Run**이 동시에 `CompressWithCompressonator` / `CompressWithCpuFallback`에 진입할 수 있어 해당 필드가 동시 접근 대상이 된다.
+
+### 성격 분석
+세 필드 모두 **idempotent 1회 캐싱**이다. 동일 입력이면 결과가 항상 같고, 재계산해도 값이 바뀌지 않는다. 따라서 torn read/double init이 발생해도 **결과 정확성은 유지**된다. 즉 **기능적 race는 없음**. 다만:
+- `string?`은 참조 대입이라 x86/x64에서 대체로 atomic이지만 ECMA 사양상 보장 아님.
+- `bool?`은 내부적으로 `Nullable<bool>` (struct, HasValue + Value 2필드) → **torn read 가능**. 한 스레드가 `HasValue=true`만 먼저 보고 `Value`는 이전 값을 읽는 시나리오 존재.
+
+### 보강 방안
+
+**Phase 1 한정 작은 패치**로 다음을 적용:
+
+1. `_compressonatorCliPath`, `_compressonatorLibPath`: `volatile` 키워드 추가 (참조 대입 순서 보장). 또는 `Interlocked.CompareExchange`로 첫 할당만 승자 선택:
+   ```csharp
+   private static string? _compressonatorCliPath;  // volatile 불가 (Nullable reference)
+   // 대입 지점:
+   var resolved = File.Exists(cliPath) ? cliPath : "";
+   Interlocked.CompareExchange(ref _compressonatorCliPath, resolved, null);
+   // 이후 읽기는 _compressonatorCliPath를 다시 확인하여 승자 값 사용.
+   ```
+
+2. `_bc1CpuSupported`: `Nullable<bool>` 대신 **3-state int**로 변경:
+   ```csharp
+   // 0 = unknown, 1 = supported, 2 = unsupported
+   private static int _bc1CpuSupportedState;
+
+   // 확인 시:
+   int state = Volatile.Read(ref _bc1CpuSupportedState);
+   if (state == 2) return useBC3Path();
+   if (state == 0) {
+       try { /* BC1 encode 시도 */ Interlocked.CompareExchange(ref _bc1CpuSupportedState, 1, 0); }
+       catch { Interlocked.CompareExchange(ref _bc1CpuSupportedState, 2, 0); }
+   }
+   ```
+   이러면 torn read 원천 차단 + 첫 판정이 여러 스레드에서 동시에 일어나도 결과 동일.
+
+### 적용 범위
+- `CompressWithCompressonator` 내부의 경로 캐싱 블록 (line 651-678 근처).
+- `CompressWithCpuFallback` 내부의 `_bc1CpuSupported` 체크/세팅 지점.
+
+### 영향
+- 외부 동작 변화 없음 (캐싱 동작/로그 동일).
+- 기존 호출자(메인 동기 경로)에도 안전 (`Interlocked.CompareExchange`는 순차 경로에서 추가 비용 무시 가능).
+- 리뷰어는 3필드 이외에 다른 static mutable이 추가되지 않았는지만 확인.
+
+---
+
 ## ThreadGuard 삽입 위치
 
 | 위치 | Context 문자열 | 비고 |
@@ -322,6 +379,8 @@ if (tex._mipData != null) {
 
 ## 리뷰 체크리스트
 
+- [ ] `_compressonatorCliPath` / `_compressonatorLibPath` 대입이 `Interlocked.CompareExchange`로 보강되었는가?
+- [ ] `_bc1CpuSupported`가 int 3-state로 전환되었고 `Volatile.Read` + `Interlocked.CompareExchange` 조합으로 접근되는가?
 - [ ] `PlanTextureCompression`이 순수 함수인가? (멤버/정적 mutable 상태 접근 없음)
 - [ ] `CompressTextureBackground`가 `_gpuCompressor`에 접근하지 않는가?
 - [ ] `FinalizeTextureOnMain` 진입부에 `ThreadGuard.CheckMainThread` 존재하는가?

@@ -12,6 +12,7 @@ status: draft
 > 상위: [warmup-texture-background-async.md](warmup-texture-background-async.md)
 > 선행: [Phase 1](warmup-texture-background-async-phase1-rosecache-split.md) — `RoseCache` Plan/Background/Finalize API.
 > 병행: [Phase 2](warmup-texture-background-async-phase2-warmup-manager.md) — warmup manager 호출자. 동일 worktree에서 함께 구현.
+> 플랫폼: **Windows / Linux 공통**. `_pendingPrecompressedTextures` 큐, `WarmupHandoff` record, ThreadGuard 삽입 모두 OS 독립.
 
 ---
 

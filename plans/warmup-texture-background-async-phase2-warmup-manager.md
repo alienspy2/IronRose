@@ -13,6 +13,7 @@ status: draft
 > 선행: [Phase 1](warmup-texture-background-async-phase1-rosecache-split.md) — `RoseCache`의 Plan/Background/Finalize API 준비 완료.
 > 선행: [Phase 3](warmup-texture-background-async-phase3-asset-database-api.md) — `AssetDatabase.PrepareTextureWarmupBackground` / `FinalizeTextureWarmupOnMain` API 추가.
 > **Phase 2와 3은 같은 worktree에서 함께 구현**한다 (API 계약 공유). 문서만 구분.
+> 플랫폼: **Windows / Linux 공통**. 순수 C# `Task.Run` + 상태 머신 변경이라 OS별 분기 없음.
 
 ---
 

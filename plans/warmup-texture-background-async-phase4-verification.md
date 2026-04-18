@@ -15,6 +15,7 @@ status: draft
 > 상위: [warmup-texture-background-async.md](warmup-texture-background-async.md)
 > 선행: Phase 1~3 구현 완료 및 빌드 성공.
 > 목적: UI freeze가 실제로 제거되었는지, 품질/동작 회귀가 없는지 **실측**으로 확인.
+> 플랫폼: **Windows / Linux 모두 검증 필요**. 코드 변경은 OS-neutral이지만 Compressonator CLI 바이너리/Veldrid 백엔드가 플랫폼별로 다르므로 두 OS에서 각각 스모크를 돌린다. 아래 시나리오는 OS별 명령을 병기한다.
 
 ---
 
@@ -34,7 +35,9 @@ status: draft
 ### S1. 기본 warmup 반응성 (기준 케이스)
 
 **사전 준비**:
-- 테스트 프로젝트: `C:\git\IronRoseSimpleGameDemoProject` (로그 참조 프로젝트와 동일).
+- 테스트 프로젝트:
+  - Windows: `C:\git\IronRoseSimpleGameDemoProject` (로그 참조 프로젝트와 동일).
+  - Linux: `/home/alienspy/git/IronRoseSimpleGameDemoProject` (primary cwd의 additional working directory).
 - 캐시 클리어: 메뉴 `File → Reimport All` 또는 `RoseConfig.ForceClearCache`.
 
 **실행**:
@@ -49,7 +52,9 @@ status: draft
 
 **측정**:
 - `Logs/editor_*.log`에서 warmup 기간 `[TextureImporter] Loaded` 라인 간격이 균일 (수 초 단위 점프는 CLI 호출 시간이며 메인 freeze와 무관).
-- Windows Task Manager에서 IronRose 프로세스의 CPU 코어 분포 — 메인 스레드 외 다른 코어도 활성.
+- CPU 코어 분포 (메인 스레드 외 다른 코어도 활성):
+  - Windows: Task Manager → Details → IronRose 프로세스 → "Analyze wait chain" 또는 Resource Monitor CPU 탭.
+  - Linux: `top -H -p $(pgrep -f IronRose.Editor)` 또는 `htop` (Shift+H로 thread view).
 
 ### S2. 대용량 BC7 (1024×1024)
 
@@ -69,7 +74,10 @@ status: draft
 
 **실행**:
 1. 캐시 클리어 후 기동.
-2. Warmup 중 `Logs/editor_*.log`를 `tail -f` 또는 `Get-Content -Wait`로 관찰.
+2. Warmup 중 실시간 로그 관찰:
+   - Linux: `tail -f Logs/editor_*.log`.
+   - Windows (PowerShell): `Get-Content -Wait Logs/editor_*.log`.
+   - Windows (Git Bash): `tail -f Logs/editor_*.log`.
 
 **기대**:
 - `Compressonator CLI timed out (60s)` 로그 출현 시에도 ImGui는 반응.
@@ -77,8 +85,9 @@ status: draft
 
 ### S4. CLI 없는 환경 (CPU 폴백)
 
-**사전 준비**:
-- `externalTools/compressonatorcli/windows/compressonatorcli.exe`를 임시로 `.exe.bak` 이름변경.
+**사전 준비** (OS별 이름변경):
+- Windows: `externalTools/compressonatorcli/windows/compressonatorcli.exe` → `compressonatorcli.exe.bak`.
+- Linux: `externalTools/compressonatorcli/linux/compressonatorcli-bin` → `compressonatorcli-bin.bak`.
 - 캐시 클리어.
 
 **실행**: 에디터 기동.
@@ -88,7 +97,7 @@ status: draft
 - 이후 모든 BC 압축이 `BC compress done via GPU ...` 또는 `CPU ...`.
 - UI 반응성 유지.
 
-**사후 정리**: `.exe.bak`를 원상 복구.
+**사후 정리**: `.bak`를 원상 복구 (양 플랫폼 공통).
 
 ### S5. Reimport All
 
@@ -150,20 +159,25 @@ grep "\[ThreadGuard\]" Logs/editor_*.log
 
 ### C4. `.rosecache` 동등성
 
-Warmup 전:
-```
-sha256sum Library/RoseCache/*.rosecache > /tmp/before.sha
-```
+Warmup 전 (OS별):
+- Linux / Git Bash: `sha256sum Library/RoseCache/*.rosecache > /tmp/before.sha`
+- Windows PowerShell: `Get-FileHash Library/RoseCache/*.rosecache -Algorithm SHA256 | Out-File $env:TEMP\before.sha`
 
-Phase 4 적용 후 재 warmup:
-```
-sha256sum Library/RoseCache/*.rosecache > /tmp/after.sha
-diff /tmp/before.sha /tmp/after.sha
-```
+Phase 4 적용 후 재 warmup, diff:
+- Linux / Git Bash:
+  ```
+  sha256sum Library/RoseCache/*.rosecache > /tmp/after.sha
+  diff /tmp/before.sha /tmp/after.sha
+  ```
+- Windows PowerShell:
+  ```
+  Get-FileHash Library/RoseCache/*.rosecache -Algorithm SHA256 | Out-File $env:TEMP\after.sha
+  Compare-Object (Get-Content $env:TEMP\before.sha) (Get-Content $env:TEMP\after.sha)
+  ```
 
 - diff 출력 없어야 함. 예외: CLI가 Mode 탐색 상 비결정적일 가능성이 있으면 sample 에셋 수 개만 비교하거나 무시.
 
-**주의**: Compressonator CLI는 동일 입력에 대해 결정적(비확률적). GPU 경로도 compute shader가 결정적 구조라면 동일. CPU BCnEncoder.NET도 결정적. 따라서 바이트 단위 동일이 기대됨.
+**주의**: Compressonator CLI는 동일 입력에 대해 결정적(비확률적). GPU 경로도 compute shader가 결정적 구조라면 동일. CPU BCnEncoder.NET도 결정적. 따라서 바이트 단위 동일이 기대됨. **플랫폼 간 `.rosecache` 호환성 주의**: Windows에서 생성된 캐시와 Linux에서 생성된 캐시는 CLI 바이너리가 다르므로 바이트 단위로 같다는 보장은 없다. 동등성 검증은 **동일 OS 내에서 Phase 적용 전후 비교**로 수행.
 
 ### C5. FSW / Metadata race 없음
 
@@ -177,14 +191,23 @@ grep -i "race\|conflict\|dirty\|invalid" Logs/editor_*.log
 
 ## 성능 프로파일링 (선택)
 
-### PerfView 스냅샷
+### 프로파일링 스냅샷 (OS별)
 
+**Windows — PerfView**:
 1. Warmup 시작 직전 PerfView 시작.
 2. Warmup 완료까지 기록 (약 3분).
 3. 정지 후 분석:
    - 메인 스레드 CPU time — warmup 기간 동안 GPU 폴백 시점 외에는 수 ms 수준.
    - `Task.Run` 백그라운드 스레드 — CLI 프로세스 WaitForExit이 주 소요.
    - 메인 스레드 Wait 시간 — freeze가 없다면 수 ms 이내.
+
+**Linux — `dotnet-trace` / `perf`**:
+1. `dotnet-trace collect -p $(pgrep -f IronRose.Editor) --duration 00:03:00 -o warmup.nettrace` 또는
+   `perf record -F 99 -g -p $(pgrep -f IronRose.Editor) -- sleep 180`.
+2. 분석:
+   - `dotnet-trace`: `dotnet-trace convert warmup.nettrace --format speedscope` → speedscope.app에서 flamegraph 확인.
+   - `perf`: `perf report` 또는 `perf script | stackcollapse-perf.pl | flamegraph.pl > warmup.svg`.
+3. 확인 포인트는 Windows와 동일 (메인 스레드 점유 / Task 스레드 CLI WaitForExit).
 
 ### 프레임 시간 로깅 (옵션)
 
@@ -237,9 +260,10 @@ Phase 4 검증 통과 시:
 
 ## 리뷰 체크리스트
 
-- [ ] 스모크 S1~S6 모두 통과 기록?
-- [ ] 로그 C1~C5 모두 기준 충족?
-- [ ] `.rosecache` SHA-256 동등 확인?
-- [ ] `[ThreadGuard]` 위반 0건?
+- [ ] 스모크 S1~S6 모두 통과 기록 — **Windows / Linux 양쪽**?
+- [ ] 로그 C1~C5 모두 기준 충족 — **Windows / Linux 양쪽**?
+- [ ] `.rosecache` SHA-256 동등 확인 (동일 OS 내 전후 비교)?
+- [ ] `[ThreadGuard]` 위반 0건 — **Windows / Linux 양쪽**?
 - [ ] 품질 저하 없음 (시각적 비교 — 샘플 5~10개 에셋 Inspector 프리뷰 대조)?
-- [ ] 총 warmup 시간 ≤ 191s?
+- [ ] 총 warmup 시간 ≤ 191s (Windows 기준) / Linux 별도 기준 측정?
+- [ ] Linux `compressonatorcli-bin` 실행권한(`chmod +x`) 및 `pkglibs` 로드 정상 동작?

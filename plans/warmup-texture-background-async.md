@@ -19,6 +19,18 @@ related_logs:
 
 ---
 
+## 적용 플랫폼
+
+**Windows / Linux 공통**. 본 계획의 모든 변경은 플랫폼 분기 없이 `RoseCache` / `AssetDatabase` / `AssetWarmupManager`의 공용 경로에 적용된다.
+
+- Compressonator CLI 탐지: `externalTools/compressonatorcli/windows/compressonatorcli.exe` (Windows) / `externalTools/compressonatorcli/linux/compressonatorcli-bin` (Linux). 둘 다 `RoseCache.CompressWithCompressonator` (line 646-784, 652-665 근처 `OperatingSystem.IsWindows()` 분기)에서 처리.
+- GPU 폴백: Veldrid Vulkan 백엔드로 Linux에서도 동일 compute 경로 사용.
+- CPU 폴백: BCnEncoder.NET (managed, 크로스 플랫폼).
+
+따라서 Phase 1~3 구현은 단일 코드 경로로 양 플랫폼을 커버하며, Phase 4 스모크 시나리오만 OS별 명령어를 병기한다.
+
+---
+
 ## 배경
 
 ### 증상
@@ -392,6 +404,16 @@ public void FinalizeTextureWarmupOnMain(WarmupHandoff handoff);
 - 장점: C# native 패턴.
 - 단점: 내부에 GPU 동기 호출(Veldrid)이 있어 깔끔한 await 경계가 없음. 복수 진입점(Plan/Background/Finalize) 분리가 명시적이지 않아 호출자(Warmup/Reimport)가 경계를 다루기 애매.
 - **기각**. 명시적 2단계 분리가 더 명확.
+
+---
+
+## 정적 필드 race 보강 (Phase 1에서 같이 처리)
+
+Phase 2 이후 Warmup Task와 ReimportAsync Task가 동시에 `CompressWithCompressonator` / `CompressWithCpuFallback`에 진입할 수 있어, [RoseCache.cs:73-83](../src/IronRose.Engine/AssetPipeline/RoseCache.cs#L73-L83)의 3개 static 필드 (`_compressonatorCliPath`, `_compressonatorLibPath`, `_bc1CpuSupported`)에 **torn read** 가능성이 노출된다.
+
+모든 필드가 idempotent 1회 캐싱이라 기능적 race는 없으나, `bool?` (Nullable struct) 는 ECMA 사양상 torn read가 가능하므로 int 3-state + `Interlocked` 로 치환한다. `string?` 필드는 `Interlocked.CompareExchange`로 첫 할당만 승자 선택.
+
+상세: [phase1 문서 §정적 필드 race 보강](warmup-texture-background-async-phase1-rosecache-split.md) 참조.
 
 ---
 
