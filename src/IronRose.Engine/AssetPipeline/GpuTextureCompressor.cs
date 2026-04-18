@@ -1,3 +1,20 @@
+// ------------------------------------------------------------
+// @file    GpuTextureCompressor.cs
+// @brief   Vulkan compute 셰이더 기반 GPU BC7/BC5 텍스처 압축기. 에셋 warm-up 시 사용.
+// @deps    IronRose.Rendering/ShaderCompiler, RoseEngine/EditorDebug, RoseEngine/ThreadGuard, Veldrid
+// @exports
+//   sealed class GpuTextureCompressor : IDisposable
+//     ctor(GraphicsDevice)                                                 — 장치 참조 저장 (초기화는 Initialize)
+//     Initialize(string shaderDir): void                                   — compute 파이프라인/버퍼 생성 (1회)
+//     CompressBC7(byte[] rgba, int w, int h): byte[]                       — RGBA→BC7 블록 배열 반환
+//     CompressBC5(byte[] rgba, int w, int h): byte[]                       — RGBA→BC5 블록 배열 반환
+//     GenerateMipmapsGPU(byte[] rgba, int w, int h): byte[][]              — GPU mipmap 체인 생성 후 RGBA 각 레벨 반환
+//     Dispose(): void                                                      — GPU 리소스 해제
+// @note    내부 _lock으로 동시 호출을 직렬화. 2048×2048까지는 사전 할당 버퍼 재사용.
+//          (Phase B-5) 모든 GPU 진입 지점(Initialize/CompressBC7/CompressBC5/GenerateMipmapsGPU/Dispose)에
+//          ThreadGuard.CheckMainThread 가드를 두어 메인 외 스레드 진입을 차단하고 null/빈 결과로 스킵한다
+//          (throw 금지). 위반 시 호출자는 CPU 폴백 경로로 안전하게 이어져야 한다.
+// ------------------------------------------------------------
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -56,6 +73,8 @@ namespace IronRose.AssetPipeline
         public void Initialize(string shaderDir)
         {
             if (_initialized) return;
+            if (!ThreadGuard.CheckMainThread("GpuTextureCompressor.Initialize"))
+                return; // 메인이 아니면 초기화를 건너뛴다 (드라이버 충돌 회피)
             var factory = _device.ResourceFactory;
 
             // Compile compute shaders
@@ -104,11 +123,15 @@ namespace IronRose.AssetPipeline
 
         public byte[] CompressBC7(byte[] rgbaData, int width, int height)
         {
+            if (!ThreadGuard.CheckMainThread("GpuTextureCompressor.CompressBC7"))
+                return Array.Empty<byte>();
             return CompressInternal(rgbaData, width, height, _bc7Pipeline!);
         }
 
         public byte[] CompressBC5(byte[] rgbaData, int width, int height)
         {
+            if (!ThreadGuard.CheckMainThread("GpuTextureCompressor.CompressBC5"))
+                return Array.Empty<byte>();
             return CompressInternal(rgbaData, width, height, _bc5Pipeline!);
         }
 
@@ -207,6 +230,8 @@ namespace IronRose.AssetPipeline
         /// </summary>
         public byte[][] GenerateMipmapsGPU(byte[] rgbaData, int width, int height)
         {
+            if (!ThreadGuard.CheckMainThread("GpuTextureCompressor.GenerateMipmapsGPU"))
+                return Array.Empty<byte[]>();
             lock (_lock)
             {
                 var factory = _device.ResourceFactory;
@@ -291,6 +316,8 @@ namespace IronRose.AssetPipeline
         {
             if (_disposed) return;
             _disposed = true;
+            if (!ThreadGuard.CheckMainThread("GpuTextureCompressor.Dispose"))
+                return; // 메인이 아니면 GPU 리소스 해제를 스킵 (드라이버 충돌 회피. 프로세스 종료 시 자동 정리됨)
             _cl?.Dispose();
             _stagingInput?.Dispose();
             _gpuInput?.Dispose();
