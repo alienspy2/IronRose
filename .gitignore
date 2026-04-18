@@ -51,6 +51,7 @@ TestResults/
 .claude/test_outputs/
 .claude/*.log
 .claude/worktrees/
+.claude/settings.local.json
 
 # Runtime logs
 Logs/
