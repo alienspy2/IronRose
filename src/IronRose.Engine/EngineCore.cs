@@ -138,6 +138,9 @@ namespace IronRose.Engine
 
         public void Initialize(IWindow window)
         {
+            // 메인 스레드 ID 캡처 — 이후 모든 ThreadGuard.CheckMainThread 호출의 기준
+            ThreadGuard.CaptureMainThread();
+
             // CLI 로그 버퍼 생성 (LogSink 연결 전에 생성)
             _cliLogBuffer = new CliLogBuffer();
 
@@ -310,6 +313,8 @@ namespace IronRose.Engine
 
             // 에셋 파일 변경 감지 처리 (Play 상태와 무관)
             _assetDatabase?.ProcessFileChanges();
+            // (Phase B-5) FSW/백그라운드에서 enqueue된 RoseMetadata.OnSaved 이벤트를 메인에서 일괄 처리
+            _assetDatabase?.ProcessMetadataSavedQueue();
 
             // 핫 리로드 요청 처리
             _scriptReloadManager?.ProcessReload();
