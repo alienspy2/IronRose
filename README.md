@@ -86,9 +86,9 @@ IronRose.sln
 
 IronRose는 Unity와 달리, **항상 소스코드와 함께 사용되고 소스코드와 함께 실행**됩니다. 빌드된 바이너리 배포나 Hub 설치 개념이 없습니다. 개발자는 항상 엔진 소스 레포(`IronRose`)를 로컬에 두고 `ProjectReference`로 직접 참조합니다.
 
-### 2-레포 구조 (예정)
+### 2-레포 구조
 
-현재는 단일 레포 구조이나, Unity Hub처럼 **엔진 레포**와 **에셋 프로젝트 레포**를 분리하는 것을 목표로 합니다:
+**엔진 레포**와 **에셋 프로젝트 레포**를 분리:
 
 ```
 ~/git/
@@ -96,7 +96,7 @@ IronRose는 Unity와 달리, **항상 소스코드와 함께 사용되고 소스
   MyGame/            # 에셋 프로젝트 레포 (Scripts, Assets 등)
 ```
 
-에셋 프로젝트는 `ProjectReference Path="../IronRose/..."` 로 엔진을 직접 참조합니다. Hub UI 없이 에디터에서 프로젝트 폴더를 열어 사용합니다. 설계 상세는 [`plans/editor-assets-repo-separation.md`](plans/editor-assets-repo-separation.md)를 참조하세요.
+에셋 프로젝트는 `ProjectReference Path="../IronRose/..."` 로 엔진을 직접 참조합니다. Hub UI 없이 에디터에서 프로젝트 폴더를 열어 사용합니다.
 
 ---
 
@@ -105,7 +105,7 @@ IronRose는 Unity와 달리, **항상 소스코드와 함께 사용되고 소스
 ### 요구 사항
 
 - **.NET 10.0 SDK**
-- **Vulkan 지원 GPU** (드라이버 설치 필요)
+- **Vulkan 지원 GPU**
 
 ### 빌드 및 실행
 
@@ -124,7 +124,7 @@ new project 를 하거나
 
 https://github.com/alienspy2/IronRoseSimpleGameDemoProject 를 받고 open project 
 
-이후, 안내대로, 생성된 workspace 파일로 vs code 열기
+이후, 안내대로, code 를 끈 후, project depo 의 생성된 workspace 파일로 vs code 열기
 
 ---
 
